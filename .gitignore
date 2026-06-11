@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.env
+.env.*
+.vscode/
+.idea/
+playwright/.cache/
+node_modules/
+logs/
+*.db
+*.sqlite
+models/

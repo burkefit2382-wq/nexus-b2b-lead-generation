@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+pydantic
+requests
+playwright
+beautifulsoup4
+python-dotenv
+apscheduler
+llama-cpp-python
+sentence-transformers
+tqdm
+aiohttp
+aiofiles
+python-multipart

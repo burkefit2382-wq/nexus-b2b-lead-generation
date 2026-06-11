@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXUS - B2B Lead Generation Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🔍 NEXUS Intelligence Suite</h1>
+            <p>B2B Lead Generation & OSINT Platform</p>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Total Leads</h3>
+                <p id="total-leads" class="stat-value">0</p>
+            </div>
+            <div class="stat-card">
+                <h3>High Quality</h3>
+                <p id="high-quality" class="stat-value">0</p>
+            </div>
+            <div class="stat-card">
+                <h3>Recent Scrape</h3>
+                <p id="recent-scrape" class="stat-value">0</p>
+            </div>
+            <div class="stat-card">
+                <h3>System Status</h3>
+                <p id="system-status" class="stat-value">Checking...</p>
+            </div>
+        </div>
+
+        <div class="content-grid">
+            <div class="panel">
+                <h2>📊 Quick Actions</h2>
+                <div class="action-buttons">
+                    <button onclick="scrapeGoogleMaps()" class="btn btn-primary">
+                        🗺️ Google Maps Search
+                    </button>
+                    <button onclick="scrapeLinkedIn()" class="btn btn-primary">
+                        💼 LinkedIn Intelligence
+                    </button>
+                    <button onclick="runOSINT()" class="btn btn-secondary">
+                        🔍 Run OSINT Check
+                    </button>
+                    <button onclick="generateAI()" class="btn btn-accent">
+                        🤖 AI Analysis
+                    </button>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>📋 Recent Leads</h2>
+                <div id="leads-list" class="leads-list">
+                    <p class="loading">Loading leads...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>🔧 Lead Management</h2>
+            <div class="form-container">
+                <input type="text" id="search-input" placeholder="Search leads..." class="form-input">
+                <button onclick="searchLeads()" class="btn btn-secondary">Search</button>
+                <button onclick="exportLeads()" class="btn btn-secondary">Export CSV</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>📝 API Console</h2>
+            <textarea id="console-output" readonly class="console-output"></textarea>
+            <div class="console-input">
+                <input type="text" id="api-url" placeholder="API Endpoint" class="form-input">
+                <button onclick="callAPI()" class="btn btn-primary">Call API</button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>NEXUS B2B Lead Generation & OSINT Intelligence Suite v1.0.0</p>
+        <p><a href="/docs" target="_blank">API Documentation</a> | <a href="https://github.com/burkefit2382/nexus-b2b-lead-generation" target="_blank">GitHub</a></p>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
