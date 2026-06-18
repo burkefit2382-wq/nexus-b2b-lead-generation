@@ -19,26 +19,26 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - Seed: admin@nexus.io + 4 sample leads on startup (idempotent).
 
 ## Implemented (2026-06-18)
-- JWT auth (register/login/logout/me/refresh), bcrypt, RBAC (user/admin), API keys (X-API-Key).
+- JWT auth + RBAC (user/admin), API keys (X-API-Key), refresh tokens.
 - Lead engine: list/filter/search/stats/create/sell/delete + CSV export.
-- AI: DeepSeek + Qwen via HF router (model-selectable in chat & scraper); graceful fallback.
+- **Monetization (Stripe)**: credit packages (Starter $29/10cr, Pro $99/50cr, Agency $299/200cr);
+  scraped/premium leads are locked (contact masked) until unlocked with 1 credit; secure
+  checkout (server-side prices, origin allowlist, atomic idempotent credit grant, session
+  ownership check) + /api/webhook/stripe. Billing tab with return-polling.
+- **People Intelligence**: POST /api/people-intel/scan → identity resolution + live digital
+  footprint (social presence checks) + public records (breach) + AI profile + risk scoring;
+  history scoped per-user (admin sees all). People Intel tab UI.
+- AI: DeepSeek + Qwen via HF router (selectable in chat, scraper, people-intel); graceful fallback.
 - 12 cloud OSINT tools + reports log.
-- **24/7 Lead Scraper engine** (APScheduler, AsyncIOScheduler): multi-provider
-  (Hacker News + GitHub working from cloud; Reddit via OAuth when creds set), OSINT intent
-  pre-filter + AI/heuristic HQ scoring, dedup, contact extraction, configurable sources/
-  interval/min-score, manual trigger, live feed. Self-healing source_site backfill on startup.
-- Frontend: Lead Scrapers control panel, AI model selector, all dashboards.
-- Tested: backend 26/26 pytest, frontend e2e — all green. Deployment check PASS.
+- 24/7 multi-provider scraper (Hacker News + GitHub live; Reddit via OAuth) with OSINT/AI HQ filter.
+- Tested: backend 36/36 pytest, frontend e2e — all green. Deployment check PASS.
 
 ## Known Constraints
-- HF token needs the **"Inference Providers" permission** (currently 403) → AI returns graceful
-  error / scraped leads tagged `ai_pending` until fixed. Heuristic scoring works meanwhile.
-- Reddit/Craigslist block datacenter IPs → Reddit needs OAuth creds (REDDIT_CLIENT_ID/SECRET/
-  USERNAME/PASSWORD). HN + GitHub work without auth.
-- Local Qwen 3.6-27B not runnable in-container (no GPU) → Qwen served via HF router instead.
+- HF token needs **"Inference Providers" permission** (currently 403) → AI graceful/heuristic
+  fallback until fixed. Reddit needs OAuth creds (REDDIT_*). Local Qwen 27B not runnable (no GPU).
+- Stripe in TEST mode (sk_test_emergent); test card 4242 4242 4242 4242.
 
 ## Backlog / Next
-- P0: HF token "Inference Providers" permission → enable DeepSeek/Qwen scoring.
-- P1: Reddit OAuth creds for home-remodeling/cleaning niche leads.
-- P1: More providers (StackExchange, RSS, Reddit) + per-source error reporting.
-- P2: Stripe billing (sell leads / seats / API access); usage analytics; scraper rate-limit.
+- P0: HF "Inference Providers" permission; Reddit OAuth creds.
+- P1: API-access subscription tier (recurring) on top of one-time credit packs.
+- P2: People-intel rate limiting; lead unlock receipts/exports; usage analytics dashboard.

@@ -1078,7 +1078,8 @@ async def people_intel_scan(body: PeopleScanReq, user: dict = Depends(get_curren
 
 @api.get("/people-intel/history")
 async def people_intel_history(limit: int = 20, user: dict = Depends(get_current_user)):
-    cur = db.people_reports.find({}).sort("created_at", -1).limit(limit)
+    q = {} if user.get("role") == "admin" else {"by": user["id"]}
+    cur = db.people_reports.find(q).sort("created_at", -1).limit(limit)
     return [{"id": str(r["_id"]), "subject": (r.get("input") or {}),
              "risk": (r.get("risk") or {}).get("level"), "summary": r.get("summary"),
              "created_at": r.get("created_at")} async for r in cur]
@@ -1103,6 +1104,14 @@ async def payment_checkout(body: CheckoutReq, request: Request, user: dict = Dep
     pkg = CREDIT_PACKAGES.get(body.package_id)
     if not pkg:
         raise HTTPException(status_code=400, detail="Invalid package")
+    # open-redirect guard: only allow same-host or trusted origins
+    from urllib.parse import urlparse
+    o = urlparse(body.origin_url)
+    host = (o.hostname or "")
+    req_host = (request.base_url.hostname or "")
+    if o.scheme not in ("http", "https") or not (
+        host == req_host or host.endswith("emergentagent.com") or host in ("localhost", "127.0.0.1")):
+        raise HTTPException(status_code=400, detail="Invalid origin")
     from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest
     host_url = str(request.base_url)
     webhook_url = f"{host_url}api/webhook/stripe"
@@ -1122,19 +1131,27 @@ async def payment_checkout(body: CheckoutReq, request: Request, user: dict = Dep
     return {"url": session.url, "session_id": session.session_id}
 
 async def _settle_payment(session_id: str, payment_status: str):
-    txn = await db.payment_transactions.find_one({"session_id": session_id})
-    if not txn:
-        return
-    if payment_status == "paid" and txn.get("payment_status") != "paid":
-        await db.users.update_one({"_id": ObjectId(txn["user_id"])},
-                                  {"$inc": {"credits": int(txn["credits"])}})
-    await db.payment_transactions.update_one({"session_id": session_id},
-        {"$set": {"payment_status": payment_status,
-                  "status": "complete" if payment_status == "paid" else payment_status,
-                  "updated_at": datetime.now(timezone.utc).isoformat()}})
+    if payment_status == "paid":
+        # atomic: flip to paid only once, then grant credits only if we won the race
+        res = await db.payment_transactions.update_one(
+            {"session_id": session_id, "payment_status": {"$ne": "paid"}},
+            {"$set": {"payment_status": "paid", "status": "complete",
+                      "updated_at": datetime.now(timezone.utc).isoformat()}})
+        if res.modified_count == 1:
+            txn = await db.payment_transactions.find_one({"session_id": session_id})
+            if txn:
+                await db.users.update_one({"_id": ObjectId(txn["user_id"])},
+                                          {"$inc": {"credits": int(txn["credits"])}})
+    else:
+        await db.payment_transactions.update_one({"session_id": session_id},
+            {"$set": {"payment_status": payment_status, "status": payment_status,
+                      "updated_at": datetime.now(timezone.utc).isoformat()}})
 
 @api.get("/payments/status/{session_id}")
 async def payment_status(session_id: str, request: Request, user: dict = Depends(get_current_user)):
+    txn = await db.payment_transactions.find_one({"session_id": session_id})
+    if not txn or (txn["user_id"] != user["id"] and user.get("role") != "admin"):
+        raise HTTPException(status_code=404, detail="Transaction not found")
     from emergentintegrations.payments.stripe.checkout import StripeCheckout
     sc = StripeCheckout(api_key=os.environ["STRIPE_API_KEY"],
                         webhook_url=f"{str(request.base_url)}api/webhook/stripe")
