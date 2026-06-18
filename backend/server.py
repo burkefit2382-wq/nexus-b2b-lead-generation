@@ -772,7 +772,10 @@ SERVICE_QUERIES = [
     ("tree service", "tree_service"), ("flooring", "flooring"),
 ]
 # Key Tampa Bay locales (Hillsborough + Pinellas) appended to each search.
-TAMPA_LOCALES = ["Tampa FL", "St Petersburg FL", "Clearwater FL", "Brandon FL", "Largo FL"]
+TAMPA_LOCALES = [
+    "Tampa FL", "St Petersburg FL", "Clearwater FL", "Brandon FL", "Largo FL",
+    "Riverview FL", "Plant City FL", "Pinellas Park FL", "Palm Harbor FL", "Tarpon Springs FL",
+]
 SOURCES_VERSION = 3
 # OpenStreetMap/Nominatim (free, no key, cloud-accessible) — local independent-service businesses.
 DEFAULT_SOURCES = [
@@ -898,7 +901,7 @@ async def fetch_osm(src: dict) -> list:
         for locale in TAMPA_LOCALES:
             q = f"{src['query']}, {locale}"
             url = (f"https://nominatim.openstreetmap.org/search?q={quote(q)}"
-                   "&format=jsonv2&extratags=1&addressdetails=1&limit=10&countrycodes=us")
+                   "&format=jsonv2&extratags=1&addressdetails=1&limit=25&countrycodes=us")
             try:
                 data = (await c.get(url)).json()
             except Exception as e:
