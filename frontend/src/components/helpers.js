@@ -9,4 +9,7 @@ export const scoreClass = (s) => {
 };
 
 let _uidSeq = 0;
-export const nextUid = () => `uid_${Date.now()}_${_uidSeq++}`;
+export const nextUid = () => {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  return `uid_${Date.now()}_${_uidSeq++}`;
+};

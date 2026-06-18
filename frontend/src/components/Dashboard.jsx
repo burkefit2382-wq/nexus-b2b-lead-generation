@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { Overview, Osint, AIChat, ApiKeys, Reports, Admin, PeopleIntel, Billing } from "./tabs";
 import { Leads } from "./Leads";
@@ -34,8 +34,8 @@ const TAB_VIEWS = {
 
 /* Tab state + cross-component navigation (Stripe return + "nexus-goto" events) */
 function useDashboardTab() {
-  const hasSession = new URLSearchParams(window.location.search).get("session_id");
-  const [tab, setTab] = useState(hasSession ? "billing" : "overview");
+  const params = new URLSearchParams(window.location.search);
+  const [tab, setTab] = useState(params.get("session_id") ? "billing" : "overview");
   useEffect(() => {
     const handler = (e) => setTab(e.detail);
     window.addEventListener("nexus-goto", handler);
@@ -97,17 +97,15 @@ export default function Dashboard() {
   const nav = [...NAV, ...(user.role === "admin" ? [{ id: "admin", label: "Admin", icon: ShieldCheck }] : [])];
   const current = nav.find((n) => n.id === tab) || nav[0];
 
-  const renderTab = useCallback(() => {
-    const view = TAB_VIEWS[tab];
-    return view ? view() : <Overview goTo={setTab} />;
-  }, [tab, setTab]);
+  const view = TAB_VIEWS[tab];
+  const content = view ? view() : <Overview goTo={setTab} />;
 
   return (
     <div className="app-shell">
       <Sidebar nav={nav} tab={tab} setTab={setTab} user={user} logout={logout} />
       <main className="main">
         <Topbar current={current} credits={user.credits} onCreditsClick={() => setTab("billing")} />
-        <div className="content">{renderTab()}</div>
+        <div className="content">{content}</div>
       </main>
     </div>
   );
