@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useRef } from "react";
 import api from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 import {
   Send, Bot, Trash2, DollarSign, Download, RefreshCw, Plus, KeyRound,
   Copy, ShieldAlert, Crosshair, Globe, Network, Smartphone, AtSign,
-  MapPin, ScanLine, Server, FileSearch, Search, Users, Sparkles
+  MapPin, ScanLine, Server, FileSearch, Search, Users, Sparkles,
+  Lock, Unlock, CreditCard, UserSearch, ShieldCheck, AlertTriangle
 } from "lucide-react";
 
 const cat = (c) => (c === "home_remodeling" ? "Remodeling" : c === "cleaning" ? "Cleaning" : c || "—");
@@ -85,6 +87,7 @@ export function Overview({ goTo }) {
 
 /* ============================ LEADS ============================ */
 export function Leads() {
+  const { user, refreshUser } = useAuth();
   const [data, setData] = useState({ leads: [], total: 0 });
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
@@ -111,12 +114,24 @@ export function Leads() {
     if (price == null) return;
     await api.patch(`/leads/${id}/sell?price=${parseFloat(price) || 0}`); load();
   };
+  const unlock = async (id) => {
+    try { await api.post(`/leads/${id}/unlock`); await refreshUser(); load(); }
+    catch (e) {
+      if (e.response?.status === 402) { if (window.confirm("Out of credits. Go to Billing to buy a pack?")) window.dispatchEvent(new CustomEvent("nexus-goto", { detail: "billing" })); }
+      else alert(e.response?.data?.detail || e.message);
+    }
+  };
   const del = async (id) => { if (window.confirm("Delete this lead?")) { await api.delete(`/leads/${id}`); load(); } };
   const exportCsv = () => window.open(`${api.defaults.baseURL}/leads/export/csv`, "_blank");
 
   return (
     <div className="fade-in">
-      <div className="section-title">Lead Engine · {data.total} records</div>
+      <div className="section-title" style={{ justifyContent: "space-between" }}>
+        <span>Lead Engine · {data.total} records</span>
+        <span className="mono" style={{ fontSize: 12, color: "var(--accent)" }}>
+          <CreditCard size={13} style={{ verticalAlign: -2, marginRight: 6 }} />{user?.credits ?? 0} credits
+        </span>
+      </div>
       <div className="panel">
         <div className="panel-head">
           <div className="toolbar">
@@ -147,7 +162,10 @@ export function Leads() {
               : data.leads.map((l) => (
                 <tr key={l.id} data-testid={`lead-row-${l.id}`}>
                   <td className="name">{l.full_name || "—"}<div className="muted">{l.city}{l.state ? ", " + l.state : ""}</div></td>
-                  <td className="muted">{l.email || "—"}<div>{l.phone}</div></td>
+                  <td className="muted">
+                    {l.locked ? <span style={{ color: "var(--muted)", fontFamily: "var(--mono)", fontSize: 12 }}><Lock size={12} style={{ verticalAlign: -1, marginRight: 5 }} />locked</span>
+                      : <>{l.email || "—"}<div>{l.phone}</div></>}
+                  </td>
                   <td><span className="badge">{cat(l.category)}</span></td>
                   <td>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -159,6 +177,7 @@ export function Leads() {
                   <td><span className={`badge ${l.is_sold ? "sold" : ""}`}>{l.status}</span></td>
                   <td>
                     <div className="row-actions">
+                      {l.locked && <button className="icon-btn" style={{ color: "var(--accent)", borderColor: "var(--accent-dim)" }} title="Unlock (1 credit)" onClick={() => unlock(l.id)} data-testid={`lead-unlock-${l.id}`}><Unlock size={14} /></button>}
                       <button className="icon-btn" title="Mark sold" onClick={() => sell(l.id)} data-testid={`lead-sell-${l.id}`}><DollarSign size={14} /></button>
                       <button className="icon-btn danger" title="Delete" onClick={() => del(l.id)} data-testid={`lead-del-${l.id}`}><Trash2 size={14} /></button>
                     </div>
@@ -170,6 +189,166 @@ export function Leads() {
           </table>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ============================ PEOPLE INTELLIGENCE ============================ */
+export function PeopleIntel() {
+  const [form, setForm] = useState({ name: "", email: "", phone: "", username: "", model: "deepseek" });
+  const [report, setReport] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const upd = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const scan = async () => {
+    setBusy(true); setReport(null);
+    try { const r = await api.post("/people-intel/scan", form); setReport(r.data); }
+    catch (e) { alert(e.response?.data?.detail || e.message); }
+    finally { setBusy(false); }
+  };
+  const riskColor = { low: "var(--accent)", medium: "var(--amber)", high: "var(--danger)" };
+
+  return (
+    <div className="fade-in">
+      <div className="section-title">People Intelligence · OSINT Resolver</div>
+      <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: 16 }}>
+        <div className="panel">
+          <div className="panel-head"><h3>Subject Inputs</h3></div>
+          <div className="panel-body">
+            {["name", "username", "email", "phone"].map((k) => (
+              <div className="field" key={k}>
+                <label>{k}</label>
+                <input className="input" value={form[k]} onChange={(e) => upd(k, e.target.value)}
+                  placeholder={k === "username" ? "e.g. torvalds" : k} data-testid={`pi-${k}`} />
+              </div>
+            ))}
+            <div className="field">
+              <label>AI Model</label>
+              <select className="select" style={{ width: "100%" }} value={form.model} onChange={(e) => upd("model", e.target.value)} data-testid="pi-model">
+                <option value="deepseek">DeepSeek V3.1</option>
+                <option value="qwen">Qwen 2.5 32B</option>
+              </select>
+            </div>
+            <button className="btn" onClick={scan} disabled={busy} data-testid="pi-scan">
+              {busy ? <span className="spinner" /> : <><UserSearch size={15} /> Run Scan</>}
+            </button>
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-head"><h3>Intelligence Report</h3>
+            {report && <span className="badge" style={{ color: riskColor[report.risk.level], borderColor: riskColor[report.risk.level] }}>
+              <AlertTriangle size={11} style={{ verticalAlign: -1, marginRight: 5 }} />RISK: {report.risk.level.toUpperCase()}</span>}
+          </div>
+          <div className="panel-body" data-testid="pi-report">
+            {!report ? <div className="empty"><UserSearch size={36} /><div>Enter identifiers and run a scan.</div></div>
+            : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                <div>
+                  <div className="mono" style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>AI PROFILE · {(report.ai_profile.confidence * 100).toFixed(0)}% conf</div>
+                  <div style={{ fontSize: 14, lineHeight: 1.6 }}>{report.ai_profile.summary}</div>
+                  <div className="mono" style={{ fontSize: 12, color: "var(--muted)", marginTop: 8 }}>
+                    {report.ai_profile.occupation_guess} · {report.ai_profile.personality}
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+                    {(report.ai_profile.interests || []).map((t, i) => <span key={i} className="badge cold">{t}</span>)}
+                  </div>
+                </div>
+                <div>
+                  <div className="mono" style={{ fontSize: 11, color: "var(--muted)", marginBottom: 8 }}>DIGITAL FOOTPRINT ({report.footprint.accounts.length})</div>
+                  {report.footprint.accounts.length ? report.footprint.accounts.map((a, i) => (
+                    <a key={i} href={a.url} target="_blank" rel="noreferrer" className="key-row" style={{ marginBottom: 8, display: "flex" }}>
+                      <div className="kmeta"><b>{a.platform}</b><div className="pfx">{a.url}</div></div>
+                      <span className="badge hot">{(a.confidence * 100).toFixed(0)}%</span>
+                    </a>
+                  )) : <div className="muted mono" style={{ fontSize: 12 }}>No public accounts detected.</div>}
+                </div>
+                <div>
+                  <div className="mono" style={{ fontSize: 11, color: "var(--muted)", marginBottom: 8 }}>PUBLIC RECORDS ({report.public_records.records.length})</div>
+                  {report.public_records.records.map((r, i) => (
+                    <div key={i} style={{ fontSize: 13, padding: "8px 0", borderBottom: "1px solid var(--line)" }}>
+                      <span className="badge">{r.category}</span> <span className="muted">{r.description}</span>
+                    </div>
+                  ))}
+                </div>
+                {report.risk.reasons.length > 0 && (
+                  <div>
+                    <div className="mono" style={{ fontSize: 11, color: "var(--danger)", marginBottom: 8 }}>RISK INDICATORS</div>
+                    {report.risk.reasons.map((r, i) => <div key={i} style={{ fontSize: 13, color: "var(--amber)" }}>⚠ {r}</div>)}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================ BILLING / CREDITS ============================ */
+export function Billing() {
+  const { user, refreshUser } = useAuth();
+  const [pkgs, setPkgs] = useState([]);
+  const [busy, setBusy] = useState("");
+  const [poll, setPoll] = useState(null);
+
+  useEffect(() => {
+    api.get("/payments/packages").then((r) => setPkgs(r.data)).catch(() => {});
+    const sid = new URLSearchParams(window.location.search).get("session_id");
+    if (sid) startPolling(sid);
+    // eslint-disable-next-line
+  }, []);
+
+  const startPolling = async (sid, attempt = 0) => {
+    setPoll("Verifying payment…");
+    if (attempt > 6) { setPoll("Still processing — check back shortly."); return; }
+    try {
+      const r = await api.get(`/payments/status/${sid}`);
+      if (r.data.payment_status === "paid") {
+        setPoll("✅ Payment complete — credits added!");
+        await refreshUser();
+        window.history.replaceState({}, "", window.location.pathname);
+        return;
+      }
+      if (r.data.status === "expired") { setPoll("Session expired."); return; }
+      setTimeout(() => startPolling(sid, attempt + 1), 2000);
+    } catch (e) { setPoll("Could not verify payment."); }
+  };
+
+  const buy = async (id) => {
+    setBusy(id);
+    try {
+      const r = await api.post("/payments/checkout", { package_id: id, origin_url: window.location.origin });
+      window.location.href = r.data.url;
+    } catch (e) { alert(e.response?.data?.detail || e.message); setBusy(""); }
+  };
+
+  return (
+    <div className="fade-in">
+      <div className="section-title" style={{ justifyContent: "space-between" }}>
+        <span>Billing · Lead Credits</span>
+        <span className="mono" style={{ fontSize: 13, color: "var(--accent)" }}>
+          <CreditCard size={14} style={{ verticalAlign: -2, marginRight: 6 }} />{user?.credits ?? 0} credits available
+        </span>
+      </div>
+      {poll && <div className="key-reveal" data-testid="billing-poll"><span className="mono" style={{ color: "var(--accent)" }}>{poll}</span></div>}
+      <div className="osint-grid">
+        {pkgs.map((p) => (
+          <div className="tool-card" key={p.id} style={{ cursor: "default" }} data-testid={`pkg-${p.id}`}>
+            <div className="ico"><CreditCard size={18} /></div>
+            <h4>{p.name}</h4>
+            <div style={{ fontFamily: "var(--head)", fontSize: 34, fontWeight: 700, margin: "8px 0" }}>${p.amount}</div>
+            <p style={{ marginBottom: 14 }}><b style={{ color: "var(--accent)" }}>{p.credits} credits</b> · unlock {p.credits} premium leads</p>
+            <button className="btn btn-sm" onClick={() => buy(p.id)} disabled={busy === p.id} data-testid={`buy-${p.id}`}>
+              {busy === p.id ? <span className="spinner" /> : "Buy Now"}
+            </button>
+          </div>
+        ))}
+      </div>
+      <p className="mono" style={{ fontSize: 11, color: "var(--muted)", marginTop: 18 }}>
+        1 credit unlocks 1 scraped lead's full contact. Secure checkout via Stripe (test mode). Card: 4242 4242 4242 4242.
+      </p>
     </div>
   );
 }

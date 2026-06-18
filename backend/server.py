@@ -165,7 +165,8 @@ class LoginReq(BaseModel):
     password: str
 
 def _pub(u: dict) -> dict:
-    return {"id": u["id"], "email": u["email"], "name": u.get("name", ""), "role": u.get("role", "user")}
+    return {"id": u["id"], "email": u["email"], "name": u.get("name", ""),
+            "role": u.get("role", "user"), "credits": u.get("credits", 0)}
 
 @api.post("/auth/register")
 async def register(body: RegisterReq, response: Response):
@@ -173,7 +174,8 @@ async def register(body: RegisterReq, response: Response):
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Email already registered")
     doc = {"email": email, "password_hash": hash_password(body.password),
-           "name": body.name, "role": "user", "created_at": datetime.now(timezone.utc).isoformat()}
+           "name": body.name, "role": "user", "credits": 0,
+           "created_at": datetime.now(timezone.utc).isoformat()}
     res = await db.users.insert_one(doc)
     uid = str(res.inserted_id)
     set_auth_cookies(response, create_access_token(uid, email), create_refresh_token(uid))
@@ -298,8 +300,38 @@ async def list_leads(category: Optional[str] = None, status: Optional[str] = Non
         q["$or"] = [{"full_name": rx}, {"email": rx}, {"city": rx}, {"ai_summary": rx}, {"company": rx}]
     total = await db.leads.count_documents(q)
     cur = db.leads.find(q).sort("score", -1).skip(offset).limit(limit)
-    leads = [_lead_pub(l) async for l in cur]
+    is_admin = user.get("role") == "admin"
+    leads = []
+    async for l in cur:
+        pub = _lead_pub(l)
+        # Monetization gate: scraped leads are locked until purchased with a credit
+        if l.get("scraped") and not is_admin and user["id"] not in (l.get("unlocked_by") or []):
+            pub["locked"] = True
+            pub["email"] = ""
+            pub["phone"] = ""
+            pub["source_url"] = ""
+        else:
+            pub["locked"] = False
+        pub.pop("unlocked_by", None)
+        leads.append(pub)
     return {"total": total, "leads": leads}
+
+@api.post("/leads/{lead_id}/unlock")
+async def unlock_lead(lead_id: str, user: dict = Depends(get_current_user)):
+    lead = await db.leads.find_one({"_id": ObjectId(lead_id)})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    if user["id"] in (lead.get("unlocked_by") or []):
+        return {"unlocked": True, "already": True, "lead": _lead_pub(lead)}
+    if user.get("role") != "admin":
+        u = await db.users.find_one({"_id": ObjectId(user["id"])})
+        if (u.get("credits") or 0) < 1:
+            raise HTTPException(status_code=402, detail="Insufficient credits — buy a pack to unlock leads")
+        await db.users.update_one({"_id": ObjectId(user["id"])}, {"$inc": {"credits": -1}})
+    await db.leads.update_one({"_id": ObjectId(lead_id)}, {"$addToSet": {"unlocked_by": user["id"]}})
+    lead = await db.leads.find_one({"_id": ObjectId(lead_id)})
+    pub = _lead_pub(lead); pub.pop("unlocked_by", None); pub["locked"] = False
+    return {"unlocked": True, "lead": pub}
 
 @api.get("/leads/stats")
 async def lead_stats(user: dict = Depends(get_current_user)):
@@ -922,6 +954,209 @@ async def scraper_set_config(body: ScraperConfig, user: dict = Depends(require_a
 async def scraper_feed(limit: int = 30, user: dict = Depends(get_current_user)):
     cur = db.leads.find({"scraped": True}).sort("created_at", -1).limit(limit)
     return [_lead_pub(l) async for l in cur]
+
+# ====================== PEOPLE INTELLIGENCE ======================
+class IdentityInput(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    username: Optional[str] = None
+
+async def _resolve_identity(d: IdentityInput) -> dict:
+    candidates = []
+    if d.email:
+        candidates.append({"source": "email_osint", "value": d.email, "confidence": 0.9,
+                           "notes": "Email used as primary identifier."})
+    if d.username:
+        candidates.append({"source": "username_osint", "value": d.username, "confidence": 0.8,
+                           "notes": "Username searched across platforms."})
+    if d.phone:
+        candidates.append({"source": "phone_osint", "value": d.phone, "confidence": 0.7,
+                           "notes": "Phone number provided."})
+    if d.name:
+        candidates.append({"source": "name", "value": d.name, "confidence": 0.5,
+                           "notes": "Display name provided."})
+    primary = max(candidates, key=lambda c: c["confidence"]) if candidates else None
+    return {"primary": primary, "candidates": candidates,
+            "overall_confidence": primary["confidence"] if primary else 0.0}
+
+async def _build_footprint(d: IdentityInput) -> dict:
+    accounts = []
+    if d.username:
+        plats = {"twitter": f"https://x.com/{d.username}", "github": f"https://github.com/{d.username}",
+                 "instagram": f"https://www.instagram.com/{d.username}/",
+                 "reddit": f"https://www.reddit.com/user/{d.username}",
+                 "tiktok": f"https://www.tiktok.com/@{d.username}"}
+        async with httpx.AsyncClient(timeout=8, follow_redirects=True,
+                                     headers={"User-Agent": "Mozilla/5.0"}) as c:
+            for plat, url in plats.items():
+                try:
+                    r = await c.get(url)
+                    exists = r.status_code == 200
+                except Exception:
+                    exists = False
+                if exists:
+                    accounts.append({"platform": plat, "handle": d.username, "url": url,
+                                     "type": "developer" if plat == "github" else "social",
+                                     "confidence": 0.85 if exists else 0.3})
+    return {"accounts": accounts, "domains": [], "posts": []}
+
+async def _public_records(d: IdentityInput) -> dict:
+    records = []
+    if d.email:
+        async with httpx.AsyncClient(timeout=10) as c:
+            try:
+                r = await c.get(f"https://haveibeenpwned.com/unifiedsearch/{d.email}",
+                                headers={"User-Agent": "NEXUS-OSINT"})
+                if r.status_code == 200:
+                    records.append({"category": "breach", "source": "HaveIBeenPwned",
+                                    "description": "Email appears in known breach datasets.",
+                                    "url": None, "confidence": 0.8})
+            except Exception:
+                pass
+    if d.name:
+        records.append({"category": "business", "source": "registry_guess",
+                        "description": f"Possible business/registry association with {d.name}.",
+                        "url": None, "confidence": 0.5})
+    return {"records": records}
+
+async def _ai_profile(d: IdentityInput, footprint: dict, records: dict, model_key: str) -> dict:
+    ctx = {"input": d.model_dump(), "accounts": [a["platform"] for a in footprint["accounts"]],
+           "records": [r["category"] for r in records["records"]]}
+    prompt = ("You are an OSINT analyst. From the JSON below, infer a privacy-respecting public-profile. "
+              "Return ONLY JSON with keys: summary (2-3 sentences), personality (string), "
+              "interests (list of strings), occupation_guess (string), risk_indicators (list of strings), "
+              "confidence (0-1 float).\n\n" + json.dumps(ctx))
+    r = await deepseek_chat([{"role": "user", "content": prompt}], model_key=model_key, max_tokens=400, temperature=0.4)
+    if "error" not in r:
+        out = r["content"].strip()
+        if "```" in out:
+            out = out.split("```")[1].replace("json", "", 1).strip()
+        try:
+            data = json.loads(out[out.find("{"): out.rfind("}") + 1])
+            data.setdefault("interests", []); data.setdefault("risk_indicators", [])
+            data.setdefault("confidence", 0.6)
+            return data
+        except Exception:
+            pass
+    # heuristic fallback
+    interests = []
+    if any(a["platform"] == "github" for a in footprint["accounts"]):
+        interests.append("software development")
+    if any(a["platform"] in ("twitter", "instagram") for a in footprint["accounts"]):
+        interests.append("online discourse")
+    return {"summary": "Subject maintains a public digital presence across the platforms detected.",
+            "personality": "Digitally engaged", "interests": interests,
+            "occupation_guess": "Knowledge worker", "risk_indicators": [], "confidence": 0.55}
+
+class PeopleScanReq(IdentityInput):
+    model: str = "deepseek"
+
+@api.post("/people-intel/scan")
+async def people_intel_scan(body: PeopleScanReq, user: dict = Depends(get_current_user)):
+    d = IdentityInput(name=body.name, email=body.email, phone=body.phone, username=body.username)
+    mk = "qwen" if body.model == "qwen" else "deepseek"
+    identity = await _resolve_identity(d)
+    footprint = await _build_footprint(d)
+    public_records = await _public_records(d)
+    profile = await _ai_profile(d, footprint, public_records, mk)
+    risk_ind = profile.get("risk_indicators", []) or []
+    breached = any(r["category"] == "breach" for r in public_records["records"])
+    level = "high" if (risk_ind and breached) else "medium" if (risk_ind or breached) else "low"
+    reasons = list(risk_ind) + (["email found in breach datasets"] if breached else [])
+    report = {"input": d.model_dump(), "identity": identity, "footprint": footprint,
+              "public_records": public_records, "ai_profile": profile,
+              "risk": {"level": level, "reasons": reasons},
+              "summary": (f"People-intel for {d.name or d.username or d.email or 'subject'}: "
+                          f"identity confidence {identity['overall_confidence']:.2f}, "
+                          f"{len(footprint['accounts'])} accounts, "
+                          f"{len(public_records['records'])} records, risk={level}."),
+              "created_at": datetime.now(timezone.utc).isoformat(), "by": user["id"]}
+    await db.people_reports.insert_one(dict(report))
+    report.pop("_id", None)
+    return report
+
+@api.get("/people-intel/history")
+async def people_intel_history(limit: int = 20, user: dict = Depends(get_current_user)):
+    cur = db.people_reports.find({}).sort("created_at", -1).limit(limit)
+    return [{"id": str(r["_id"]), "subject": (r.get("input") or {}),
+             "risk": (r.get("risk") or {}).get("level"), "summary": r.get("summary"),
+             "created_at": r.get("created_at")} async for r in cur]
+
+# ====================== STRIPE PAYMENTS (lead credits) ======================
+CREDIT_PACKAGES = {
+    "starter": {"name": "Starter", "amount": 29.0, "credits": 10},
+    "pro": {"name": "Pro", "amount": 99.0, "credits": 50},
+    "agency": {"name": "Agency", "amount": 299.0, "credits": 200},
+}
+
+class CheckoutReq(BaseModel):
+    package_id: str
+    origin_url: str
+
+@api.get("/payments/packages")
+async def payment_packages(user: dict = Depends(get_current_user)):
+    return [{"id": k, **v} for k, v in CREDIT_PACKAGES.items()]
+
+@api.post("/payments/checkout")
+async def payment_checkout(body: CheckoutReq, request: Request, user: dict = Depends(get_current_user)):
+    pkg = CREDIT_PACKAGES.get(body.package_id)
+    if not pkg:
+        raise HTTPException(status_code=400, detail="Invalid package")
+    from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest
+    host_url = str(request.base_url)
+    webhook_url = f"{host_url}api/webhook/stripe"
+    sc = StripeCheckout(api_key=os.environ["STRIPE_API_KEY"], webhook_url=webhook_url)
+    origin = body.origin_url.rstrip("/")
+    success_url = f"{origin}/?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{origin}/"
+    meta = {"user_id": user["id"], "package_id": body.package_id, "credits": str(pkg["credits"])}
+    req = CheckoutSessionRequest(amount=float(pkg["amount"]), currency="usd",
+                                 success_url=success_url, cancel_url=cancel_url, metadata=meta)
+    session = await sc.create_checkout_session(req)
+    await db.payment_transactions.insert_one({
+        "session_id": session.session_id, "user_id": user["id"], "package_id": body.package_id,
+        "amount": float(pkg["amount"]), "currency": "usd", "credits": pkg["credits"],
+        "payment_status": "pending", "status": "initiated", "metadata": meta,
+        "created_at": datetime.now(timezone.utc).isoformat()})
+    return {"url": session.url, "session_id": session.session_id}
+
+async def _settle_payment(session_id: str, payment_status: str):
+    txn = await db.payment_transactions.find_one({"session_id": session_id})
+    if not txn:
+        return
+    if payment_status == "paid" and txn.get("payment_status") != "paid":
+        await db.users.update_one({"_id": ObjectId(txn["user_id"])},
+                                  {"$inc": {"credits": int(txn["credits"])}})
+    await db.payment_transactions.update_one({"session_id": session_id},
+        {"$set": {"payment_status": payment_status,
+                  "status": "complete" if payment_status == "paid" else payment_status,
+                  "updated_at": datetime.now(timezone.utc).isoformat()}})
+
+@api.get("/payments/status/{session_id}")
+async def payment_status(session_id: str, request: Request, user: dict = Depends(get_current_user)):
+    from emergentintegrations.payments.stripe.checkout import StripeCheckout
+    sc = StripeCheckout(api_key=os.environ["STRIPE_API_KEY"],
+                        webhook_url=f"{str(request.base_url)}api/webhook/stripe")
+    cs = await sc.get_checkout_status(session_id)
+    await _settle_payment(session_id, cs.payment_status)
+    u = await db.users.find_one({"_id": ObjectId(user["id"])})
+    return {"status": cs.status, "payment_status": cs.payment_status,
+            "amount_total": cs.amount_total, "currency": cs.currency,
+            "credits": (u or {}).get("credits", 0)}
+
+@app.post("/api/webhook/stripe")
+async def stripe_webhook(request: Request):
+    from emergentintegrations.payments.stripe.checkout import StripeCheckout
+    sc = StripeCheckout(api_key=os.environ["STRIPE_API_KEY"],
+                        webhook_url=f"{str(request.base_url)}api/webhook/stripe")
+    body = await request.body()
+    try:
+        ev = await sc.handle_webhook(body, request.headers.get("Stripe-Signature"))
+        await _settle_payment(ev.session_id, ev.payment_status)
+    except Exception as e:
+        logger.warning("stripe webhook error: %s", e)
+    return {"received": True}
 
 # ----------------------------------------------------------------------------- mount + startup
 app.include_router(api)
