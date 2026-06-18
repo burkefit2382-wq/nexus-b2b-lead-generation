@@ -32,7 +32,7 @@ export function AuthProvider({ children }) {
     try {
       await api.post("/auth/logout");
     } catch (err) {
-      console.error("Logout request failed:", err);
+      if (process.env.NODE_ENV !== "production") console.error("Logout request failed:", err);
     }
     setUser(false);
   }, []);
@@ -43,7 +43,7 @@ export function AuthProvider({ children }) {
       setUser(r.data);
       return r.data;
     } catch (err) {
-      console.error("refreshUser failed:", err);
+      if (process.env.NODE_ENV !== "production") console.error("refreshUser failed:", err);
       return undefined;
     }
   }, []);

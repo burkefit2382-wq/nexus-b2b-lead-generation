@@ -69,7 +69,7 @@ export function Overview({ goTo }) {
               <tbody>
                 {leads.map((l) => (
                   <tr key={l.id}>
-                    <td className="name">{l.full_name || "—"}<div className="muted">{l.city}, {l.state}</div></td>
+                    <td className="name">{l.full_name || l.company || "—"}<div className="muted">{l.city}, {l.state}</div></td>
                     <td><span className={`badge ${scoreClass(l.score)}`}>{Math.round(l.score)}</span></td>
                   </tr>
                 ))}
