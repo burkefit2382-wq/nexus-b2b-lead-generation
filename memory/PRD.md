@@ -46,6 +46,15 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
   (draft + copy works now). Endpoints: /api/threat/scan|reports|outreach-profile (all require_admin).
 - Tested: backend 45+ pytest, frontend e2e (iterations 1-6) — all green.
 
+## Implemented (2026-06-18 — pay-per-lead)
+- **Stripe Pay-Per-Lead (pay-as-you-go)**: locked scraped leads expose a score-tiered price
+  (score >=70 -> $15, >=40 -> $7, else $3) via `lead_price()`. `POST /api/leads/{id}/buy`
+  creates a direct Stripe checkout for one lead (no pre-bought credits); on settlement
+  (`_settle_payment`, kind="lead") the buyer is added to that lead's `unlocked_by`.
+  `/payments/status` returns `kind`/`lead_id`; Billing poll shows "lead unlocked" message.
+  Frontend: lime "$price" Buy button per locked lead in Lead Engine (`lead-buy-{id}`).
+  Verified: 27 buy buttons render for normal user; live Stripe session created ($15 for score-95 lead).
+
 ## Known Constraints
 - AI is LIVE: DeepSeek-V3.1 (`deepseek-ai/DeepSeek-V3.1:novita`) + Qwen (`Qwen/Qwen2.5-72B-Instruct`)
   via HF router with a working token (Inference Providers permission granted).

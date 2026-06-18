@@ -277,6 +277,15 @@ def _lead_pub(l: dict) -> dict:
     l["id"] = str(l.pop("_id"))
     return l
 
+def lead_price(lead: dict) -> float:
+    """Pay-per-lead pricing tiered by lead score (USD)."""
+    s = lead.get("score") or 0
+    if s >= 70:
+        return 15.0
+    if s >= 40:
+        return 7.0
+    return 3.0
+
 class LeadCreate(BaseModel):
     category: str = "home_remodeling"
     full_name: str = ""
@@ -309,6 +318,7 @@ async def list_leads(category: Optional[str] = None, status: Optional[str] = Non
         # Monetization gate: scraped leads are locked until purchased with a credit
         if l.get("scraped") and not is_admin and user["id"] not in (l.get("unlocked_by") or []):
             pub["locked"] = True
+            pub["price"] = lead_price(l)
             pub["email"] = ""
             pub["phone"] = ""
             pub["source_url"] = ""
@@ -334,6 +344,42 @@ async def unlock_lead(lead_id: str, user: dict = Depends(get_current_user)):
     lead = await db.leads.find_one({"_id": ObjectId(lead_id)})
     pub = _lead_pub(lead); pub.pop("unlocked_by", None); pub["locked"] = False
     return {"unlocked": True, "lead": pub}
+
+class LeadBuyReq(BaseModel):
+    origin_url: str
+
+@api.post("/leads/{lead_id}/buy")
+async def buy_lead(lead_id: str, body: LeadBuyReq, request: Request, user: dict = Depends(get_current_user)):
+    """Pay-per-lead: direct Stripe checkout to unlock one lead (no pre-bought credits)."""
+    lead = await db.leads.find_one({"_id": ObjectId(lead_id)})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    if user["id"] in (lead.get("unlocked_by") or []):
+        raise HTTPException(status_code=400, detail="Lead already unlocked")
+    from urllib.parse import urlparse
+    o = urlparse(body.origin_url)
+    host = (o.hostname or "")
+    req_host = (request.base_url.hostname or "")
+    if o.scheme not in ("http", "https") or not (
+        host == req_host or host.endswith("emergentagent.com") or host in ("localhost", "127.0.0.1")):
+        raise HTTPException(status_code=400, detail="Invalid origin")
+    price = lead_price(lead)
+    from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest
+    host_url = str(request.base_url)
+    sc = StripeCheckout(api_key=os.environ["STRIPE_API_KEY"], webhook_url=f"{host_url}api/webhook/stripe")
+    origin = body.origin_url.rstrip("/")
+    success_url = f"{origin}/?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{origin}/"
+    meta = {"user_id": user["id"], "kind": "lead", "lead_id": lead_id}
+    req = CheckoutSessionRequest(amount=float(price), currency="usd",
+                                 success_url=success_url, cancel_url=cancel_url, metadata=meta)
+    session = await sc.create_checkout_session(req)
+    await db.payment_transactions.insert_one({
+        "session_id": session.session_id, "user_id": user["id"], "kind": "lead",
+        "lead_id": lead_id, "amount": float(price), "currency": "usd", "credits": 0,
+        "payment_status": "pending", "status": "initiated", "metadata": meta,
+        "created_at": datetime.now(timezone.utc).isoformat()})
+    return {"url": session.url, "session_id": session.session_id, "amount": float(price)}
 
 @api.get("/leads/stats")
 async def lead_stats(user: dict = Depends(get_current_user)):
@@ -1154,8 +1200,12 @@ async def _settle_payment(session_id: str, payment_status: str):
         if res.modified_count == 1:
             txn = await db.payment_transactions.find_one({"session_id": session_id})
             if txn:
-                await db.users.update_one({"_id": ObjectId(txn["user_id"])},
-                                          {"$inc": {"credits": int(txn["credits"])}})
+                if txn.get("kind") == "lead" and txn.get("lead_id"):
+                    await db.leads.update_one({"_id": ObjectId(txn["lead_id"])},
+                                              {"$addToSet": {"unlocked_by": txn["user_id"]}})
+                else:
+                    await db.users.update_one({"_id": ObjectId(txn["user_id"])},
+                                              {"$inc": {"credits": int(txn["credits"])}})
     else:
         await db.payment_transactions.update_one({"session_id": session_id},
             {"$set": {"payment_status": payment_status, "status": payment_status,
@@ -1174,6 +1224,7 @@ async def payment_status(session_id: str, request: Request, user: dict = Depends
     u = await db.users.find_one({"_id": ObjectId(user["id"])})
     return {"status": cs.status, "payment_status": cs.payment_status,
             "amount_total": cs.amount_total, "currency": cs.currency,
+            "kind": txn.get("kind", "credits"), "lead_id": txn.get("lead_id"),
             "credits": (u or {}).get("credits", 0)}
 
 @app.post("/api/webhook/stripe")

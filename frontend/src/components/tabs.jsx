@@ -199,7 +199,7 @@ export function Billing() {
     try {
       const r = await api.get(`/payments/status/${sid}`);
       if (r.data.payment_status === "paid") {
-        setPoll("✅ Payment complete — credits added!");
+        setPoll(r.data.kind === "lead" ? "✅ Payment complete — lead unlocked! Open the Lead Engine to view full contact." : "✅ Payment complete — credits added!");
         await refreshUser();
         window.history.replaceState({}, "", window.location.pathname);
         return;

@@ -32,7 +32,7 @@ function LeadsToolbar({ search, setSearch, category, setCategory, load, exportCs
 }
 
 /* ---- single lead row ---- */
-function LeadRow({ lead, onUnlock, onSell, onDelete }) {
+function LeadRow({ lead, onUnlock, onBuy, onSell, onDelete }) {
   const l = lead;
   return (
     <tr data-testid={`lead-row-${l.id}`}>
@@ -57,6 +57,7 @@ function LeadRow({ lead, onUnlock, onSell, onDelete }) {
       <td>
         <div className="row-actions">
           {l.locked && <button className="icon-btn" style={{ color: "var(--accent)", borderColor: "var(--accent-dim)" }} title="Unlock (1 credit)" onClick={() => onUnlock(l.id)} data-testid={`lead-unlock-${l.id}`}><Unlock size={14} /></button>}
+          {l.locked && <button className="btn btn-sm" style={{ padding: "4px 10px", fontSize: 12 }} title={`Buy this lead for $${l.price}`} onClick={() => onBuy(l.id)} data-testid={`lead-buy-${l.id}`}><CreditCard size={13} style={{ verticalAlign: -2, marginRight: 4 }} />${l.price}</button>}
           <button className="icon-btn" title="Mark sold" onClick={() => onSell(l.id)} data-testid={`lead-sell-${l.id}`}><DollarSign size={14} /></button>
           <button className="icon-btn danger" title="Delete" onClick={() => onDelete(l.id)} data-testid={`lead-del-${l.id}`}><Trash2 size={14} /></button>
         </div>
@@ -104,6 +105,12 @@ export function Leads() {
     }
   };
   const del = async (id) => { if (window.confirm("Delete this lead?")) { await api.delete(`/leads/${id}`); load(); } };
+  const buy = async (id) => {
+    try {
+      const r = await api.post(`/leads/${id}/buy`, { origin_url: window.location.origin });
+      window.location.href = r.data.url;
+    } catch (e) { alert(e.response?.data?.detail || e.message); }
+  };
   const exportCsv = () => window.open(`${api.defaults.baseURL}/leads/export/csv`, "_blank");
 
   return (
@@ -126,7 +133,7 @@ export function Leads() {
               {loading
                 ? <tr><td colSpan={7} style={{ padding: 30, textAlign: "center" }}><span className="spinner lime" /></td></tr>
                 : data.leads.map((l) => (
-                  <LeadRow key={l.id} lead={l} onUnlock={unlock} onSell={sell} onDelete={del} />
+                  <LeadRow key={l.id} lead={l} onUnlock={unlock} onBuy={buy} onSell={sell} onDelete={del} />
                 ))}
               {!loading && !data.leads.length && <tr><td colSpan={7} className="empty">No leads match your filters.</td></tr>}
             </tbody>
