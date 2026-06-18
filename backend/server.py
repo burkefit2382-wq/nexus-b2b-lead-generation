@@ -979,6 +979,12 @@ async def startup():
             await db.leads.insert_one(doc)
     # start 24/7 scraper
     await db.leads.create_index("source_url")
+    # self-heal: correct any scraped leads whose source_site mismatches their URL
+    for domain, site in [("github.com", "GitHub"), ("news.ycombinator.com", "Hacker News"),
+                         ("reddit.com", "Reddit")]:
+        await db.leads.update_many(
+            {"scraped": True, "source_url": {"$regex": domain}, "source_site": {"$ne": site}},
+            {"$set": {"source_site": site}})
     cfg = await get_scraper_config()
     if cfg.get("enabled"):
         reschedule(cfg.get("interval_min", 30))

@@ -19,24 +19,26 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - Seed: admin@nexus.io + 4 sample leads on startup (idempotent).
 
 ## Implemented (2026-06-18)
-- JWT auth (register/login/logout/me/refresh), bcrypt, brute-force-safe login.
-- RBAC: admin-only `/api/admin/users` + role update; user/admin roles.
-- API keys: generate (shown once) / list / revoke; machine auth via `X-API-Key`.
+- JWT auth (register/login/logout/me/refresh), bcrypt, RBAC (user/admin), API keys (X-API-Key).
 - Lead engine: list/filter/search/stats/create/sell/delete + CSV export.
-- AI: DeepSeek enrichment + chat (graceful error when token invalid).
-- 12 cloud OSINT tools: dns, whois, ip, geolocate, phone, social, breach, subdomains,
-  portscan, metadata, dork, shodan + reports log.
-- Tested: backend 19/19 pytest, frontend Playwright e2e — all green.
-- Deployment check: PASS (deployable); query limits added.
+- AI: DeepSeek + Qwen via HF router (model-selectable in chat & scraper); graceful fallback.
+- 12 cloud OSINT tools + reports log.
+- **24/7 Lead Scraper engine** (APScheduler, AsyncIOScheduler): multi-provider
+  (Hacker News + GitHub working from cloud; Reddit via OAuth when creds set), OSINT intent
+  pre-filter + AI/heuristic HQ scoring, dedup, contact extraction, configurable sources/
+  interval/min-score, manual trigger, live feed. Self-healing source_site backfill on startup.
+- Frontend: Lead Scrapers control panel, AI model selector, all dashboards.
+- Tested: backend 26/26 pytest, frontend e2e — all green. Deployment check PASS.
 
 ## Known Constraints
-- Hugging Face token provided (`hf_KPweOeKQkePU`) is INVALID/truncated → AI returns a graceful
-  error until a valid full `hf_...` token is set in `/app/backend/.env` (HF_TOKEN).
-- Local Qwen 3.6-27B not runnable in this container (no GPU).
+- HF token needs the **"Inference Providers" permission** (currently 403) → AI returns graceful
+  error / scraped leads tagged `ai_pending` until fixed. Heuristic scoring works meanwhile.
+- Reddit/Craigslist block datacenter IPs → Reddit needs OAuth creds (REDDIT_CLIENT_ID/SECRET/
+  USERNAME/PASSWORD). HN + GitHub work without auth.
+- Local Qwen 3.6-27B not runnable in-container (no GPU) → Qwen served via HF router instead.
 
 ## Backlog / Next
-- P1: Add valid HF token → enable AI enrichment/chat.
-- P1: Real lead scrapers (replace Scrapy spiders with cloud-safe ingestion / CSV import).
-- P2: API-key scopes/rate-limits; usage dashboard.
-- P2: Billing (Stripe) to monetize lead exports / seats.
-- P2: Frontend live-search debounce; pagination on leads & users.
+- P0: HF token "Inference Providers" permission → enable DeepSeek/Qwen scoring.
+- P1: Reddit OAuth creds for home-remodeling/cleaning niche leads.
+- P1: More providers (StackExchange, RSS, Reddit) + per-source error reporting.
+- P2: Stripe billing (sell leads / seats / API access); usage analytics; scraper rate-limit.
