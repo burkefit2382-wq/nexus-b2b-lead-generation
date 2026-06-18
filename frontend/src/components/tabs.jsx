@@ -247,6 +247,7 @@ export function Billing() {
 }
 
 /* ============================ ENRICHMENT ENGINE ============================ */
+const ENRICH_COST = { business: 1, person: 1, property: 1, osint: 1, lead: 3 };
 const ENRICH_TYPES = [
   { id: "business", label: "Business", fields: ["name", "domain", "phone", "address"] },
   { id: "person", label: "Person", fields: ["name", "email", "phone", "username"] },
@@ -256,6 +257,7 @@ const ENRICH_TYPES = [
 ];
 
 export function Enrichment() {
+  const { user, refreshUser } = useAuth();
   const [type, setType] = useState("business");
   const [form, setForm] = useState({});
   const [model, setModel] = useState("deepseek");
@@ -281,15 +283,25 @@ export function Enrichment() {
       }
       const r = await api.post(url, body);
       setOut(r.data);
-    } catch (e) { setOut({ error: e.response?.data?.detail || e.message }); }
-    finally { setBusy(false); }
+      await refreshUser();
+    } catch (e) {
+      if (e.response?.status === 402) {
+        setOut({ error: e.response.data.detail });
+        if (window.confirm("Out of credits. Go to Billing to buy a pack?")) window.dispatchEvent(new CustomEvent("nexus-goto", { detail: "billing" }));
+      } else setOut({ error: e.response?.data?.detail || e.message });
+    } finally { setBusy(false); }
   };
 
   const switchType = (t) => { setType(t); setForm({}); setOut(null); };
 
   return (
     <div className="fade-in">
-      <div className="section-title">Enrichment Engine · Firmographic + Identity</div>
+      <div className="section-title" style={{ justifyContent: "space-between" }}>
+        <span>Enrichment Engine · Paid API</span>
+        <span className="mono" style={{ fontSize: 12, color: "var(--accent)" }}>
+          <CreditCard size={13} style={{ verticalAlign: -2, marginRight: 6 }} />{user?.credits ?? 0} credits
+        </span>
+      </div>
       <div className="osint-grid" style={{ marginBottom: 20 }}>
         {ENRICH_TYPES.map((t) => (
           <div key={t.id} className={`tool-card ${type === t.id ? "active" : ""}`}
@@ -297,12 +309,13 @@ export function Enrichment() {
             <div className="ico"><Boxes size={18} /></div>
             <h4>{t.label}</h4>
             <p>POST /api/enrich/{t.id}</p>
+            <span className="badge hot" style={{ marginTop: 8 }}>{ENRICH_COST[t.id]} credit{ENRICH_COST[t.id] > 1 ? "s" : ""}</span>
           </div>
         ))}
       </div>
 
       <div className="panel">
-        <div className="panel-head"><h3>{cfg.label} Enrichment</h3>
+        <div className="panel-head"><h3>{cfg.label} Enrichment · {ENRICH_COST[type]} credit{ENRICH_COST[type] > 1 ? "s" : ""}/call</h3>
           <select className="select" value={model} onChange={(e) => setModel(e.target.value)} data-testid="enrich-model">
             <option value="deepseek">DeepSeek</option>
             <option value="qwen">Qwen</option>
@@ -319,7 +332,7 @@ export function Enrichment() {
             </button>
           </div>
           <div className="result-box" data-testid="enrich-result">
-            {out ? JSON.stringify(out, null, 2) : <span className="placeholder">// enriched firmographic + identity data renders here as JSON</span>}
+            {out ? JSON.stringify(out, null, 2) : <span className="placeholder">// enriched firmographic + identity data renders here as JSON · billed per call</span>}
           </div>
         </div>
       </div>

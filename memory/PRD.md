@@ -34,7 +34,10 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - **Enrichment Engine (Clearbit/Apollo-style)**: 5 AI-backed endpoints — `/api/enrich/business`
   (firmographics: industry/employees/tech_stack/quality_score), `/person` (footprint + AI profile),
   `/property` (AI estimate), `/osint` (identity + accounts), `/lead` (composite + weighted score/grade)
-  + `/enrich/history`. Frontend "Enrichment" tab. Reuses footprint/identity/AI helpers.
+  + `/enrich/history` + `/enrich/pricing`. **Metered/paid API**: each call consumes credits
+  (business/person/property/osint = 1, composite lead = 3) via atomic deduction; 402 when out of
+  credits; works for dashboard users AND external `X-API-Key` developers. Frontend "Enrichment" tab
+  shows per-call cost + balance.
 - Refactored into modular components (Leads.jsx, Scrapers.jsx, Dashboard Sidebar/Topbar/hook, helpers.js).
 - Tested: backend 36/36 pytest + 5 enrich endpoints, frontend e2e (iterations 1-5) — all green.
 

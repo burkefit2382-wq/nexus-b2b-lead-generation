@@ -1188,6 +1188,20 @@ async def stripe_webhook(request: Request):
     return {"received": True}
 
 # ====================== ENRICHMENT ENGINE (Clearbit/Apollo-style) ======================
+# Metered pricing: each call consumes credits (this is the paid API revenue stream).
+ENRICH_COST = {"business": 1, "person": 1, "property": 1, "osint": 1, "lead": 3}
+
+async def _charge_credits(user: dict, amount: int, reason: str):
+    """Atomically deduct credits; admins are exempt. Raises 402 if insufficient."""
+    if user.get("role") == "admin" or amount <= 0:
+        return
+    res = await db.users.update_one(
+        {"_id": ObjectId(user["id"]), "credits": {"$gte": amount}},
+        {"$inc": {"credits": -amount}})
+    if res.modified_count != 1:
+        raise HTTPException(status_code=402,
+                            detail=f"Insufficient credits — {reason} costs {amount} credit(s). Buy a pack in Billing.")
+
 def normalize_domain(domain: Optional[str]) -> Optional[str]:
     if not domain:
         return None
@@ -1336,32 +1350,41 @@ def score_lead(enriched: dict) -> dict:
     return {"score": score, "identity": identity, "grade": (
         "A" if score >= 75 else "B" if score >= 50 else "C" if score >= 25 else "D")}
 
+@api.get("/enrich/pricing")
+async def enrich_pricing(user: dict = Depends(get_current_user)):
+    return {"costs": ENRICH_COST, "unit": "credit", "credits": user.get("credits", 0)}
+
 @api.post("/enrich/business")
 async def enrich_business_api(payload: BusinessReq, user: dict = Depends(get_current_user)):
+    await _charge_credits(user, ENRICH_COST["business"], "Business enrichment")
     res = await enrich_business(payload)
     await _save_enrichment("business", payload.model_dump(), res, user["id"])
     return res
 
 @api.post("/enrich/person")
 async def enrich_person_api(payload: PersonReq, user: dict = Depends(get_current_user)):
+    await _charge_credits(user, ENRICH_COST["person"], "Person enrichment")
     res = await enrich_person(payload)
     await _save_enrichment("person", payload.model_dump(), res, user["id"])
     return res
 
 @api.post("/enrich/property")
 async def enrich_property_api(payload: PropertyReq, user: dict = Depends(get_current_user)):
+    await _charge_credits(user, ENRICH_COST["property"], "Property enrichment")
     res = await enrich_property(payload)
     await _save_enrichment("property", payload.model_dump(), res, user["id"])
     return res
 
 @api.post("/enrich/osint")
 async def enrich_osint_api(payload: OSINTEnrichReq, user: dict = Depends(get_current_user)):
+    await _charge_credits(user, ENRICH_COST["osint"], "OSINT enrichment")
     res = await enrich_osint(payload)
     await _save_enrichment("osint", payload.model_dump(), res, user["id"])
     return res
 
 @api.post("/enrich/lead")
 async def enrich_lead_api(payload: LeadEnrichReq, user: dict = Depends(get_current_user)):
+    await _charge_credits(user, ENRICH_COST["lead"], "Composite lead enrichment")
     enriched = {}
     if payload.business:
         enriched["business"] = await enrich_business(payload.business)
