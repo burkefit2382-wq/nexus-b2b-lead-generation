@@ -817,6 +817,58 @@ async def fetch_source(src: dict) -> list:
         return await fetch_github(src)
     return await fetch_reddit(src)
 
+def _passes_intent_gate(text: str) -> bool:
+    """OSINT-style pre-filter: candidate must express service intent."""
+    low = text.lower()
+    return any(k in low for k in INTENT_KW)
+
+def _extract_contacts(text: str) -> dict:
+    """Pull first email/phone from raw text (OSINT enrichment)."""
+    emails = EMAIL_RX.findall(text)
+    phones = PHONE_RX.findall(text)
+    return {"email": emails[0] if emails else "", "phone": phones[0] if phones else ""}
+
+async def _score_candidate(cand: dict, text: str, use_ai: bool, ai_model: str, min_score: float) -> dict:
+    """Score a candidate via AI (preferred) or heuristic; decide if it qualifies."""
+    hscore = heuristic_score(text)
+    result = {"score": hscore, "summary": "", "budget": "", "tags": "", "keep": hscore >= min_score}
+    ai = await _ai_score_candidate(cand, ai_model) if (use_ai and hscore >= 18) else None
+    if ai and "intent_score" in ai:
+        final = float(ai.get("intent_score", hscore) or hscore)
+        result.update({"score": final, "summary": ai.get("summary", ""),
+                       "budget": ai.get("budget_estimate", ""),
+                       "tags": ",".join(ai.get("category_tags", []) or []),
+                       "keep": final >= min_score})
+    elif use_ai:
+        # AI temporarily unavailable -> provisional qualify, flagged for re-scoring
+        result.update({"score": max(hscore, 45.0), "tags": "ai_pending", "keep": True})
+    return result
+
+def _build_lead_doc(cand: dict, text: str, scored: dict) -> dict:
+    return {"category": cand["category"], "full_name": cand["full_name"],
+            "email": cand["email"], "phone": cand["phone"], "company": "",
+            "city": "", "state": "", "source_site": cand.get("source_site", "web"),
+            "source_url": cand["source_url"], "raw_text": text,
+            "status": "enriched" if scored["summary"] else "raw", "score": scored["score"],
+            "ai_summary": scored["summary"], "ai_intent_score": scored["score"],
+            "ai_budget_est": scored["budget"], "tags": scored["tags"],
+            "is_sold": False, "sold_price": 0.0, "scraped": True,
+            "created_at": datetime.now(timezone.utc).isoformat()}
+
+async def _process_candidate(cand: dict, use_ai: bool, ai_model: str, min_score: float) -> bool:
+    """Returns True if the candidate was stored as a qualified lead."""
+    if await db.leads.find_one({"source_url": cand["source_url"]}):
+        return False
+    text = cand["raw_text"]
+    if not _passes_intent_gate(text):
+        return False
+    cand.update(_extract_contacts(text))
+    scored = await _score_candidate(cand, text, use_ai, ai_model, min_score)
+    if not scored["keep"]:
+        return False
+    await db.leads.insert_one(_build_lead_doc(cand, text, scored))
+    return True
+
 async def run_scrape_cycle(reason: str = "scheduled"):
     if SCRAPER_STATE["status"] == "running":
         return
@@ -831,49 +883,8 @@ async def run_scrape_cycle(reason: str = "scheduled"):
         for src in cfg.get("sources", []):
             for cand in await fetch_source(src):
                 found += 1
-                # dedup
-                if await db.leads.find_one({"source_url": cand["source_url"]}):
-                    continue
-                text = cand["raw_text"]
-                # HQ pre-filter (OSINT-style intent gate)
-                if not any(k in text.lower() for k in INTENT_KW):
-                    continue
-                # contact extraction (OSINT enrichment)
-                emails = EMAIL_RX.findall(text); phones = PHONE_RX.findall(text)
-                cand["email"] = emails[0] if emails else ""
-                cand["phone"] = phones[0] if phones else ""
-                hscore = heuristic_score(text)
-                final = hscore
-                summary = ""; budget = ""; tags = ""
-                # AI HQ scoring (best-effort; only on promising candidates)
-                ai = None
-                if use_ai and hscore >= 18:
-                    ai = await _ai_score_candidate(cand, ai_model)
-                if ai and "intent_score" in ai:
-                    final = float(ai.get("intent_score", hscore) or hscore)
-                    summary = ai.get("summary", "")
-                    budget = ai.get("budget_estimate", "")
-                    tags = ",".join(ai.get("category_tags", []) or [])
-                    keep = final >= min_score
-                elif use_ai:
-                    # AI temporarily unavailable -> provisional qualify, flag for re-scoring
-                    final = max(hscore, 45.0)
-                    tags = "ai_pending"
-                    keep = True
-                else:
-                    keep = final >= min_score
-                if not keep:
-                    continue
-                doc = {"category": cand["category"], "full_name": cand["full_name"],
-                       "email": cand["email"], "phone": cand["phone"], "company": "",
-                       "city": "", "state": "", "source_site": cand.get("source_site", "web"),
-                       "source_url": cand["source_url"], "raw_text": text,
-                       "status": "enriched" if summary else "raw", "score": final,
-                       "ai_summary": summary, "ai_intent_score": final, "ai_budget_est": budget,
-                       "tags": tags, "is_sold": False, "sold_price": 0.0,
-                       "scraped": True, "created_at": datetime.now(timezone.utc).isoformat()}
-                await db.leads.insert_one(doc)
-                qualified += 1
+                if await _process_candidate(cand, use_ai, ai_model, min_score):
+                    qualified += 1
         SCRAPER_STATE.update({"found": SCRAPER_STATE["found"] + found,
                               "qualified": SCRAPER_STATE["qualified"] + qualified,
                               "cycles": SCRAPER_STATE["cycles"] + 1})

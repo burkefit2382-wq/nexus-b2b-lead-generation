@@ -1,0 +1,27 @@
+{
+  "summary": "Iteration 4 — Frontend regression after code-quality refactor (Leads.jsx + Scrapers.jsx extracted from tabs.jsx, Dashboard split into Sidebar/Topbar + useDashboardTab hook, helpers.js shared). All critical risk areas pass: (1) Scrapers Save Config returns HTTP 200 and the response payload confirms _uid is stripped from sources before PUT; reloading the tab still shows the 6 sources persisted. (2) Editing the scraper source 'query' input is focus-stable (typing characters does not lose focus / does not cause re-mount). (3) Dashboard tab navigation via the new useDashboardTab + TAB_VIEWS map works for every sidebar item — nav-overview, nav-scrapers, nav-leads, nav-people, nav-osint, nav-ai, nav-reports, nav-billing, nav-keys, nav-admin all render with content (no white-screen). (4) Leads (extracted LeadRow) renders 27 rows for admin with sell+delete buttons per row, search/category/enrich-all/export controls all wired with correct data-testids; unlock buttons correctly absent for admin (admin sees leads unlocked, matches iteration 3 behavior). People Intel scan for 'torvalds' renders 855 chars of report content. Billing shows all 3 package cards. AI chat model selector renders. API Keys generate button renders. Admin tab renders. Logout returns to login screen. Topbar credits chip shows '0 credits'. Only 2 console 401s observed (pre-login /auth/me calls — pre-existing, unrelated to refactor). No React key warnings or pageerrors during any tab switch.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Dashboard.jsx useDashboardTab hook reads URLSearchParams at module-init for the initial state — fine for Stripe return flow, but if user navigates within SPA from a Stripe return URL to another tab and then refreshes, the session_id will still force 'billing' tab. Consider clearing the session_id query param via window.history.replaceState after consuming it.",
+    "Scrapers.jsx save() correctly strips _uid before PUT (verified — response shows clean sources). However loadCfg() re-injects _uid via nextUid() on every reload, so after Save+Reload all rows get NEW uids. This is acceptable for React keys but means optimistic-UI continuity is lost; minor.",
+    "Leads.jsx unlock() handler uses window.dispatchEvent(new CustomEvent('nexus-goto', {detail: 'billing'})) — this is a clean pattern but tightly couples Leads to Dashboard's listener. Consider centralizing nav via a NavContext if more cross-component navigation is added.",
+    "helpers.js nextUid uses Date.now()+counter — fine for client-only ephemeral keys, but if a user opens two tabs simultaneously and saves in both, ids could theoretically clash. Server doesn't care (stripped), but defensive: include Math.random or crypto.randomUUID().",
+    "Dashboard.jsx renderTab() uses useCallback but the returned function is invoked immediately in JSX — useCallback adds no value here (the function executes synchronously each render). Could be simplified to a const.",
+    "Sidebar receives the full `user` object but only uses name/email/role — pass only those props (or use useAuth inside Sidebar) to make the component contract tighter."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100% (10/10 nav tabs, scrapers save+focus stability+persistence, leads CRUD UI, people-intel scan, billing, ai, keys, admin, logout all OK)"},
+  "test_credentials": "admin@nexus.io / nexus123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Scrapers Save Config test added one extra source row with query 'test-regression-query-extra' to /api/scraper/config (now persisted, 6 sources total). No leads or users created.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Refactor regression clean. Key verified artifacts: PUT /api/scraper/config returned 200 with sources lacking _uid (confirmed via response body inspection). Focus stability on SourceRow query input verified by typing extra chars and re-reading document.activeElement.placeholder. Admin user sees 0 unlock buttons (leads are unlocked for admin) — same as iter3, expected. If next iteration needs to verify the unlock UI, register a fresh @example.com user via POST /api/auth/register and navigate to Leads. People-intel pi-report container exists in empty state too — wait for content length >200 chars rather than just selector visibility.",
+  "rca of the issue": "No issues found. Refactor (component extraction Leads.jsx, Scrapers.jsx; Dashboard split into Sidebar/Topbar + useDashboardTab; helpers.js extraction; _uid strip-before-PUT) is functionally equivalent to pre-refactor behavior."
+}
