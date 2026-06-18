@@ -31,7 +31,12 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - AI: DeepSeek + Qwen via HF router (selectable in chat, scraper, people-intel); graceful fallback.
 - 12 cloud OSINT tools + reports log.
 - 24/7 multi-provider scraper (Hacker News + GitHub live; Reddit via OAuth) with OSINT/AI HQ filter.
-- Tested: backend 36/36 pytest, frontend e2e — all green. Deployment check PASS.
+- **Enrichment Engine (Clearbit/Apollo-style)**: 5 AI-backed endpoints — `/api/enrich/business`
+  (firmographics: industry/employees/tech_stack/quality_score), `/person` (footprint + AI profile),
+  `/property` (AI estimate), `/osint` (identity + accounts), `/lead` (composite + weighted score/grade)
+  + `/enrich/history`. Frontend "Enrichment" tab. Reuses footprint/identity/AI helpers.
+- Refactored into modular components (Leads.jsx, Scrapers.jsx, Dashboard Sidebar/Topbar/hook, helpers.js).
+- Tested: backend 36/36 pytest + 5 enrich endpoints, frontend e2e (iterations 1-5) — all green.
 
 ## Known Constraints
 - AI is LIVE: DeepSeek-V3.1 (`deepseek-ai/DeepSeek-V3.1:novita`) + Qwen (`Qwen/Qwen2.5-72B-Instruct`)
