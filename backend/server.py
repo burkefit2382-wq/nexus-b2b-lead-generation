@@ -122,10 +122,15 @@ def require_role(*roles: str):
 
 require_admin = require_role("admin")
 
-# ----------------------------------------------------------------------------- DeepSeek (HF router)
-def _hf_chat_sync(messages, max_tokens=600, temperature=0.4):
+# ----------------------------------------------------------------------------- DeepSeek / Qwen (HF router)
+def _resolve_model(key: str) -> str:
+    if key == "qwen":
+        return os.environ.get("QWEN_MODEL", "Qwen/Qwen2.5-32B-Instruct")
+    return os.environ.get("DEEPSEEK_MODEL", "deepseek-ai/DeepSeek-V3.1:novita")
+
+def _hf_chat_sync(messages, model_key="deepseek", max_tokens=600, temperature=0.4):
     token = os.environ.get("HF_TOKEN", "")
-    model = os.environ.get("DEEPSEEK_MODEL", "deepseek-ai/DeepSeek-V3.1:novita")
+    model = _resolve_model(model_key)
     base = os.environ.get("HF_ROUTER_BASE", "https://router.huggingface.co/v1")
     if not token:
         return {"error": "No HF_TOKEN configured"}
@@ -134,12 +139,12 @@ def _hf_chat_sync(messages, max_tokens=600, temperature=0.4):
         c = OpenAI(base_url=base, api_key=token)
         r = c.chat.completions.create(model=model, messages=messages,
                                       max_tokens=max_tokens, temperature=temperature)
-        return {"content": r.choices[0].message.content}
+        return {"content": r.choices[0].message.content, "model": model}
     except Exception as e:
         return {"error": str(e)}
 
-async def deepseek_chat(messages, **kw):
-    return await asyncio.to_thread(_hf_chat_sync, messages, **kw)
+async def deepseek_chat(messages, model_key="deepseek", **kw):
+    return await asyncio.to_thread(_hf_chat_sync, messages, model_key, **kw)
 
 # ----------------------------------------------------------------------------- App / routers
 app = FastAPI(title="NEXUS OSINT Orchestrator", version="2.0.0")
@@ -356,14 +361,14 @@ class EnrichReq(BaseModel):
     batch: bool = False
     limit: int = 10
 
-async def _enrich_one(lead: dict) -> dict:
+async def _enrich_one(lead: dict, model_key: str = "deepseek") -> dict:
     txt = (lead.get("raw_text") or f"{lead.get('full_name','')} {lead.get('company','')} {lead.get('city','')}").strip()[:1500]
     prompt = ("Analyze this service lead. Return ONLY valid JSON with keys: "
               "summary (2 sentences), intent_score (0-100 integer), "
               "budget_estimate (string like '$2k-$5k'), urgency (low/medium/high/urgent), "
               "category_tags (list of 3 strings).\n\n"
               f"Category: {lead.get('category')} | Source: {lead.get('source_site')}\nContent: {txt}")
-    r = await deepseek_chat([{"role": "user", "content": prompt}], max_tokens=350, temperature=0.2)
+    r = await deepseek_chat([{"role": "user", "content": prompt}], model_key=model_key, max_tokens=350, temperature=0.2)
     if "error" in r:
         return r
     out = r["content"].strip()
@@ -398,11 +403,13 @@ async def enrich(body: EnrichReq, user: dict = Depends(get_current_user)):
 @api.get("/enrichment/model-status")
 async def model_status(user: dict = Depends(get_current_user)):
     configured = bool(os.environ.get("HF_TOKEN"))
-    return {"loaded": configured, "model": os.environ.get("DEEPSEEK_MODEL"),
-            "provider": "Hugging Face Router", "status": "ready" if configured else "no_token"}
+    return {"loaded": configured, "provider": "Hugging Face Router",
+            "models": {"deepseek": _resolve_model("deepseek"), "qwen": _resolve_model("qwen")},
+            "status": "ready" if configured else "no_token"}
 
 class ChatReq(BaseModel):
     message: str
+    model: str = "deepseek"
 
 @api.post("/enrichment/chat")
 async def ai_chat(body: ChatReq, user: dict = Depends(get_current_user)):
@@ -411,11 +418,12 @@ async def ai_chat(body: ChatReq, user: dict = Depends(get_current_user)):
     sys_p = (f"You are NEXUS, an elite OSINT and lead-generation AI assistant. "
              f"System stats: {total} total leads, {hot} hot leads (score>=70). "
              "Help with lead analysis, OSINT intel, digital footprints and cybersecurity. Be concise.")
+    mk = "qwen" if body.model == "qwen" else "deepseek"
     r = await deepseek_chat([{"role": "system", "content": sys_p},
-                             {"role": "user", "content": body.message}], max_tokens=500, temperature=0.7)
+                             {"role": "user", "content": body.message}], model_key=mk, max_tokens=500, temperature=0.7)
     if "error" in r:
         return {"error": r["error"]}
-    return {"response": r["content"]}
+    return {"response": r["content"], "model": r.get("model")}
 
 # ====================== OSINT TOOLS (cloud-native) ======================
 async def _save_report(target, tool, result):
@@ -637,6 +645,284 @@ async def osint_reports(limit: int = 50, user: dict = Depends(get_current_user))
     return [{"id": str(r["_id"]), "target": r.get("target"), "tool": r.get("tool_used"),
              "created_at": r.get("created_at")} async for r in cur]
 
+# ====================== 24/7 SCRAPER ENGINE (OSINT/AI HQ filter) ======================
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+scheduler = AsyncIOScheduler(timezone="UTC")
+SCRAPER_STATE = {"status": "idle", "last_run": None, "last_error": None,
+                 "found": 0, "qualified": 0, "cycles": 0, "next_run": None}
+
+INTENT_KW = ["looking for", "need a", "need to", "need some", "hire", "hiring", "quote", "estimate",
+             "recommend", "anyone know", "help me find", "asap", "this week", "budget",
+             "how much", "cost to", "searching for", "in need of", "any good", "suggestions for"]
+URGENCY_KW = ["asap", "urgent", "this week", "immediately", "today", "tomorrow", "emergency", "right away"]
+EMAIL_RX = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
+PHONE_RX = re.compile(r"\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}")
+
+DEFAULT_SOURCES = [
+    {"provider": "hackernews", "query": "looking for freelance developer", "category": "freelance"},
+    {"provider": "hackernews", "query": "need help building", "category": "services"},
+    {"provider": "github", "query": "looking for contractor OR freelancer in:body type:issue", "category": "open_source"},
+    {"provider": "reddit", "query": "looking for kitchen remodel contractor", "subreddit": "HomeImprovement", "category": "home_remodeling"},
+    {"provider": "reddit", "query": "recommend house cleaning service", "subreddit": "CleaningTips", "category": "cleaning"},
+]
+
+async def get_scraper_config() -> dict:
+    cfg = await db.scraper_config.find_one({"_id": "config"})
+    if not cfg:
+        cfg = {"_id": "config", "enabled": os.environ.get("SCRAPER_ENABLED", "true") == "true",
+               "interval_min": int(os.environ.get("SCRAPER_INTERVAL_MIN", "30")),
+               "min_score": float(os.environ.get("SCRAPER_MIN_SCORE", "55")),
+               "use_ai": True, "ai_model": "deepseek", "sources": DEFAULT_SOURCES}
+        await db.scraper_config.insert_one(cfg)
+    return cfg
+
+def heuristic_score(text: str) -> float:
+    t = text.lower()
+    score = 0
+    for k in INTENT_KW:
+        if k in t:
+            score += 12
+    for k in URGENCY_KW:
+        if k in t:
+            score += 14
+    if EMAIL_RX.search(text):
+        score += 18
+    if PHONE_RX.search(text):
+        score += 15
+    if len(t) > 160:
+        score += 6
+    return float(min(score, 100))
+
+async def fetch_hackernews(src: dict) -> list:
+    from urllib.parse import quote
+    url = f"http://hn.algolia.com/api/v1/search_by_date?query={quote(src['query'])}&tags=story&hitsPerPage=25"
+    out = []
+    try:
+        async with httpx.AsyncClient(timeout=15, headers={"User-Agent": "NEXUS-LeadBot/1.0"}) as c:
+            data = (await c.get(url)).json()
+        for h in data.get("hits", []):
+            title = h.get("title") or h.get("story_title") or ""
+            body = h.get("story_text") or h.get("comment_text") or ""
+            text = (title + " — " + body).strip()
+            if not text or text == "—":
+                continue
+            out.append({"full_name": "hn/" + (h.get("author") or "anon"),
+                        "raw_text": text[:2000], "source_site": "Hacker News",
+                        "category": src["category"],
+                        "source_url": "https://news.ycombinator.com/item?id=" + str(h.get("objectID")),
+                        "city": "", "state": "", "company": "", "title": title})
+    except Exception as e:
+        SCRAPER_STATE["last_error"] = "hn: " + str(e)[:160]
+    return out
+
+async def fetch_github(src: dict) -> list:
+    from urllib.parse import quote
+    url = f"https://api.github.com/search/issues?q={quote(src['query'])}&per_page=20&sort=created&order=desc"
+    headers = {"User-Agent": "NEXUS-LeadBot/1.0", "Accept": "application/vnd.github+json"}
+    gh = os.environ.get("GITHUB_TOKEN")
+    if gh:
+        headers["Authorization"] = "Bearer " + gh
+    out = []
+    try:
+        async with httpx.AsyncClient(timeout=15, headers=headers) as c:
+            data = (await c.get(url)).json()
+        for it in data.get("items", []):
+            text = (it.get("title", "") + " — " + (it.get("body") or "")).strip()
+            out.append({"full_name": "gh/" + (it.get("user", {}) or {}).get("login", "anon"),
+                        "raw_text": text[:2000], "source_site": "GitHub",
+                        "category": src["category"], "source_url": it.get("html_url", ""),
+                        "city": "", "state": "", "company": "", "title": it.get("title", "")})
+    except Exception as e:
+        SCRAPER_STATE["last_error"] = "github: " + str(e)[:160]
+    return out
+
+async def _reddit_token() -> Optional[str]:
+    cid = os.environ.get("REDDIT_CLIENT_ID"); sec = os.environ.get("REDDIT_CLIENT_SECRET")
+    usr = os.environ.get("REDDIT_USERNAME"); pw = os.environ.get("REDDIT_PASSWORD")
+    if not (cid and sec and usr and pw):
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=15, auth=(cid, sec),
+                                     headers={"User-Agent": "NEXUS-LeadBot/1.0 by " + usr}) as c:
+            r = await c.post("https://www.reddit.com/api/v1/access_token",
+                             data={"grant_type": "password", "username": usr, "password": pw})
+            return r.json().get("access_token")
+    except Exception:
+        return None
+
+async def fetch_reddit(src: dict) -> list:
+    from urllib.parse import quote
+    token = await _reddit_token()
+    if not token:
+        SCRAPER_STATE["last_error"] = "reddit: add REDDIT_CLIENT_ID/SECRET/USERNAME/PASSWORD to enable"
+        return []
+    q = quote(src["query"]); sub = src.get("subreddit", "")
+    base = f"https://oauth.reddit.com/r/{sub}/search" if sub else "https://oauth.reddit.com/search"
+    url = f"{base}?q={q}&restrict_sr={'1' if sub else '0'}&sort=new&limit=20&t=month"
+    out = []
+    try:
+        async with httpx.AsyncClient(timeout=15, headers={"Authorization": "Bearer " + token,
+                                     "User-Agent": "NEXUS-LeadBot/1.0"}) as c:
+            data = (await c.get(url)).json()
+        for ch in data.get("data", {}).get("children", []):
+            p = ch.get("data", {})
+            text = (p.get("title", "") + " — " + p.get("selftext", "")).strip()
+            out.append({"full_name": "u/" + p.get("author", "anon"), "raw_text": text[:2000],
+                        "source_site": "Reddit", "category": src["category"],
+                        "source_url": "https://reddit.com" + p.get("permalink", ""),
+                        "city": "", "state": "", "company": "", "title": p.get("title", "")})
+    except Exception as e:
+        SCRAPER_STATE["last_error"] = "reddit: " + str(e)[:160]
+    return out
+
+async def fetch_source(src: dict) -> list:
+    p = src.get("provider", "reddit")
+    if p == "hackernews":
+        return await fetch_hackernews(src)
+    if p == "github":
+        return await fetch_github(src)
+    return await fetch_reddit(src)
+
+async def run_scrape_cycle(reason: str = "scheduled"):
+    if SCRAPER_STATE["status"] == "running":
+        return
+    SCRAPER_STATE["status"] = "running"
+    SCRAPER_STATE["last_error"] = None
+    cfg = await get_scraper_config()
+    min_score = cfg.get("min_score", 55)
+    use_ai = cfg.get("use_ai", True)
+    ai_model = cfg.get("ai_model", "deepseek")
+    found = qualified = 0
+    try:
+        for src in cfg.get("sources", []):
+            for cand in await fetch_source(src):
+                found += 1
+                # dedup
+                if await db.leads.find_one({"source_url": cand["source_url"]}):
+                    continue
+                text = cand["raw_text"]
+                # HQ pre-filter (OSINT-style intent gate)
+                if not any(k in text.lower() for k in INTENT_KW):
+                    continue
+                # contact extraction (OSINT enrichment)
+                emails = EMAIL_RX.findall(text); phones = PHONE_RX.findall(text)
+                cand["email"] = emails[0] if emails else ""
+                cand["phone"] = phones[0] if phones else ""
+                hscore = heuristic_score(text)
+                final = hscore
+                summary = ""; budget = ""; tags = ""
+                # AI HQ scoring (best-effort; only on promising candidates)
+                ai = None
+                if use_ai and hscore >= 18:
+                    ai = await _ai_score_candidate(cand, ai_model)
+                if ai and "intent_score" in ai:
+                    final = float(ai.get("intent_score", hscore) or hscore)
+                    summary = ai.get("summary", "")
+                    budget = ai.get("budget_estimate", "")
+                    tags = ",".join(ai.get("category_tags", []) or [])
+                    keep = final >= min_score
+                elif use_ai:
+                    # AI temporarily unavailable -> provisional qualify, flag for re-scoring
+                    final = max(hscore, 45.0)
+                    tags = "ai_pending"
+                    keep = True
+                else:
+                    keep = final >= min_score
+                if not keep:
+                    continue
+                doc = {"category": cand["category"], "full_name": cand["full_name"],
+                       "email": cand["email"], "phone": cand["phone"], "company": "",
+                       "city": "", "state": "", "source_site": cand.get("source_site", "web"),
+                       "source_url": cand["source_url"], "raw_text": text,
+                       "status": "enriched" if summary else "raw", "score": final,
+                       "ai_summary": summary, "ai_intent_score": final, "ai_budget_est": budget,
+                       "tags": tags, "is_sold": False, "sold_price": 0.0,
+                       "scraped": True, "created_at": datetime.now(timezone.utc).isoformat()}
+                await db.leads.insert_one(doc)
+                qualified += 1
+        SCRAPER_STATE.update({"found": SCRAPER_STATE["found"] + found,
+                              "qualified": SCRAPER_STATE["qualified"] + qualified,
+                              "cycles": SCRAPER_STATE["cycles"] + 1})
+    except Exception as e:
+        SCRAPER_STATE["last_error"] = str(e)[:200]
+    finally:
+        SCRAPER_STATE["status"] = "idle"
+        SCRAPER_STATE["last_run"] = datetime.now(timezone.utc).isoformat()
+        logger.info("Scrape cycle (%s): found=%d qualified=%d", reason, found, qualified)
+
+async def _ai_score_candidate(cand: dict, model_key: str) -> Optional[dict]:
+    prompt = ("You are a lead-quality filter. Analyze this social post and return ONLY JSON with keys: "
+              "summary (1-2 sentences), intent_score (0-100 integer, how likely this person wants to HIRE/BUY "
+              "this service now), budget_estimate (string), category_tags (list of 3). "
+              "Score low if it's just discussion/advice, high if they actively seek a provider.\n\n"
+              f"Category: {cand['category']}\nPost: {cand['raw_text'][:1500]}")
+    r = await deepseek_chat([{"role": "user", "content": prompt}], model_key=model_key, max_tokens=300, temperature=0.2)
+    if "error" in r:
+        return None
+    out = r["content"].strip()
+    if "```" in out:
+        out = out.split("```")[1].replace("json", "", 1).strip()
+    try:
+        return json.loads(out[out.find("{"): out.rfind("}") + 1])
+    except Exception:
+        return None
+
+def reschedule(interval_min: int):
+    try:
+        scheduler.remove_job("scrape")
+    except Exception:
+        pass
+    scheduler.add_job(run_scrape_cycle, "interval", minutes=max(5, interval_min),
+                      id="scrape", replace_existing=True, max_instances=1)
+
+@api.get("/scraper/status")
+async def scraper_status(user: dict = Depends(get_current_user)):
+    cfg = await get_scraper_config()
+    job = scheduler.get_job("scrape")
+    nxt = job.next_run_time.isoformat() if job and job.next_run_time else None
+    scraped = await db.leads.count_documents({"scraped": True})
+    return {**SCRAPER_STATE, "next_run": nxt, "scheduler_running": scheduler.running,
+            "enabled": cfg.get("enabled"), "interval_min": cfg.get("interval_min"),
+            "min_score": cfg.get("min_score"), "total_scraped_leads": scraped}
+
+@api.post("/scraper/trigger")
+async def scraper_trigger(user: dict = Depends(get_current_user)):
+    asyncio.create_task(run_scrape_cycle("manual"))
+    return {"triggered": True, "status": "cycle started"}
+
+@api.get("/scraper/config")
+async def scraper_get_config(user: dict = Depends(get_current_user)):
+    cfg = await get_scraper_config()
+    cfg.pop("_id", None)
+    return cfg
+
+class ScraperConfig(BaseModel):
+    enabled: bool = True
+    interval_min: int = 30
+    min_score: float = 55
+    use_ai: bool = True
+    ai_model: str = "deepseek"
+    sources: List[dict] = []
+
+@api.put("/scraper/config")
+async def scraper_set_config(body: ScraperConfig, user: dict = Depends(require_admin)):
+    data = body.model_dump()
+    await db.scraper_config.update_one({"_id": "config"}, {"$set": data}, upsert=True)
+    if data["enabled"]:
+        reschedule(data["interval_min"])
+        if not scheduler.running:
+            scheduler.start()
+    else:
+        try: scheduler.remove_job("scrape")
+        except Exception: pass
+    return {"updated": True, **data}
+
+@api.get("/scraper/feed")
+async def scraper_feed(limit: int = 30, user: dict = Depends(get_current_user)):
+    cur = db.leads.find({"scraped": True}).sort("created_at", -1).limit(limit)
+    return [_lead_pub(l) async for l in cur]
+
 # ----------------------------------------------------------------------------- mount + startup
 app.include_router(api)
 app.add_middleware(CORSMiddleware, allow_credentials=True,
@@ -691,6 +977,14 @@ async def startup():
                    "created_at": datetime.now(timezone.utc).isoformat()}
             doc.setdefault("ai_intent_score", doc.get("score", 0))
             await db.leads.insert_one(doc)
+    # start 24/7 scraper
+    await db.leads.create_index("source_url")
+    cfg = await get_scraper_config()
+    if cfg.get("enabled"):
+        reschedule(cfg.get("interval_min", 30))
+        if not scheduler.running:
+            scheduler.start()
+        logger.info("Scraper scheduled every %s min", cfg.get("interval_min"))
     logger.info("NEXUS online — admin seeded, %d leads", await db.leads.count_documents({}))
 
 @app.on_event("shutdown")

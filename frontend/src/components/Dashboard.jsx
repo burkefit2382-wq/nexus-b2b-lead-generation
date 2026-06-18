@@ -1,12 +1,13 @@
 import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import { Overview, Leads, Osint, AIChat, ApiKeys, Reports, Admin } from "./tabs";
+import { Overview, Leads, Osint, AIChat, ApiKeys, Reports, Admin, Scrapers } from "./tabs";
 import {
-  LayoutGrid, Crosshair, Users2, Bot, KeyRound, ScrollText, ShieldCheck, LogOut
+  LayoutGrid, Crosshair, Users2, Bot, KeyRound, ScrollText, ShieldCheck, LogOut, Radar
 } from "lucide-react";
 
 const NAV = [
   { id: "overview", label: "Overview", icon: LayoutGrid },
+  { id: "scrapers", label: "Lead Scrapers", icon: Radar, tag: "24/7" },
   { id: "leads", label: "Lead Engine", icon: Users2 },
   { id: "osint", label: "OSINT Tools", icon: Crosshair, tag: "12" },
   { id: "ai", label: "NEXUS AI", icon: Bot },
@@ -22,6 +23,7 @@ export default function Dashboard() {
 
   const render = () => {
     switch (tab) {
+      case "scrapers": return <Scrapers />;
       case "leads": return <Leads />;
       case "osint": return <Osint />;
       case "ai": return <AIChat />;

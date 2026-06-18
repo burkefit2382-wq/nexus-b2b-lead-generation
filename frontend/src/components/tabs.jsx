@@ -254,6 +254,7 @@ export function Osint() {
 export function AIChat() {
   const [msgs, setMsgs] = useState([]);
   const [input, setInput] = useState("");
+  const [model, setModel] = useState("deepseek");
   const [busy, setBusy] = useState(false);
   const streamRef = useRef(null);
   useEffect(() => { streamRef.current?.scrollTo(0, streamRef.current.scrollHeight); }, [msgs, busy]);
@@ -263,7 +264,7 @@ export function AIChat() {
     if (!m || busy) return;
     setMsgs((x) => [...x, { role: "user", text: m }]); setInput(""); setBusy(true);
     try {
-      const r = await api.post("/enrichment/chat", { message: m });
+      const r = await api.post("/enrichment/chat", { message: m, model });
       setMsgs((x) => [...x, { role: "ai", text: r.data.response || ("⚠ " + (r.data.error || "no response")) }]);
     } catch (e) {
       setMsgs((x) => [...x, { role: "ai", text: "⚠ " + (e.response?.data?.detail || e.message) }]);
@@ -272,8 +273,17 @@ export function AIChat() {
 
   return (
     <div className="fade-in">
-      <div className="section-title">NEXUS AI · DeepSeek Analyst</div>
+      <div className="section-title" style={{ justifyContent: "space-between" }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 10 }}>NEXUS AI · Analyst</span>
+      </div>
       <div className="panel">
+        <div className="panel-head">
+          <h3>Conversation</h3>
+          <select className="select" value={model} onChange={(e) => setModel(e.target.value)} data-testid="chat-model">
+            <option value="deepseek">DeepSeek V3.1</option>
+            <option value="qwen">Qwen 2.5 32B</option>
+          </select>
+        </div>
         <div className="chat-wrap">
           <div className="chat-stream" ref={streamRef}>
             {!msgs.length && (
@@ -394,7 +404,133 @@ export function Reports() {
   );
 }
 
-/* ============================ ADMIN ============================ */
+/* ============================ SCRAPERS (24/7 engine) ============================ */
+export function Scrapers() {
+  const [status, setStatus] = useState(null);
+  const [cfg, setCfg] = useState(null);
+  const [feed, setFeed] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [triggering, setTriggering] = useState(false);
+
+  const loadStatus = () => api.get("/scraper/status").then((r) => setStatus(r.data)).catch(() => {});
+  const loadFeed = () => api.get("/scraper/feed?limit=12").then((r) => setFeed(r.data)).catch(() => {});
+  const loadCfg = () => api.get("/scraper/config").then((r) => setCfg(r.data)).catch(() => {});
+  useEffect(() => {
+    loadStatus(); loadCfg(); loadFeed();
+    const t = setInterval(() => { loadStatus(); loadFeed(); }, 8000);
+    return () => clearInterval(t);
+  }, []);
+
+  const trigger = async () => {
+    setTriggering(true);
+    try { await api.post("/scraper/trigger"); setTimeout(() => { loadStatus(); loadFeed(); }, 6000); }
+    finally { setTimeout(() => setTriggering(false), 6000); }
+  };
+  const save = async () => {
+    setSaving(true);
+    try { await api.put("/scraper/config", cfg); loadStatus(); }
+    catch (e) { alert("Save failed: " + (e.response?.data?.detail || e.message)); }
+    finally { setSaving(false); }
+  };
+  const upd = (k, v) => setCfg((c) => ({ ...c, [k]: v }));
+  const updSrc = (i, k, v) => setCfg((c) => { const s = [...c.sources]; s[i] = { ...s[i], [k]: v }; return { ...c, sources: s }; });
+  const addSrc = () => setCfg((c) => ({ ...c, sources: [...c.sources, { provider: "hackernews", query: "", subreddit: "", category: "services" }] }));
+  const delSrc = (i) => setCfg((c) => ({ ...c, sources: c.sources.filter((_, x) => x !== i) }));
+
+  const S = status || {};
+  return (
+    <div className="fade-in">
+      <div className="section-title">24/7 Lead Scraper · OSINT/AI HQ Filter</div>
+
+      <div className="stat-grid" style={{ marginBottom: 22 }}>
+        <div className="stat"><div className="label">Engine</div>
+          <div className={`value ${S.scheduler_running ? "lime" : ""}`} style={{ fontSize: 26 }}>{S.scheduler_running ? "RUNNING" : "STOPPED"}</div>
+          <div className="sub">{S.status === "running" ? "scraping now…" : "idle · every " + (S.interval_min ?? "—") + "m"}</div></div>
+        <div className="stat"><div className="label">Found (session)</div><div className="value">{S.found ?? 0}</div><div className="sub">{S.cycles ?? 0} cycles</div></div>
+        <div className="stat"><div className="label">Qualified</div><div className="value lime">{S.qualified ?? 0}</div><div className="sub">passed HQ filter</div></div>
+        <div className="stat"><div className="label">Total Scraped</div><div className="value cyan">{S.total_scraped_leads ?? 0}</div><div className="sub">in pipeline</div></div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 16 }}>
+        <div className="panel">
+          <div className="panel-head"><h3>Sources & Schedule</h3>
+            <button className="btn btn-sm" onClick={trigger} disabled={triggering} data-testid="scraper-trigger">
+              {triggering ? <span className="spinner" /> : <><RefreshCw size={13} /> Run Now</>}
+            </button>
+          </div>
+          <div className="panel-body">
+            {cfg && (
+              <>
+                <div className="toolbar" style={{ marginBottom: 16 }}>
+                  <label className="mono" style={{ fontSize: 11, color: "var(--muted)" }}>INTERVAL (min)</label>
+                  <input className="search-input" style={{ width: 80 }} type="number" value={cfg.interval_min}
+                    onChange={(e) => upd("interval_min", parseInt(e.target.value) || 30)} data-testid="scraper-interval" />
+                  <label className="mono" style={{ fontSize: 11, color: "var(--muted)" }}>MIN SCORE</label>
+                  <input className="search-input" style={{ width: 80 }} type="number" value={cfg.min_score}
+                    onChange={(e) => upd("min_score", parseFloat(e.target.value) || 0)} data-testid="scraper-minscore" />
+                  <label className="mono" style={{ fontSize: 11, color: "var(--muted)", display: "flex", alignItems: "center", gap: 6 }}>
+                    <input type="checkbox" checked={cfg.use_ai} onChange={(e) => upd("use_ai", e.target.checked)} /> AI FILTER
+                  </label>
+                  <select className="select" value={cfg.ai_model} onChange={(e) => upd("ai_model", e.target.value)} data-testid="scraper-model">
+                    <option value="deepseek">DeepSeek</option>
+                    <option value="qwen">Qwen</option>
+                  </select>
+                  <label className="mono" style={{ fontSize: 11, color: "var(--muted)", display: "flex", alignItems: "center", gap: 6 }}>
+                    <input type="checkbox" checked={cfg.enabled} onChange={(e) => upd("enabled", e.target.checked)} /> ENABLED
+                  </label>
+                </div>
+
+                {cfg.sources.map((s, i) => (
+                  <div key={i} className="toolbar" style={{ marginBottom: 8 }}>
+                    <select className="select" value={s.provider} onChange={(e) => updSrc(i, "provider", e.target.value)}>
+                      <option value="hackernews">HackerNews</option>
+                      <option value="github">GitHub</option>
+                      <option value="reddit">Reddit</option>
+                    </select>
+                    <input className="search-input" style={{ flex: 1 }} placeholder="query" value={s.query}
+                      onChange={(e) => updSrc(i, "query", e.target.value)} />
+                    {s.provider === "reddit" && (
+                      <input className="search-input" style={{ width: 130 }} placeholder="subreddit" value={s.subreddit || ""}
+                        onChange={(e) => updSrc(i, "subreddit", e.target.value)} />
+                    )}
+                    <input className="search-input" style={{ width: 130 }} placeholder="category" value={s.category}
+                      onChange={(e) => updSrc(i, "category", e.target.value)} />
+                    <button className="icon-btn danger" onClick={() => delSrc(i)}><Trash2 size={13} /></button>
+                  </div>
+                ))}
+                <div className="toolbar" style={{ marginTop: 12 }}>
+                  <button className="btn btn-ghost btn-sm" onClick={addSrc} data-testid="scraper-add-source"><Plus size={13} /> Add Source</button>
+                  <button className="btn btn-sm" onClick={save} disabled={saving} data-testid="scraper-save">{saving ? <span className="spinner" /> : "Save Config"}</button>
+                </div>
+                {S.last_error && <p className="mono" style={{ fontSize: 11, color: "var(--amber)", marginTop: 14 }}>⚠ {S.last_error}</p>}
+                <p className="mono" style={{ fontSize: 11, color: "var(--muted)", marginTop: 10 }}>
+                  next run: {S.next_run ? new Date(S.next_run).toLocaleTimeString() : "—"} · last: {S.last_run ? new Date(S.last_run).toLocaleTimeString() : "never"}
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-head"><h3>Live Lead Feed</h3></div>
+          <div className="panel-body" style={{ padding: 0, maxHeight: 520, overflowY: "auto" }}>
+            {feed.map((l) => (
+              <div key={l.id} style={{ padding: "14px 18px", borderBottom: "1px solid var(--line)" }} data-testid={`feed-${l.id}`}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                  <span className="badge">{l.source_site}</span>
+                  <span className={`badge ${scoreClass(l.score)}`}>{Math.round(l.score)}</span>
+                </div>
+                <div style={{ fontSize: 13, marginTop: 8, color: "var(--txt)", lineHeight: 1.5 }}>{(l.title || l.raw_text || "").slice(0, 120)}…</div>
+                <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>{l.full_name} · {l.category}{l.tags === "ai_pending" && <span style={{ color: "var(--amber)" }}> · ai_pending</span>}</div>
+              </div>
+            ))}
+            {!feed.length && <div className="empty"><RefreshCw size={32} /><div>No scraped leads yet — hit Run Now.</div></div>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 export function Admin() {
   const [users, setUsers] = useState([]);
   const [err, setErr] = useState("");

@@ -227,3 +227,101 @@ def test_logout_clears_cookie():
     assert r.status_code == 200
     me = s.get(f"{API}/auth/me", timeout=10)
     assert me.status_code == 401
+
+
+# ---------------- 24/7 Scraper Engine ----------------
+def test_scraper_status_shape(admin_session):
+    r = admin_session.get(f"{API}/scraper/status", timeout=10)
+    assert r.status_code == 200
+    s = r.json()
+    for k in ("scheduler_running", "interval_min", "min_score", "found",
+              "qualified", "cycles", "total_scraped_leads"):
+        assert k in s, f"missing {k} in {s}"
+    assert s["scheduler_running"] is True
+
+
+def test_scraper_config_get_and_admin_put(admin_session):
+    r = admin_session.get(f"{API}/scraper/config", timeout=10)
+    assert r.status_code == 200
+    cfg = r.json()
+    assert "sources" in cfg and isinstance(cfg["sources"], list)
+    providers = {s.get("provider") for s in cfg["sources"]}
+    assert {"hackernews", "github", "reddit"}.issubset(providers)
+
+    # admin PUT
+    new_cfg = {
+        "enabled": True,
+        "interval_min": 30,
+        "min_score": 55.0,
+        "use_ai": True,
+        "ai_model": "deepseek",
+        "sources": cfg["sources"],
+    }
+    p = admin_session.put(f"{API}/scraper/config", json=new_cfg, timeout=10)
+    assert p.status_code == 200, p.text
+    assert p.json().get("updated") is True
+
+
+def test_scraper_config_put_forbidden_for_user(user_account):
+    payload = {"enabled": True, "interval_min": 30, "min_score": 55.0,
+               "use_ai": True, "ai_model": "deepseek", "sources": []}
+    r = user_account["session"].put(f"{API}/scraper/config", json=payload, timeout=10)
+    assert r.status_code == 403
+
+
+def test_scraper_trigger_increments_cycles_and_feed(admin_session):
+    before = admin_session.get(f"{API}/scraper/status", timeout=10).json()
+    t = admin_session.post(f"{API}/scraper/trigger", timeout=10)
+    assert t.status_code == 200
+    assert t.json().get("triggered") is True
+
+    # wait up to ~40s for cycle to complete
+    cycles_after = before["cycles"]
+    for _ in range(20):
+        time.sleep(2)
+        st = admin_session.get(f"{API}/scraper/status", timeout=10).json()
+        if st["cycles"] > before["cycles"] and st["status"] == "idle":
+            cycles_after = st["cycles"]
+            break
+    assert cycles_after > before["cycles"], f"cycle did not complete; status={st}"
+    # found should be >=0 (HN/GitHub may be rate-limited but call must succeed)
+    assert st["found"] >= before["found"]
+
+    # feed
+    f = admin_session.get(f"{API}/scraper/feed", timeout=10)
+    assert f.status_code == 200
+    feed = f.json()
+    assert isinstance(feed, list)
+    # All scraped leads must have scraped=true and source_site matching domain
+    for l in feed:
+        assert l.get("scraped") is True
+        site = (l.get("source_site") or "").lower()
+        url = (l.get("source_url") or "").lower()
+        # source_site should NOT be hardcoded to Reddit unless url is reddit
+        if "reddit" not in url and site == "reddit":
+            pytest.fail(f"source_site=Reddit but url is {url}")
+        if "news.ycombinator" in url:
+            assert "hacker news" in site
+        if "github.com" in url:
+            assert site == "github"
+
+
+# ---------------- AI model selection ----------------
+def test_ai_model_status_lists_both(admin_session):
+    r = admin_session.get(f"{API}/enrichment/model-status", timeout=10)
+    assert r.status_code == 200
+    body = r.json()
+    assert "models" in body
+    assert "deepseek" in body["models"]
+    assert "qwen" in body["models"]
+    assert body["models"]["deepseek"]
+    assert body["models"]["qwen"]
+
+
+@pytest.mark.parametrize("model", ["deepseek", "qwen"])
+def test_ai_chat_both_models_graceful(admin_session, model):
+    r = admin_session.post(f"{API}/enrichment/chat",
+                           json={"message": "hi", "model": model}, timeout=30)
+    assert r.status_code == 200, r.text  # NEVER 500
+    body = r.json()
+    assert "response" in body or "error" in body
