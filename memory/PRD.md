@@ -34,8 +34,10 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - Tested: backend 36/36 pytest, frontend e2e — all green. Deployment check PASS.
 
 ## Known Constraints
-- HF token needs **"Inference Providers" permission** (currently 403) → AI graceful/heuristic
-  fallback until fixed. Reddit needs OAuth creds (REDDIT_*). Local Qwen 27B not runnable (no GPU).
+- AI is LIVE: DeepSeek-V3.1 (`deepseek-ai/DeepSeek-V3.1:novita`) + Qwen (`Qwen/Qwen2.5-72B-Instruct`)
+  via HF router with a working token (Inference Providers permission granted).
+- Reddit scraping deferred (needs script-app client_id/secret — user skipped). HN + GitHub run 24/7.
+- Local Qwen 27B not runnable (no GPU) → Qwen served via HF router.
 - Stripe in TEST mode (sk_test_emergent); test card 4242 4242 4242 4242.
 
 ## Backlog / Next
