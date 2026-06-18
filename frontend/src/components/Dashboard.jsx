@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
-import { Overview, Osint, AIChat, ApiKeys, Reports, Admin, PeopleIntel, Billing } from "./tabs";
+import { Overview, Osint, AIChat, ApiKeys, Reports, Admin, PeopleIntel, Billing, Enrichment } from "./tabs";
 import { Leads } from "./Leads";
 import { Scrapers } from "./Scrapers";
 import {
   LayoutGrid, Crosshair, Users2, Bot, KeyRound, ScrollText, ShieldCheck, LogOut, Radar,
-  UserSearch, CreditCard
+  UserSearch, CreditCard, Boxes
 } from "lucide-react";
 
 const NAV = [
   { id: "overview", label: "Overview", icon: LayoutGrid },
   { id: "scrapers", label: "Lead Scrapers", icon: Radar, tag: "24/7" },
   { id: "leads", label: "Lead Engine", icon: Users2 },
+  { id: "enrich", label: "Enrichment", icon: Boxes, tag: "5" },
   { id: "people", label: "People Intel", icon: UserSearch },
   { id: "osint", label: "OSINT Tools", icon: Crosshair, tag: "12" },
   { id: "ai", label: "NEXUS AI", icon: Bot },
@@ -23,6 +24,7 @@ const NAV = [
 const TAB_VIEWS = {
   scrapers: () => <Scrapers />,
   leads: () => <Leads />,
+  enrich: () => <Enrichment />,
   people: () => <PeopleIntel />,
   billing: () => <Billing />,
   osint: () => <Osint />,

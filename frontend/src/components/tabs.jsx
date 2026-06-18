@@ -6,7 +6,7 @@ import {
   Send, Bot, Trash2, RefreshCw, Plus, KeyRound,
   Copy, ShieldAlert, Crosshair, Globe, Network, Smartphone, AtSign,
   MapPin, ScanLine, Server, FileSearch, Search, Users,
-  CreditCard, UserSearch, ShieldCheck, AlertTriangle
+  CreditCard, UserSearch, ShieldCheck, AlertTriangle, Boxes
 } from "lucide-react";
 
 /* ============================ OVERVIEW ============================ */
@@ -246,7 +246,87 @@ export function Billing() {
   );
 }
 
-/* ============================ OSINT TOOLS ============================ */
+/* ============================ ENRICHMENT ENGINE ============================ */
+const ENRICH_TYPES = [
+  { id: "business", label: "Business", fields: ["name", "domain", "phone", "address"] },
+  { id: "person", label: "Person", fields: ["name", "email", "phone", "username"] },
+  { id: "property", label: "Property", fields: ["address"] },
+  { id: "osint", label: "OSINT", fields: ["target"] },
+  { id: "lead", label: "Lead (composite)", fields: ["name", "domain", "target"] },
+];
+
+export function Enrichment() {
+  const [type, setType] = useState("business");
+  const [form, setForm] = useState({});
+  const [model, setModel] = useState("deepseek");
+  const [out, setOut] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const cfg = ENRICH_TYPES.find((t) => t.id === type);
+  const upd = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const run = async () => {
+    setBusy(true); setOut(null);
+    try {
+      let url; let body;
+      if (type === "lead") {
+        url = "/enrich/lead";
+        body = {
+          model,
+          business: form.name ? { name: form.name, domain: form.domain || "", model } : undefined,
+          osint: form.target ? { target: form.target, model } : undefined,
+        };
+      } else {
+        url = `/enrich/${type}`;
+        body = { ...form, model };
+      }
+      const r = await api.post(url, body);
+      setOut(r.data);
+    } catch (e) { setOut({ error: e.response?.data?.detail || e.message }); }
+    finally { setBusy(false); }
+  };
+
+  const switchType = (t) => { setType(t); setForm({}); setOut(null); };
+
+  return (
+    <div className="fade-in">
+      <div className="section-title">Enrichment Engine · Firmographic + Identity</div>
+      <div className="osint-grid" style={{ marginBottom: 20 }}>
+        {ENRICH_TYPES.map((t) => (
+          <div key={t.id} className={`tool-card ${type === t.id ? "active" : ""}`}
+            onClick={() => switchType(t.id)} data-testid={`enrich-type-${t.id}`}>
+            <div className="ico"><Boxes size={18} /></div>
+            <h4>{t.label}</h4>
+            <p>POST /api/enrich/{t.id}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="panel">
+        <div className="panel-head"><h3>{cfg.label} Enrichment</h3>
+          <select className="select" value={model} onChange={(e) => setModel(e.target.value)} data-testid="enrich-model">
+            <option value="deepseek">DeepSeek</option>
+            <option value="qwen">Qwen</option>
+          </select>
+        </div>
+        <div className="panel-body">
+          <div className="toolbar" style={{ marginBottom: 16, flexWrap: "wrap" }}>
+            {cfg.fields.map((f) => (
+              <input key={f} className="search-input" placeholder={f} value={form[f] || ""}
+                onChange={(e) => upd(f, e.target.value)} data-testid={`enrich-field-${f}`} />
+            ))}
+            <button className="btn btn-sm" onClick={run} disabled={busy} data-testid="enrich-run">
+              {busy ? <span className="spinner" /> : <><Boxes size={14} /> Enrich</>}
+            </button>
+          </div>
+          <div className="result-box" data-testid="enrich-result">
+            {out ? JSON.stringify(out, null, 2) : <span className="placeholder">// enriched firmographic + identity data renders here as JSON</span>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const TOOLS = [
   { id: "dns", name: "DNS Recon", icon: Server, desc: "A / MX / NS / TXT records", field: "target", ph: "example.com" },
   { id: "whois", name: "WHOIS Lookup", icon: FileSearch, desc: "Domain registration intel", field: "target", ph: "example.com" },

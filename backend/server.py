@@ -1187,6 +1187,199 @@ async def stripe_webhook(request: Request):
         logger.warning("stripe webhook error: %s", e)
     return {"received": True}
 
+# ====================== ENRICHMENT ENGINE (Clearbit/Apollo-style) ======================
+def normalize_domain(domain: Optional[str]) -> Optional[str]:
+    if not domain:
+        return None
+    return (domain.replace("https://", "").replace("http://", "")
+            .replace("www.", "").strip().strip("/").lower())
+
+def business_quality_score(data: dict) -> int:
+    score = 0
+    if data.get("tech_stack"):
+        score += 25
+    if data.get("industry"):
+        score += 20
+    if data.get("employee_range"):
+        score += 20
+    if data.get("domain"):
+        score += 20
+    if data.get("founded"):
+        score += 15
+    return min(score, 100)
+
+def weighted_score(weights: dict) -> float:
+    total = sum((v or 0) for v in weights.values())
+    return round(min(total, 1.0) * 100, 1)
+
+async def _ai_json(prompt: str, model_key: str = "deepseek", max_tokens: int = 350) -> Optional[dict]:
+    r = await deepseek_chat([{"role": "user", "content": prompt}],
+                            model_key=model_key, max_tokens=max_tokens, temperature=0.3)
+    if "error" in r:
+        return None
+    out = r["content"].strip()
+    if "```" in out:
+        out = out.split("```")[1].replace("json", "", 1).strip()
+    try:
+        return json.loads(out[out.find("{"): out.rfind("}") + 1])
+    except Exception:
+        return None
+
+async def _save_enrichment(etype: str, payload: dict, result: dict, user_id: str):
+    await db.enrichments.insert_one({"type": etype, "input": payload, "result": result,
+                                     "by": user_id, "created_at": datetime.now(timezone.utc).isoformat()})
+
+class BusinessReq(BaseModel):
+    name: str
+    domain: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    model: str = "deepseek"
+
+class PersonReq(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    username: Optional[str] = None
+    model: str = "deepseek"
+
+class PropertyReq(BaseModel):
+    address: str
+    model: str = "deepseek"
+
+class OSINTEnrichReq(BaseModel):
+    target: str
+    model: str = "deepseek"
+
+class LeadEnrichReq(BaseModel):
+    business: Optional[BusinessReq] = None
+    person: Optional[PersonReq] = None
+    osint: Optional[OSINTEnrichReq] = None
+    model: str = "deepseek"
+
+def _slug(s: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9]", "", s or "")
+
+async def enrich_business(payload: BusinessReq) -> dict:
+    mk = "qwen" if payload.model == "qwen" else "deepseek"
+    domain = normalize_domain(payload.domain)
+    prompt = ("You are a B2B firmographic enrichment engine. From the business details, infer realistic "
+              "firmographics. Return ONLY JSON with keys: industry (string), employee_range (e.g. '1-10'), "
+              "founded (year integer), tech_stack (list of strings), description (1 sentence), confidence (0-1). "
+              f"\nName: {payload.name}\nDomain: {domain}\nPhone: {payload.phone}\nAddress: {payload.address}")
+    ai = await _ai_json(prompt, mk)
+    enriched = {"name": payload.name, "domain": domain,
+                "industry": (ai or {}).get("industry", ""),
+                "employee_range": (ai or {}).get("employee_range", ""),
+                "founded": (ai or {}).get("founded"),
+                "tech_stack": (ai or {}).get("tech_stack", []) or [],
+                "description": (ai or {}).get("description", ""),
+                "ai_confidence": (ai or {}).get("confidence", 0.5 if ai else 0.0),
+                "ai_available": ai is not None,
+                "social": {"facebook": f"https://facebook.com/{_slug(payload.name)}",
+                           "linkedin": f"https://linkedin.com/company/{_slug(payload.name)}"}}
+    enriched["quality_score"] = business_quality_score(enriched)
+    return enriched
+
+async def enrich_person(payload: PersonReq) -> dict:
+    mk = "qwen" if payload.model == "qwen" else "deepseek"
+    ident = IdentityInput(name=payload.name, email=payload.email,
+                          phone=payload.phone, username=payload.username)
+    footprint = await _build_footprint(ident)
+    records = await _public_records(ident)
+    profile = await _ai_profile(ident, footprint, records, mk)
+    return {"identity": payload.model_dump(exclude={"model"}),
+            "profiles": [a["url"] for a in footprint["accounts"]],
+            "footprint": footprint["accounts"], "ai_profile": profile,
+            "breached": any(r["category"] == "breach" for r in records["records"])}
+
+async def enrich_property(payload: PropertyReq) -> dict:
+    mk = "qwen" if payload.model == "qwen" else "deepseek"
+    prompt = ("You are a property intelligence estimator. From the address, provide a best-effort "
+              "ESTIMATE. Return ONLY JSON with keys: property_type (string), estimated_value (string like "
+              "'$300k-$450k'), bedrooms (int), year_built (int), owner_occupied (boolean), "
+              "renovation_potential (low/medium/high), confidence (0-1)."
+              f"\nAddress: {payload.address}")
+    ai = await _ai_json(prompt, mk)
+    return {"address": payload.address, "estimated": True, "ai_available": ai is not None,
+            **(ai or {"property_type": "", "estimated_value": "", "confidence": 0.0})}
+
+async def enrich_osint(payload: OSINTEnrichReq) -> dict:
+    ident = IdentityInput(username=payload.target,
+                          email=payload.target if "@" in payload.target else None)
+    identity = await _resolve_identity(ident)
+    footprint = await _build_footprint(ident)
+    records = await _public_records(ident)
+    return {"target": payload.target, "identity": identity,
+            "profiles": [a["url"] for a in footprint["accounts"]],
+            "accounts": footprint["accounts"], "records": records["records"]}
+
+def link_identities(person: dict, osint: dict) -> dict:
+    person_urls = set(person.get("profiles", []) if person else [])
+    osint_urls = set(osint.get("profiles", []) if osint else [])
+    overlap = person_urls & osint_urls
+    union = person_urls | osint_urls
+    confidence = round(len(overlap) / len(union), 2) if union else 0.0
+    return {"match_confidence": confidence, "linked_profiles": sorted(union)}
+
+def score_lead(enriched: dict) -> dict:
+    business = enriched.get("business") or {}
+    person = enriched.get("person") or {}
+    osint = enriched.get("osint") or {}
+    identity = link_identities(person, osint)
+    social_count = len(osint.get("profiles", []) or person.get("profiles", []) or [])
+    score = weighted_score({
+        "business_quality": (business.get("quality_score", 0) / 100) * 0.4,
+        "identity_strength": identity["match_confidence"] * 0.3,
+        "social_presence": min(social_count / 5, 1.0) * 0.3,
+    })
+    return {"score": score, "identity": identity, "grade": (
+        "A" if score >= 75 else "B" if score >= 50 else "C" if score >= 25 else "D")}
+
+@api.post("/enrich/business")
+async def enrich_business_api(payload: BusinessReq, user: dict = Depends(get_current_user)):
+    res = await enrich_business(payload)
+    await _save_enrichment("business", payload.model_dump(), res, user["id"])
+    return res
+
+@api.post("/enrich/person")
+async def enrich_person_api(payload: PersonReq, user: dict = Depends(get_current_user)):
+    res = await enrich_person(payload)
+    await _save_enrichment("person", payload.model_dump(), res, user["id"])
+    return res
+
+@api.post("/enrich/property")
+async def enrich_property_api(payload: PropertyReq, user: dict = Depends(get_current_user)):
+    res = await enrich_property(payload)
+    await _save_enrichment("property", payload.model_dump(), res, user["id"])
+    return res
+
+@api.post("/enrich/osint")
+async def enrich_osint_api(payload: OSINTEnrichReq, user: dict = Depends(get_current_user)):
+    res = await enrich_osint(payload)
+    await _save_enrichment("osint", payload.model_dump(), res, user["id"])
+    return res
+
+@api.post("/enrich/lead")
+async def enrich_lead_api(payload: LeadEnrichReq, user: dict = Depends(get_current_user)):
+    enriched = {}
+    if payload.business:
+        enriched["business"] = await enrich_business(payload.business)
+    if payload.person:
+        enriched["person"] = await enrich_person(payload.person)
+    if payload.osint:
+        enriched["osint"] = await enrich_osint(payload.osint)
+    enriched["score"] = score_lead(enriched)
+    await _save_enrichment("lead", payload.model_dump(), enriched, user["id"])
+    return enriched
+
+@api.get("/enrich/history")
+async def enrich_history(limit: int = 20, user: dict = Depends(get_current_user)):
+    q = {} if user.get("role") == "admin" else {"by": user["id"]}
+    cur = db.enrichments.find(q).sort("created_at", -1).limit(limit)
+    return [{"id": str(e["_id"]), "type": e.get("type"), "input": e.get("input"),
+             "created_at": e.get("created_at")} async for e in cur]
+
 # ----------------------------------------------------------------------------- mount + startup
 app.include_router(api)
 app.add_middleware(CORSMiddleware, allow_credentials=True,
