@@ -39,7 +39,12 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
   credits; works for dashboard users AND external `X-API-Key` developers. Frontend "Enrichment" tab
   shows per-call cost + balance.
 - Refactored into modular components (Leads.jsx, Scrapers.jsx, Dashboard Sidebar/Topbar/hook, helpers.js).
-- Tested: backend 36/36 pytest + 5 enrich endpoints, frontend e2e (iterations 1-5) — all green.
+- **Corporate Threat Intel (owner-only)**: scan a company domain (SPF/DMARC, sensitive subdomains,
+  risky open ports, missing security headers, breach) → AI-assisted 0-10 risk score (clamped).
+  Risk > 5 → flagged HIGH-TICKET (admin-only) + auto-drafted professional AI sales pitch (uses
+  editable outreach profile: sender/brand/services/CTA). Email SENDING pending provider choice
+  (draft + copy works now). Endpoints: /api/threat/scan|reports|outreach-profile (all require_admin).
+- Tested: backend 45+ pytest, frontend e2e (iterations 1-6) — all green.
 
 ## Known Constraints
 - AI is LIVE: DeepSeek-V3.1 (`deepseek-ai/DeepSeek-V3.1:novita`) + Qwen (`Qwen/Qwen2.5-72B-Instruct`)
