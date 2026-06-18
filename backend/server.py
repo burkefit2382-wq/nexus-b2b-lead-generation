@@ -190,6 +190,26 @@ async def logout(response: Response):
     response.delete_cookie("refresh_token", path="/")
     return {"ok": True}
 
+@api.post("/auth/refresh")
+async def refresh_token(request: Request, response: Response):
+    rt = request.cookies.get("refresh_token")
+    if not rt:
+        raise HTTPException(status_code=401, detail="No refresh token")
+    try:
+        payload = jwt.decode(rt, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
+        if payload.get("type") != "refresh":
+            raise HTTPException(status_code=401, detail="Invalid token type")
+        user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        uid = str(user["_id"])
+        access = create_access_token(uid, user["email"])
+        response.set_cookie("access_token", access, httponly=True, secure=False,
+                            samesite="lax", max_age=43200, path="/")
+        return {"refreshed": True}
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+
 @api.get("/auth/me")
 async def me(user: dict = Depends(get_current_user)):
     return _pub(user)
@@ -652,6 +672,10 @@ SAMPLE_LEADS = [
 @app.on_event("startup")
 async def startup():
     await db.users.create_index("email", unique=True)
+    await db.api_keys.create_index("key_hash")
+    await db.leads.create_index([("score", -1)])
+    await db.leads.create_index("category")
+    await db.leads.create_index("status")
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@nexus.io").lower()
     admin_pw = os.environ.get("ADMIN_PASSWORD", "nexus123")
     existing = await db.users.find_one({"email": admin_email})
