@@ -243,7 +243,9 @@ async def create_api_key(body: ApiKeyCreate, user: dict = Depends(get_current_us
 
 @api.get("/keys")
 async def list_api_keys(user: dict = Depends(get_current_user)):
-    cur = db.api_keys.find({"user_id": user["id"]}).sort("created_at", -1)
+    cur = db.api_keys.find({"user_id": user["id"]},
+                           {"name": 1, "prefix": 1, "created_at": 1, "last_used": 1, "calls": 1, "revoked": 1}
+                           ).sort("created_at", -1).limit(100)
     return [_key_pub(k) async for k in cur]
 
 @api.delete("/keys/{key_id}")
@@ -255,7 +257,7 @@ async def revoke_api_key(key_id: str, user: dict = Depends(get_current_user)):
 # ====================== ADMIN (role-gated) ======================
 @api.get("/admin/users")
 async def admin_list_users(user: dict = Depends(require_admin)):
-    cur = db.users.find({}).sort("created_at", -1).limit(200)
+    cur = db.users.find({}, {"email": 1, "name": 1, "role": 1, "created_at": 1}).sort("created_at", -1).limit(200)
     return [{"id": str(u["_id"]), "email": u["email"], "name": u.get("name"),
              "role": u.get("role"), "created_at": u.get("created_at")} async for u in cur]
 
@@ -674,7 +676,7 @@ async def osint_dork(body: DorkReq, user: dict = Depends(get_current_user)):
 
 @api.get("/osint/reports")
 async def osint_reports(limit: int = 50, user: dict = Depends(get_current_user)):
-    cur = db.osint_reports.find({}).sort("created_at", -1).limit(limit)
+    cur = db.osint_reports.find({}, {"target": 1, "tool_used": 1, "created_at": 1}).sort("created_at", -1).limit(limit)
     return [{"id": str(r["_id"]), "target": r.get("target"), "tool": r.get("tool_used"),
              "created_at": r.get("created_at")} async for r in cur]
 
@@ -1091,7 +1093,7 @@ async def people_intel_scan(body: PeopleScanReq, user: dict = Depends(get_curren
 @api.get("/people-intel/history")
 async def people_intel_history(limit: int = 20, user: dict = Depends(get_current_user)):
     q = {} if user.get("role") == "admin" else {"by": user["id"]}
-    cur = db.people_reports.find(q).sort("created_at", -1).limit(limit)
+    cur = db.people_reports.find(q, {"input": 1, "risk": 1, "summary": 1, "created_at": 1}).sort("created_at", -1).limit(limit)
     return [{"id": str(r["_id"]), "subject": (r.get("input") or {}),
              "risk": (r.get("risk") or {}).get("level"), "summary": r.get("summary"),
              "created_at": r.get("created_at")} async for r in cur]
