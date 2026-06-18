@@ -8,8 +8,13 @@ import {
   Lock, Unlock, CreditCard, UserSearch, ShieldCheck, AlertTriangle
 } from "lucide-react";
 
-const cat = (c) => (c === "home_remodeling" ? "Remodeling" : c === "cleaning" ? "Cleaning" : c || "—");
-const scoreClass = (s) => (s >= 70 ? "hot" : s >= 45 ? "warm" : "cold");
+const CATEGORY_LABELS = { home_remodeling: "Remodeling", cleaning: "Cleaning" };
+const cat = (c) => CATEGORY_LABELS[c] || c || "—";
+const scoreClass = (s) => {
+  if (s >= 70) return "hot";
+  if (s >= 45) return "warm";
+  return "cold";
+};
 
 /* ============================ OVERVIEW ============================ */
 export function Overview({ goTo }) {

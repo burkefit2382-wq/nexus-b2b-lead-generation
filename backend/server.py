@@ -406,6 +406,7 @@ async def _enrich_one(lead: dict, model_key: str = "deepseek") -> dict:
     out = r["content"].strip()
     if "```" in out:
         out = out.split("```")[1].replace("json", "", 1).strip()
+    data = {}
     try:
         m = out[out.find("{"): out.rfind("}") + 1]
         data = json.loads(m)

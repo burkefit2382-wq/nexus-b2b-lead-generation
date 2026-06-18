@@ -23,6 +23,8 @@ export default function Login() {
     } finally { setBusy(false); }
   };
 
+  const submitLabel = mode === "login" ? "Authenticate" : "Provision Account";
+
   return (
     <div className="auth-wrap">
       <div className="auth-left">
@@ -71,7 +73,7 @@ export default function Login() {
                 data-testid="auth-password-input" />
             </div>
             <button className="btn" disabled={busy} type="submit" data-testid="auth-submit-btn">
-              {busy ? <span className="spinner" /> : mode === "login" ? "Authenticate" : "Provision Account"}
+              {busy ? <span className="spinner" /> : submitLabel}
             </button>
           </form>
           <div className="auth-switch">
