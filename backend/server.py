@@ -1403,6 +1403,181 @@ async def enrich_history(limit: int = 20, user: dict = Depends(get_current_user)
     return [{"id": str(e["_id"]), "type": e.get("type"), "input": e.get("input"),
              "created_at": e.get("created_at")} async for e in cur]
 
+# ====================== CORPORATE THREAT INTEL (owner-only high-ticket) ======================
+RISKY_PORTS = {21: "FTP", 23: "Telnet", 3389: "RDP", 3306: "MySQL", 5432: "Postgres",
+               6379: "Redis", 27017: "MongoDB", 9200: "Elasticsearch", 5900: "VNC", 11211: "Memcached"}
+SENSITIVE_SUBS = ["admin", "dev", "staging", "test", "vpn", "remote", "portal", "git", "jenkins", "jira"]
+SECURITY_HEADERS = ["strict-transport-security", "content-security-policy",
+                    "x-frame-options", "x-content-type-options"]
+
+class ThreatScanReq(BaseModel):
+    domain: str
+    model: str = "deepseek"
+
+async def _gather_threat_signals(domain: str) -> dict:
+    domain = normalize_domain(domain) or domain
+    findings = []
+
+    def _resolve():
+        try:
+            return socket.gethostbyname(domain)
+        except Exception:
+            return None
+    ip = await asyncio.to_thread(_resolve)
+
+    def _dns():
+        import dns.resolver
+        rec = {}
+        for rt in ["MX", "TXT"]:
+            try:
+                rec[rt] = [str(x) for x in dns.resolver.resolve(domain, rt, lifetime=5)]
+            except Exception:
+                rec[rt] = []
+        return rec
+    dns_rec = await asyncio.to_thread(_dns)
+    txt_join = " ".join(dns_rec.get("TXT", [])).lower()
+    if "v=spf1" not in txt_join:
+        findings.append({"category": "Email Spoofing", "detail": "No SPF record found", "severity": "medium", "weight": 1.5})
+    if "dmarc" not in txt_join:
+        findings.append({"category": "Email Spoofing", "detail": "No DMARC policy detected", "severity": "medium", "weight": 1.5})
+
+    def _subs():
+        found = []
+        for s in SENSITIVE_SUBS:
+            try:
+                host = f"{s}.{domain}"
+                found.append({"sub": host, "ip": socket.gethostbyname(host)})
+            except Exception:
+                pass
+        return found
+    subs = await asyncio.to_thread(_subs)
+    for s in subs:
+        findings.append({"category": "Exposed Surface", "detail": f"Sensitive subdomain reachable: {s['sub']}", "severity": "high", "weight": 2.0})
+
+    open_ports = []
+    if ip:
+        def _ports():
+            res = []
+            for p in RISKY_PORTS:
+                try:
+                    sk = socket.socket(); sk.settimeout(1)
+                    if sk.connect_ex((ip, p)) == 0:
+                        res.append(p)
+                    sk.close()
+                except Exception:
+                    pass
+            return res
+        open_ports = await asyncio.to_thread(_ports)
+        for p in open_ports:
+            findings.append({"category": "Open Port", "detail": f"Risky service exposed: {RISKY_PORTS[p]} (port {p})", "severity": "high", "weight": 2.5})
+
+    missing_headers = []
+    async with httpx.AsyncClient(timeout=12, follow_redirects=True,
+                                 headers={"User-Agent": "Mozilla/5.0"}) as c:
+        try:
+            resp = await c.get(f"https://{domain}")
+            hdrs = {k.lower() for k in resp.headers.keys()}
+            missing_headers = [h for h in SECURITY_HEADERS if h not in hdrs]
+            for h in missing_headers:
+                findings.append({"category": "Missing Header", "detail": f"Security header absent: {h}", "severity": "low", "weight": 0.8})
+        except Exception:
+            findings.append({"category": "Availability", "detail": "HTTPS endpoint unreachable", "severity": "medium", "weight": 1.0})
+        try:
+            br = await c.get(f"https://haveibeenpwned.com/unifiedsearch/{domain}",
+                             headers={"User-Agent": "NEXUS-OSINT"})
+            if br.status_code == 200:
+                findings.append({"category": "Data Breach", "detail": "Domain appears in known breach datasets", "severity": "high", "weight": 2.5})
+        except Exception:
+            pass
+
+    raw = min(sum(f["weight"] for f in findings), 10.0)
+    return {"domain": domain, "ip": ip, "open_ports": open_ports,
+            "sensitive_subdomains": [s["sub"] for s in subs],
+            "missing_headers": missing_headers, "findings": findings,
+            "raw_score": round(raw, 1)}
+
+async def _threat_ai(signals: dict, model_key: str) -> dict:
+    prompt = ("You are a cybersecurity risk analyst. Given the OSINT findings JSON for a company, "
+              "return ONLY JSON with keys: risk_score (0-10 float), risk_level (low/medium/high/critical), "
+              "executive_summary (2-3 sentences for a non-technical exec), "
+              "top_vulnerabilities (list of up to 4 short strings), "
+              "recommended_services (list of up to 4 security services to sell).\n\n" + json.dumps(signals)[:2500])
+    ai = await _ai_json(prompt, model_key, max_tokens=450)
+    return ai or {}
+
+async def _sales_email_draft(domain: str, signals: dict, ai: dict, model_key: str) -> dict:
+    seller = await db.outreach_profile.find_one({"_id": "profile"}) or {}
+    sender_name = seller.get("sender_name", "Security Consultant")
+    brand = seller.get("brand", "NEXUS Security")
+    services = seller.get("services", "penetration testing, breach remediation and dark-web monitoring")
+    cta = seller.get("cta", "")
+    vulns = ", ".join(ai.get("top_vulnerabilities", []) or [f["detail"] for f in signals["findings"][:3]])
+    prompt = (f"Write a concise, professional B2B cold outreach email (120-160 words) from {sender_name} of {brand}, "
+              f"a cybersecurity firm offering: {services}. The recipient is the IT/security leader at {domain}. "
+              f"Reference (diplomatically, without alarming or being unethical) that a passive external security review "
+              f"surfaced potential exposure areas: {vulns}. Offer a free 15-minute review call. "
+              f"{'Include this call-to-action link: ' + cta if cta else ''} "
+              "Return ONLY JSON with keys: subject (string), body (string). Professional, confident, not fear-mongering.")
+    ai_mail = await _ai_json(prompt, model_key, max_tokens=500)
+    if not ai_mail:
+        ai_mail = {"subject": f"Strengthening {domain}'s security posture",
+                   "body": f"Hi team,\n\nI'm {sender_name} from {brand}. A passive external review of {domain} "
+                           f"surfaced a few areas worth a quick look ({vulns}). We help companies close these gaps via "
+                           f"{services}. Open to a free 15-minute review call?\n\nBest,\n{sender_name}\n{brand}"}
+    return ai_mail
+
+@api.post("/threat/scan")
+async def threat_scan(body: ThreatScanReq, user: dict = Depends(require_admin)):
+    mk = "qwen" if body.model == "qwen" else "deepseek"
+    signals = await _gather_threat_signals(body.domain)
+    ai = await _threat_ai(signals, mk)
+    risk_score = float(ai.get("risk_score", signals["raw_score"]) or signals["raw_score"])
+    high_ticket = risk_score > 5
+    email_draft = await _sales_email_draft(signals["domain"], signals, ai, mk) if high_ticket else None
+    report = {"domain": signals["domain"], "ip": signals["ip"], "risk_score": round(risk_score, 1),
+              "risk_level": ai.get("risk_level", "high" if high_ticket else "low"),
+              "high_ticket": high_ticket, "executive_summary": ai.get("executive_summary", ""),
+              "top_vulnerabilities": ai.get("top_vulnerabilities", []),
+              "recommended_services": ai.get("recommended_services", []),
+              "findings": signals["findings"], "open_ports": signals["open_ports"],
+              "sensitive_subdomains": signals["sensitive_subdomains"],
+              "missing_headers": signals["missing_headers"],
+              "email_draft": email_draft, "email_status": "draft" if email_draft else "n/a",
+              "by": user["id"], "created_at": datetime.now(timezone.utc).isoformat()}
+    res = await db.threat_reports.insert_one(dict(report))
+    report["id"] = str(res.inserted_id); report.pop("_id", None)
+    return report
+
+@api.get("/threat/reports")
+async def threat_reports(high_ticket_only: bool = False, limit: int = 50, user: dict = Depends(require_admin)):
+    q = {"high_ticket": True} if high_ticket_only else {}
+    cur = db.threat_reports.find(q).sort([("high_ticket", -1), ("risk_score", -1)]).limit(limit)
+    out = []
+    async for r in cur:
+        r["id"] = str(r.pop("_id"))
+        out.append(r)
+    return out
+
+class OutreachProfile(BaseModel):
+    sender_name: str = ""
+    sender_email: str = ""
+    brand: str = ""
+    services: str = ""
+    cta: str = ""
+    provider: str = ""
+    auto_send: bool = False
+
+@api.get("/threat/outreach-profile")
+async def get_outreach_profile(user: dict = Depends(require_admin)):
+    p = await db.outreach_profile.find_one({"_id": "profile"}) or {}
+    p.pop("_id", None)
+    return p
+
+@api.put("/threat/outreach-profile")
+async def set_outreach_profile(body: OutreachProfile, user: dict = Depends(require_admin)):
+    await db.outreach_profile.update_one({"_id": "profile"}, {"$set": body.model_dump()}, upsert=True)
+    return {"updated": True, **body.model_dump()}
+
 # ----------------------------------------------------------------------------- mount + startup
 app.include_router(api)
 app.add_middleware(CORSMiddleware, allow_credentials=True,
