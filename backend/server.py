@@ -248,7 +248,7 @@ async def revoke_api_key(key_id: str, user: dict = Depends(get_current_user)):
 # ====================== ADMIN (role-gated) ======================
 @api.get("/admin/users")
 async def admin_list_users(user: dict = Depends(require_admin)):
-    cur = db.users.find({}).sort("created_at", -1)
+    cur = db.users.find({}).sort("created_at", -1).limit(200)
     return [{"id": str(u["_id"]), "email": u["email"], "name": u.get("name"),
              "role": u.get("role"), "created_at": u.get("created_at")} async for u in cur]
 
@@ -341,7 +341,7 @@ async def export_csv(category: Optional[str] = None, min_score: float = 0.0,
     out = io.StringIO(); w = csv.writer(out)
     w.writerow(["ID", "Category", "Status", "Score", "Name", "Email", "Phone",
                 "City", "State", "AI Summary", "Budget", "Tags", "Source"])
-    async for l in db.leads.find(q).sort("score", -1):
+    async for l in db.leads.find(q).sort("score", -1).limit(5000):
         w.writerow([str(l["_id"]), l.get("category"), l.get("status"), l.get("score"),
                     l.get("full_name"), l.get("email"), l.get("phone"), l.get("city"),
                     l.get("state"), l.get("ai_summary"), l.get("ai_budget_est"),
