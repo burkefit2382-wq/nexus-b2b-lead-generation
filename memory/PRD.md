@@ -55,6 +55,26 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
   Frontend: lime "$price" Buy button per locked lead in Lead Engine (`lead-buy-{id}`).
   Verified: 27 buy buttons render for normal user; live Stripe session created ($15 for score-95 lead).
 
+## Implemented (2026-06-18 — Tampa Bay scraping, worker, pipeline, email)
+- **Broadened scraping → Tampa Bay independent services** (Hillsborough + Pinellas): switched scraper
+  to **OpenStreetMap/Nominatim** (free, no key, cloud-accessible) — Craigslist & Reddit block our
+  datacenter IP (403). 16 service categories (plumbing, electrical, HVAC, landscaping, handyman,
+  cleaning, painting, roofing, pest, remodeling, pressure washing, moving, pool, auto, tree, flooring)
+  × 5 locales (Tampa, St Pete, Clearwater, Brandon, Largo), throttled 1.1s/req. New business-lead path
+  (`_process_business`) scores by completeness (website/phone/city), geo-tags FL. `sources_version`
+  migration. Verified: 20 real businesses with websites scraped in one cycle.
+- **P0 Background Worker**: APScheduler extracted to `backend/worker.py` (standalone). API gates the
+  in-process scheduler behind `RUN_SCHEDULER` (default true in preview so scraping still runs; set
+  false in prod). docker-compose adds a `worker` container (RUN_SCHEDULER=true) + api RUN_SCHEDULER=false.
+  Verified: worker boots, starts scheduler, runs cycle.
+- **P1 Scan-to-pipeline**: qualifying scraped leads with a real company domain auto-trigger a Threat
+  Intel scan (`_auto_threat_pipeline` → `_run_threat_scan`, source="scraper-auto", deduped). Verified:
+  20 auto threat reports generated from scraped business websites (high-ticket flagged).
+- **P1 Email (Gmail SMTP)**: `POST /api/threat/reports/{id}/send-email` sends the AI pitch via Gmail
+  SMTP (smtplib SSL:465, GMAIL_USER/GMAIL_APP_PASSWORD). Frontend "Send via Gmail" button in Threat
+  Intel. NOTE: BLOCKED — provided password is the account password, not a 16-char Gmail **App Password**
+  (Gmail returns 535 Bad Credentials). Needs an App Password (2-Step Verification on) to send.
+
 ## Known Constraints
 - AI is LIVE: DeepSeek-V3.1 (`deepseek-ai/DeepSeek-V3.1:novita`) + Qwen (`Qwen/Qwen2.5-72B-Instruct`)
   via HF router with a working token (Inference Providers permission granted).

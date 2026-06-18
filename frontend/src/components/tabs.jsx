@@ -255,6 +255,8 @@ export function ThreatIntel() {
   const [busy, setBusy] = useState(false);
   const [profile, setProfile] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
+  const [sendTo, setSendTo] = useState("");
+  const [sending, setSending] = useState(false);
 
   const loadReports = () => api.get("/threat/reports?limit=30").then((r) => setReports(r.data)).catch(() => {});
   useEffect(() => {
@@ -270,6 +272,13 @@ export function ThreatIntel() {
     finally { setBusy(false); }
   };
   const saveProfile = async () => { await api.put("/threat/outreach-profile", profile); setShowProfile(false); };
+  const sendPitch = async () => {
+    if (!report?.id || !sendTo.trim()) return;
+    setSending(true);
+    try { await api.post(`/threat/reports/${report.id}/send-email`, { to_email: sendTo.trim() }); alert("Pitch sent to " + sendTo); setSendTo(""); loadReports(); }
+    catch (e) { alert(e.response?.data?.detail || e.message); }
+    finally { setSending(false); }
+  };
   const riskColor = (s) => (s > 7 ? "var(--danger)" : s > 5 ? "var(--amber)" : "var(--accent)");
 
   return (
@@ -342,7 +351,13 @@ export function ThreatIntel() {
                 onClick={() => navigator.clipboard.writeText(`Subject: ${report.email_draft.subject}\n\n${report.email_draft.body}`)} data-testid="threat-email-copy">
                 <Copy size={13} /> Copy email
               </button>
-              <span className="warn" style={{ marginLeft: 10 }}>Add an email provider to enable one-click send.</span>
+              <div className="toolbar" style={{ marginTop: 12, gap: 8 }}>
+                <input className="search-input" placeholder="recipient email (e.g. it@company.com)" value={sendTo}
+                  onChange={(e) => setSendTo(e.target.value)} data-testid="threat-send-to" />
+                <button className="btn btn-sm" onClick={sendPitch} disabled={sending || !sendTo.trim()} data-testid="threat-send-email">
+                  {sending ? <span className="spinner" /> : <><Send size={13} /> Send via Gmail</>}
+                </button>
+              </div>
             </div>
           )}
         </div>

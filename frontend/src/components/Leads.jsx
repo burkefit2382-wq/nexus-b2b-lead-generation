@@ -36,7 +36,7 @@ function LeadRow({ lead, onUnlock, onBuy, onSell, onDelete }) {
   const l = lead;
   return (
     <tr data-testid={`lead-row-${l.id}`}>
-      <td className="name">{l.full_name || "—"}<div className="muted">{l.city}{l.state ? ", " + l.state : ""}</div></td>
+      <td className="name">{l.full_name || l.company || "—"}<div className="muted">{l.city}{l.state ? ", " + l.state : ""}</div></td>
       <td className="muted">
         {l.locked
           ? <span style={{ color: "var(--muted)", fontFamily: "var(--mono)", fontSize: 12 }}><Lock size={12} style={{ verticalAlign: -1, marginRight: 5 }} />locked</span>

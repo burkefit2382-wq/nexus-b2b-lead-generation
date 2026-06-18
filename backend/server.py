@@ -730,6 +730,10 @@ async def osint_reports(limit: int = 50, user: dict = Depends(get_current_user))
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 scheduler = AsyncIOScheduler(timezone="UTC")
+RUN_SCHEDULER = os.environ.get("RUN_SCHEDULER", "true").lower() != "false"
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 SCRAPER_STATE = {"status": "idle", "last_run": None, "last_error": None,
                  "found": 0, "qualified": 0, "cycles": 0, "next_run": None}
 
@@ -740,12 +744,39 @@ URGENCY_KW = ["asap", "urgent", "this week", "immediately", "today", "tomorrow",
 EMAIL_RX = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
 PHONE_RX = re.compile(r"\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}")
 
+# Tampa Bay service market: Hillsborough + Pinellas (and adjacent) — geo scope for local independent-service leads.
+TAMPA_CITIES = [
+    "tampa bay", "hillsborough", "pinellas", "tampa", "st. petersburg", "st petersburg",
+    "saint petersburg", "clearwater", "brandon", "largo", "riverview", "plant city", "valrico",
+    "wesley chapel", "palm harbor", "dunedin", "pinellas park", "seminole", "oldsmar",
+    "temple terrace", "apollo beach", "ruskin", "lutz", "gibsonton", "carrollwood", "westchase",
+    "odessa", "tarpon springs", "safety harbor", "thonotosassa", "town n country", "town 'n' country",
+    "sun city center", "land o lakes",
+]
+
+def _detect_tampa_geo(text: str) -> tuple:
+    low = (text or "").lower()
+    for c in TAMPA_CITIES:
+        if c in low:
+            label = "Tampa Bay" if c in ("tampa bay", "hillsborough", "pinellas") else c.title()
+            return label, "FL"
+    return "", ""
+
+# Independent-service search terms scraped across the Tampa Bay market (Hillsborough + Pinellas).
+SERVICE_QUERIES = [
+    ("plumber", "plumbing"), ("electrician", "electrical"), ("hvac", "hvac"),
+    ("landscaping", "landscaping"), ("handyman", "handyman"), ("house cleaning", "cleaning"),
+    ("painter", "painting"), ("roofing contractor", "roofing"), ("pest control", "pest_control"),
+    ("remodeling contractor", "home_remodeling"), ("pressure washing", "pressure_washing"),
+    ("moving company", "moving"), ("pool service", "pool"), ("auto repair", "auto"),
+    ("tree service", "tree_service"), ("flooring", "flooring"),
+]
+# Key Tampa Bay locales (Hillsborough + Pinellas) appended to each search.
+TAMPA_LOCALES = ["Tampa FL", "St Petersburg FL", "Clearwater FL", "Brandon FL", "Largo FL"]
+SOURCES_VERSION = 3
+# OpenStreetMap/Nominatim (free, no key, cloud-accessible) — local independent-service businesses.
 DEFAULT_SOURCES = [
-    {"provider": "hackernews", "query": "looking for freelance developer", "category": "freelance"},
-    {"provider": "hackernews", "query": "need help building", "category": "services"},
-    {"provider": "github", "query": "looking for contractor OR freelancer in:body type:issue", "category": "open_source"},
-    {"provider": "reddit", "query": "looking for kitchen remodel contractor", "subreddit": "HomeImprovement", "category": "home_remodeling"},
-    {"provider": "reddit", "query": "recommend house cleaning service", "subreddit": "CleaningTips", "category": "cleaning"},
+    {"provider": "osm", "query": q, "category": cat} for q, cat in SERVICE_QUERIES
 ]
 
 async def get_scraper_config() -> dict:
@@ -754,7 +785,8 @@ async def get_scraper_config() -> dict:
         cfg = {"_id": "config", "enabled": os.environ.get("SCRAPER_ENABLED", "true") == "true",
                "interval_min": int(os.environ.get("SCRAPER_INTERVAL_MIN", "30")),
                "min_score": float(os.environ.get("SCRAPER_MIN_SCORE", "55")),
-               "use_ai": True, "ai_model": "deepseek", "sources": DEFAULT_SOURCES}
+               "use_ai": True, "ai_model": "deepseek", "sources": DEFAULT_SOURCES,
+               "sources_version": SOURCES_VERSION}
         await db.scraper_config.insert_one(cfg)
     return cfg
 
@@ -857,8 +889,46 @@ async def fetch_reddit(src: dict) -> list:
         SCRAPER_STATE["last_error"] = "reddit: " + str(e)[:160]
     return out
 
+async def fetch_osm(src: dict) -> list:
+    """Local independent-service businesses in Tampa Bay via OpenStreetMap Nominatim (free, no key)."""
+    from urllib.parse import quote
+    out = []
+    ua = {"User-Agent": "NEXUS-LeadBot/1.0 (contact: " + (os.environ.get("GMAIL_USER") or "nexus@local") + ")"}
+    async with httpx.AsyncClient(timeout=20, headers=ua, follow_redirects=True) as c:
+        for locale in TAMPA_LOCALES:
+            q = f"{src['query']}, {locale}"
+            url = (f"https://nominatim.openstreetmap.org/search?q={quote(q)}"
+                   "&format=jsonv2&extratags=1&addressdetails=1&limit=10&countrycodes=us")
+            try:
+                data = (await c.get(url)).json()
+            except Exception as e:
+                SCRAPER_STATE["last_error"] = "osm: " + str(e)[:160]
+                data = []
+            for r in (data or []):
+                et = r.get("extratags") or {}
+                ad = r.get("address") or {}
+                name = r.get("name") or et.get("operator") or ""
+                if not name:
+                    continue
+                city = ad.get("city") or ad.get("town") or ad.get("village") or ad.get("municipality") or ""
+                website = et.get("website") or et.get("contact:website") or ""
+                phone = et.get("phone") or et.get("contact:phone") or ""
+                email = et.get("email") or et.get("contact:email") or ""
+                osm_url = f"https://www.openstreetmap.org/{r.get('osm_type','node')}/{r.get('osm_id','')}"
+                cat_label = src["category"].replace("_", " ")
+                text = f"{name} — independent {cat_label} business in {city or 'Tampa Bay'}, FL. {website} {phone}".strip()
+                out.append({"kind": "business", "full_name": "", "company": name,
+                            "raw_text": text[:2000], "source_site": "OpenStreetMap",
+                            "category": src["category"], "source_url": website or osm_url,
+                            "website": website, "city": city, "state": "FL",
+                            "phone": phone, "email": email, "title": name})
+            await asyncio.sleep(1.1)  # Nominatim usage policy: max ~1 request/second
+    return out
+
 async def fetch_source(src: dict) -> list:
-    p = src.get("provider", "reddit")
+    p = src.get("provider", "osm")
+    if p in ("osm", "nominatim"):
+        return await fetch_osm(src)
     if p == "hackernews":
         return await fetch_hackernews(src)
     if p == "github":
@@ -875,6 +945,26 @@ def _extract_contacts(text: str) -> dict:
     emails = EMAIL_RX.findall(text)
     phones = PHONE_RX.findall(text)
     return {"email": emails[0] if emails else "", "phone": phones[0] if phones else ""}
+
+FREE_EMAIL = {"gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "aol.com",
+              "icloud.com", "proton.me", "live.com", "msn.com", "me.com"}
+PLATFORM_DOMAINS = {"github.com", "news.ycombinator.com", "ycombinator.com", "craigslist.org",
+                    "reddit.com", "x.com", "twitter.com", "facebook.com", "linkedin.com"}
+
+def _extract_company_domain(text: str, source_url: str, email: str) -> Optional[str]:
+    """Find a real company domain from a scraped lead (for scan-to-pipeline)."""
+    if email and "@" in email:
+        d = email.split("@")[-1].lower().strip()
+        if d and d not in FREE_EMAIL and "." in d:
+            return d
+    for m in re.findall(r"https?://([a-zA-Z0-9.\-]+)", text or ""):
+        d = m.lower().lstrip(".")
+        if d.startswith("www."):
+            d = d[4:]
+        base = ".".join(d.split(".")[-2:])
+        if "." in d and base not in PLATFORM_DOMAINS:
+            return d
+    return None
 
 async def _score_candidate(cand: dict, text: str, use_ai: bool, ai_model: str, min_score: float) -> dict:
     """Score a candidate via AI (preferred) or heuristic; decide if it qualifies."""
@@ -893,9 +983,11 @@ async def _score_candidate(cand: dict, text: str, use_ai: bool, ai_model: str, m
     return result
 
 def _build_lead_doc(cand: dict, text: str, scored: dict) -> dict:
+    city, state = _detect_tampa_geo(text)
     return {"category": cand["category"], "full_name": cand["full_name"],
             "email": cand["email"], "phone": cand["phone"], "company": "",
-            "city": "", "state": "", "source_site": cand.get("source_site", "web"),
+            "city": city or cand.get("city", ""), "state": state or cand.get("state", ""),
+            "source_site": cand.get("source_site", "web"),
             "source_url": cand["source_url"], "raw_text": text,
             "status": "enriched" if scored["summary"] else "raw", "score": scored["score"],
             "ai_summary": scored["summary"], "ai_intent_score": scored["score"],
@@ -907,6 +999,8 @@ async def _process_candidate(cand: dict, use_ai: bool, ai_model: str, min_score:
     """Returns True if the candidate was stored as a qualified lead."""
     if await db.leads.find_one({"source_url": cand["source_url"]}):
         return False
+    if cand.get("kind") == "business":
+        return await _process_business(cand, min_score)
     text = cand["raw_text"]
     if not _passes_intent_gate(text):
         return False
@@ -914,7 +1008,44 @@ async def _process_candidate(cand: dict, use_ai: bool, ai_model: str, min_score:
     scored = await _score_candidate(cand, text, use_ai, ai_model, min_score)
     if not scored["keep"]:
         return False
-    await db.leads.insert_one(_build_lead_doc(cand, text, scored))
+    doc = _build_lead_doc(cand, text, scored)
+    await db.leads.insert_one(doc)
+    asyncio.create_task(_auto_threat_pipeline(doc))
+    return True
+
+async def _process_business(cand: dict, min_score: float) -> bool:
+    """Store an independent-service business lead (Tampa Bay) and feed scan-to-pipeline."""
+    company = (cand.get("company") or "").strip()
+    if not company:
+        return False
+    if await db.leads.find_one({"company": company, "city": cand.get("city", ""), "scraped": True}):
+        return False
+    score = 0
+    if cand.get("website"):
+        score += 30
+    if cand.get("phone"):
+        score += 25
+    if company:
+        score += 20
+    if cand.get("city"):
+        score += 15
+    if cand.get("email"):
+        score += 10
+    score = float(min(score, 100))
+    if score < min_score and not cand.get("website"):
+        return False
+    doc = {"category": cand["category"], "full_name": "", "email": cand.get("email", ""),
+           "phone": cand.get("phone", ""), "company": company,
+           "city": cand.get("city", ""), "state": cand.get("state", "FL"),
+           "source_site": cand.get("source_site", "OpenStreetMap"),
+           "source_url": cand.get("source_url", ""), "website": cand.get("website", ""),
+           "raw_text": cand.get("raw_text", ""), "status": "enriched", "score": score,
+           "ai_summary": f"Independent {cand['category'].replace('_', ' ')} business in {cand.get('city') or 'Tampa Bay'}, FL.",
+           "ai_intent_score": score, "ai_budget_est": "", "tags": "business,local," + cand["category"],
+           "is_sold": False, "sold_price": 0.0, "scraped": True,
+           "created_at": datetime.now(timezone.utc).isoformat()}
+    await db.leads.insert_one(doc)
+    asyncio.create_task(_auto_threat_pipeline(doc))
     return True
 
 async def run_scrape_cycle(reason: str = "scheduled"):
@@ -996,12 +1127,13 @@ class ScraperConfig(BaseModel):
     use_ai: bool = True
     ai_model: str = "deepseek"
     sources: List[dict] = []
+    sources_version: int = SOURCES_VERSION
 
 @api.put("/scraper/config")
 async def scraper_set_config(body: ScraperConfig, user: dict = Depends(require_admin)):
     data = body.model_dump()
     await db.scraper_config.update_one({"_id": "config"}, {"$set": data}, upsert=True)
-    if data["enabled"]:
+    if data["enabled"] and RUN_SCHEDULER:
         reschedule(data["interval_min"])
         if not scheduler.running:
             scheduler.start()
@@ -1579,11 +1711,25 @@ async def _sales_email_draft(domain: str, signals: dict, ai: dict, model_key: st
                            f"{services}. Open to a free 15-minute review call?\n\nBest,\n{sender_name}\n{brand}"}
     return ai_mail
 
-@api.post("/threat/scan")
-async def threat_scan(body: ThreatScanReq, user: dict = Depends(require_admin)):
-    mk = "qwen" if body.model == "qwen" else "deepseek"
-    signals = await _gather_threat_signals(body.domain)
-    ai = await _threat_ai(signals, mk)
+def _send_gmail_sync(to_addr: str, subject: str, body: str, from_name: str = ""):
+    user = os.environ.get("GMAIL_USER"); pw = os.environ.get("GMAIL_APP_PASSWORD")
+    if not (user and pw):
+        raise RuntimeError("Gmail not configured — set GMAIL_USER and GMAIL_APP_PASSWORD (16-char App Password).")
+    msg = MIMEMultipart()
+    msg["From"] = f"{from_name} <{user}>" if from_name else user
+    msg["To"] = to_addr
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain"))
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=25) as s:
+        s.login(user, pw.replace(" ", ""))
+        s.sendmail(user, [to_addr], msg.as_string())
+
+async def send_email(to_addr: str, subject: str, body: str, from_name: str = ""):
+    await asyncio.to_thread(_send_gmail_sync, to_addr, subject, body, from_name)
+
+async def _run_threat_scan(domain: str, model_key: str = "deepseek", by: str = "system", source: str = "manual") -> dict:
+    signals = await _gather_threat_signals(domain)
+    ai = await _threat_ai(signals, model_key)
     try:
         ai_score = float(ai.get("risk_score"))
     except (TypeError, ValueError):
@@ -1591,7 +1737,7 @@ async def threat_scan(body: ThreatScanReq, user: dict = Depends(require_admin)):
     risk_score = ai_score if (ai_score is not None and 0 <= ai_score <= 10) else signals["raw_score"]
     risk_score = max(0.0, min(10.0, round(risk_score, 1)))
     high_ticket = risk_score > 5
-    email_draft = await _sales_email_draft(signals["domain"], signals, ai, mk) if high_ticket else None
+    email_draft = await _sales_email_draft(signals["domain"], signals, ai, model_key) if high_ticket else None
     report = {"domain": signals["domain"], "ip": signals["ip"], "risk_score": round(risk_score, 1),
               "risk_level": ai.get("risk_level", "high" if high_ticket else "low"),
               "high_ticket": high_ticket, "executive_summary": ai.get("executive_summary", ""),
@@ -1601,10 +1747,31 @@ async def threat_scan(body: ThreatScanReq, user: dict = Depends(require_admin)):
               "sensitive_subdomains": signals["sensitive_subdomains"],
               "missing_headers": signals["missing_headers"],
               "email_draft": email_draft, "email_status": "draft" if email_draft else "n/a",
-              "by": user["id"], "created_at": datetime.now(timezone.utc).isoformat()}
+              "source": source, "by": by, "created_at": datetime.now(timezone.utc).isoformat()}
     res = await db.threat_reports.insert_one(dict(report))
     report["id"] = str(res.inserted_id); report.pop("_id", None)
     return report
+
+async def _auto_threat_pipeline(lead_doc: dict):
+    """Scan-to-pipeline: if a scraped lead exposes a real company domain, auto threat-scan it."""
+    try:
+        domain = _extract_company_domain(
+            (lead_doc.get("raw_text", "") + " " + (lead_doc.get("source_url") or "") + " " + (lead_doc.get("website") or "")),
+            lead_doc.get("source_url", ""), lead_doc.get("email", ""))
+        if not domain:
+            return
+        domain = normalize_domain(domain)
+        if not domain or await db.threat_reports.find_one({"domain": domain}):
+            return
+        await _run_threat_scan(domain, by="scraper-auto", source="scraper-auto")
+        logger.info("auto threat scan completed for %s", domain)
+    except Exception as e:
+        logger.warning("auto threat pipeline error: %s", e)
+
+@api.post("/threat/scan")
+async def threat_scan(body: ThreatScanReq, user: dict = Depends(require_admin)):
+    mk = "qwen" if body.model == "qwen" else "deepseek"
+    return await _run_threat_scan(body.domain, mk, by=user["id"], source="manual")
 
 @api.get("/threat/reports")
 async def threat_reports(high_ticket_only: bool = False, limit: int = 50, user: dict = Depends(require_admin)):
@@ -1635,6 +1802,28 @@ async def get_outreach_profile(user: dict = Depends(require_admin)):
 async def set_outreach_profile(body: OutreachProfile, user: dict = Depends(require_admin)):
     await db.outreach_profile.update_one({"_id": "profile"}, {"$set": body.model_dump()}, upsert=True)
     return {"updated": True, **body.model_dump()}
+
+class SendPitchReq(BaseModel):
+    to_email: str
+
+@api.post("/threat/reports/{report_id}/send-email")
+async def send_threat_email(report_id: str, body: SendPitchReq, user: dict = Depends(require_admin)):
+    rep = await db.threat_reports.find_one({"_id": ObjectId(report_id)})
+    if not rep:
+        raise HTTPException(status_code=404, detail="Report not found")
+    draft = rep.get("email_draft")
+    if not draft:
+        raise HTTPException(status_code=400, detail="No drafted pitch for this report")
+    prof = await db.outreach_profile.find_one({"_id": "profile"}) or {}
+    from_name = prof.get("sender_name") or prof.get("brand") or "NEXUS Security"
+    try:
+        await send_email(body.to_email, draft["subject"], draft["body"], from_name)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Email send failed: {str(e)[:200]}")
+    await db.threat_reports.update_one({"_id": ObjectId(report_id)},
+        {"$set": {"email_status": "sent", "sent_to": body.to_email,
+                  "sent_at": datetime.now(timezone.utc).isoformat()}})
+    return {"sent": True, "to": body.to_email}
 
 # ----------------------------------------------------------------------------- mount + startup
 app.include_router(api)
@@ -1699,11 +1888,19 @@ async def startup():
             {"scraped": True, "source_url": {"$regex": domain}, "source_site": {"$ne": site}},
             {"$set": {"source_site": site}})
     cfg = await get_scraper_config()
-    if cfg.get("enabled"):
+    # Migrate sources to the current version (Tampa Bay independent-service scraping via OSM).
+    if cfg.get("sources_version") != SOURCES_VERSION:
+        await db.scraper_config.update_one({"_id": "config"},
+            {"$set": {"sources": DEFAULT_SOURCES, "sources_version": SOURCES_VERSION}})
+        cfg["sources"] = DEFAULT_SOURCES
+        logger.info("Migrated scraper to Tampa Bay OSM service sources v%d (%d)", SOURCES_VERSION, len(DEFAULT_SOURCES))
+    if cfg.get("enabled") and RUN_SCHEDULER:
         reschedule(cfg.get("interval_min", 30))
         if not scheduler.running:
             scheduler.start()
         logger.info("Scraper scheduled every %s min", cfg.get("interval_min"))
+    elif not RUN_SCHEDULER:
+        logger.info("RUN_SCHEDULER=false — scraping handled by standalone worker container")
     logger.info("NEXUS online — admin seeded, %d leads", await db.leads.count_documents({}))
 
 @app.on_event("shutdown")

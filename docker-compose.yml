@@ -20,10 +20,27 @@ services:
     environment:
       # Override so the backend talks to the mongo service (never localhost in a container).
       - MONGO_URL=mongodb://mongo:27017
+      # API does NOT run the scheduler — the worker container owns it (prevents duplicate scrapes when API scales).
+      - RUN_SCHEDULER=false
     depends_on:
       - mongo
     expose:
       - "8001"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: nexus_worker
+    restart: always
+    command: ["python", "worker.py"]
+    env_file:
+      - ./backend/.env.production
+    environment:
+      - MONGO_URL=mongodb://mongo:27017
+      - RUN_SCHEDULER=true
+    depends_on:
+      - mongo
 
   web:
     build:
