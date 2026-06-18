@@ -1,0 +1,30 @@
+{
+  "summary": "Full backend + frontend validation of the new Corporate Threat Intel feature. Backend: 9/9 pytest cases pass (RBAC 403 for non-admin on all 4 threat endpoints, outreach-profile PUT/GET persistence, example.com low-risk scan with no email_draft, neverssl.com high-risk scan with risk_score>5 + email_draft subject/body, reports list + high_ticket_only filter, no mongo _id leak). Frontend: admin login -> nav-threat visible with PRO tag; outreach profile form saves (PUT 200, persists); example.com scan rendered 4.7 medium with NO HIGH-TICKET badge and NO email draft; neverssl.com scan rendered 7.8 high with HIGH-TICKET badge AND AI sales pitch (Subject + body, ~941 chars) + working Copy button; High-Ticket Targets table shows HOT badge + 'drafted' pitch tag. RBAC UI confirmed: a freshly registered normal user sees NO 'Threat Intel' and NO 'Admin' nav items. Regression: all 11 other tabs (overview, scrapers, leads, enrich, people, osint, ai, reports, billing, keys, admin) render with no white-screen/pageerror. Logout returns to login screen.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Threat Intel / High-Ticket Targets table", "issues": ["One stale neverssl.com row displays risk_score=-1 with level='critical'. Likely legacy data inserted before the 0-10 clamp logic; current backend code clamps correctly. Consider a one-time cleanup or filter rows with risk_score<0 in the UI."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_threat.py", "/app/test_reports/pytest/threat_results.xml"],
+  "action_items": [
+    "(Optional) Purge or hide threat_reports docs with risk_score < 0 (legacy pre-clamp data showing as -1/critical in High-Ticket Targets table).",
+    "(Optional, code quality) tabs.jsx now contains ThreatIntel and is ~739 lines; split each tab into its own file before it grows past 700 line guideline. Same comment as iteration 5."
+  ],
+  "critical_code_review_comments": [
+    "tabs.jsx is ~739 lines (over the 700 file-size guideline). Should be split per-tab module.",
+    "Threat scan opens real outbound sockets to RISKY_PORTS for every domain - acceptable in this preview env but in prod consider a configurable allowlist/timeouts and rate-limit per admin to avoid abuse.",
+    "haveibeenpwned unifiedsearch endpoint is unofficial/undocumented and can rate-limit or block - logic gracefully passes on Exception (good), but a 200 response is treated as 'breach found' even though it can return 200 with empty list. Consider parsing JSON to confirm breaches.",
+    "Outreach profile is a single global document {_id:'profile'} - not per-user. Multiple admins overwrite each other's identity. Consider keying by user id."
+  ],
+  "updated_files": ["/app/backend/tests/test_threat.py"],
+  "success_rate": { "backend": "100% (9/9)", "frontend": "100%" },
+  "test_credentials": "admin@nexus.io / nexus123 (from /app/memory/test_credentials.md). Normal users registered ad-hoc as test_*@example.com via /api/auth/register.",
+  "seed_data_creation": "Outreach profile set to {sender_name:'TEST_Sender'/'Jane Smith', brand:'TEST_Brand'/'AcmeSec', services:'pentest, vCISO'}. Multiple threat_reports inserted (example.com low ~3-4.7, neverssl.com high 7.8-8.5 with email drafts).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Corporate Threat Intel is admin-only end-to-end. Live AI scans take ~10-30s for example.com and ~15-40s for neverssl.com. To avoid Playwright nulls during re-render, poll inside threat-report textContent for the new domain string instead of just element presence. /api/threat endpoints: POST /scan, GET /reports?high_ticket_only=, GET/PUT /outreach-profile - all require admin (require_admin -> 403 for users). Email sending is intentionally NOT implemented (only draft + copy button), per spec.",
+  "rca of the issue": "N/A - no functional issues found. Single cosmetic remark: a stale threat_reports doc with risk_score=-1 shows up in the High-Ticket Targets table; introduced before the current 0-10 clamp in /api/threat/scan was added."
+}

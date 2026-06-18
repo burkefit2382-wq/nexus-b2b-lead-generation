@@ -1531,7 +1531,12 @@ async def threat_scan(body: ThreatScanReq, user: dict = Depends(require_admin)):
     mk = "qwen" if body.model == "qwen" else "deepseek"
     signals = await _gather_threat_signals(body.domain)
     ai = await _threat_ai(signals, mk)
-    risk_score = float(ai.get("risk_score", signals["raw_score"]) or signals["raw_score"])
+    try:
+        ai_score = float(ai.get("risk_score"))
+    except (TypeError, ValueError):
+        ai_score = None
+    risk_score = ai_score if (ai_score is not None and 0 <= ai_score <= 10) else signals["raw_score"]
+    risk_score = max(0.0, min(10.0, round(risk_score, 1)))
     high_ticket = risk_score > 5
     email_draft = await _sales_email_draft(signals["domain"], signals, ai, mk) if high_ticket else None
     report = {"domain": signals["domain"], "ip": signals["ip"], "risk_score": round(risk_score, 1),

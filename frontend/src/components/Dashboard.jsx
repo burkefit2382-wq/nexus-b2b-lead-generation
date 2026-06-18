@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
-import { Overview, Osint, AIChat, ApiKeys, Reports, Admin, PeopleIntel, Billing, Enrichment } from "./tabs";
+import { Overview, Osint, AIChat, ApiKeys, Reports, Admin, PeopleIntel, Billing, Enrichment, ThreatIntel } from "./tabs";
 import { Leads } from "./Leads";
 import { Scrapers } from "./Scrapers";
 import {
   LayoutGrid, Crosshair, Users2, Bot, KeyRound, ScrollText, ShieldCheck, LogOut, Radar,
-  UserSearch, CreditCard, Boxes
+  UserSearch, CreditCard, Boxes, ShieldAlert
 } from "lucide-react";
 
 const NAV = [
@@ -31,6 +31,7 @@ const TAB_VIEWS = {
   ai: () => <AIChat />,
   reports: () => <Reports />,
   keys: () => <ApiKeys />,
+  threat: () => <ThreatIntel />,
   admin: () => <Admin />,
 };
 
@@ -96,7 +97,10 @@ function Topbar({ current, credits, onCreditsClick }) {
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const [tab, setTab] = useDashboardTab();
-  const nav = [...NAV, ...(user.role === "admin" ? [{ id: "admin", label: "Admin", icon: ShieldCheck }] : [])];
+  const nav = [...NAV, ...(user.role === "admin" ? [
+    { id: "threat", label: "Threat Intel", icon: ShieldAlert, tag: "PRO" },
+    { id: "admin", label: "Admin", icon: ShieldCheck },
+  ] : [])];
   const current = nav.find((n) => n.id === tab) || nav[0];
 
   const view = TAB_VIEWS[tab];
