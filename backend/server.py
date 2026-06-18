@@ -1587,7 +1587,7 @@ async def enrich_lead_api(payload: LeadEnrichReq, user: dict = Depends(get_curre
 @api.get("/enrich/history")
 async def enrich_history(limit: int = 20, user: dict = Depends(get_current_user)):
     q = {} if user.get("role") == "admin" else {"by": user["id"]}
-    cur = db.enrichments.find(q).sort("created_at", -1).limit(limit)
+    cur = db.enrichments.find(q, {"type": 1, "input": 1, "created_at": 1}).sort("created_at", -1).limit(limit)
     return [{"id": str(e["_id"]), "type": e.get("type"), "input": e.get("input"),
              "created_at": e.get("created_at")} async for e in cur]
 
