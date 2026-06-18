@@ -1,0 +1,46 @@
+version: "3.9"
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: nexus_mongo
+    restart: always
+    volumes:
+      - mongo_data:/data/db
+    # Not exposed publicly — only the api container talks to it.
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: nexus_api
+    restart: always
+    env_file:
+      - ./backend/.env.production
+    environment:
+      # Override so the backend talks to the mongo service (never localhost in a container).
+      - MONGO_URL=mongodb://mongo:27017
+    depends_on:
+      - mongo
+    expose:
+      - "8001"
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_BACKEND_URL: "https://nexuscloud.ai"
+    container_name: nexus_web
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot
+    depends_on:
+      - api
+
+volumes:
+  mongo_data:

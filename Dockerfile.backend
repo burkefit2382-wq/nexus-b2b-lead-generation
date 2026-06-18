@@ -1,0 +1,22 @@
+# NEXUS backend — FastAPI (server.py). Single worker so the 24/7 APScheduler
+# runs exactly once (multiple workers => duplicate scraping/charges).
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY backend/requirements.txt .
+# emergentintegrations (Stripe helper) lives on a custom index:
+RUN pip install --no-cache-dir \
+    --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/ \
+    -r requirements.txt
+
+COPY backend/ .
+
+EXPOSE 8001
+
+# 1 worker on purpose (in-process scheduler). Scale via a separate worker, not more workers here.
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "1"]
