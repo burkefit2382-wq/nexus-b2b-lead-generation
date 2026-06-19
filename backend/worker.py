@@ -27,8 +27,10 @@ async def main():
     sched.add_job(server.run_scrape_cycle, "interval", minutes=interval,
                   id="scrape", replace_existing=True, max_instances=1,
                   next_run_time=datetime.datetime.now())
+    sched.add_job(server.run_reddit_cycle, "interval", minutes=max(15, server.REDDIT_INTERVAL_MIN),
+                  id="reddit", replace_existing=True, max_instances=1)
     sched.start()
-    log.info("NEXUS worker online — scraping Tampa Bay services every %s min", interval)
+    log.info("NEXUS worker online — OSM every %s min, Reddit every %s min", interval, server.REDDIT_INTERVAL_MIN)
     while True:
         await asyncio.sleep(3600)
 

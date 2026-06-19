@@ -933,7 +933,8 @@ async def fetch_osm(src: dict) -> list:
     return out
 
 async def fetch_apify_reddit(src: dict) -> list:
-    """Reddit posts via Apify (trudax/reddit-scraper-lite) — JSON over HTTPS (not IP-blocked)."""
+    """Reddit posts via Apify (trudax/reddit-scraper-lite). Async run pattern (start→poll→fetch);
+    avoids the 300s sync limit so slower runs still return data."""
     token = os.environ.get("APIFY_TOKEN")
     if not token:
         SCRAPER_STATE["last_error"] = "apify: set APIFY_TOKEN to enable Reddit"
@@ -946,13 +947,26 @@ async def fetch_apify_reddit(src: dict) -> list:
                "searchUsers": False, "skipComments": True, "sort": "new", "time": "month",
                "maxItems": max_items, "maxPostCount": max_items,
                "proxy": {"useApifyProxy": True}}
-    url = f"https://api.apify.com/v2/acts/trudax~reddit-scraper-lite/run-sync-get-dataset-items?token={token}"
+    base = "https://api.apify.com/v2"
     out = []
     try:
-        async with httpx.AsyncClient(timeout=180) as c:
-            items = (await c.post(url, json=payload)).json()
+        async with httpx.AsyncClient(timeout=60) as c:
+            run = (await c.post(f"{base}/acts/trudax~reddit-scraper-lite/runs?token={token}", json=payload)).json()
+            data = run.get("data") or {}
+            run_id = data.get("id"); dataset_id = data.get("defaultDatasetId")
+            if not run_id or not dataset_id:
+                SCRAPER_STATE["last_error"] = "apify: " + str(run)[:160]
+                return []
+            status = data.get("status")
+            for _ in range(54):  # up to ~9 min
+                if status in ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT", "TIMING-OUT"):
+                    break
+                await asyncio.sleep(10)
+                st = (await c.get(f"{base}/actor-runs/{run_id}?token={token}")).json()
+                status = (st.get("data") or {}).get("status")
+            items = (await c.get(f"{base}/datasets/{dataset_id}/items?token={token}&clean=true")).json()
     except Exception as e:
-        SCRAPER_STATE["last_error"] = "apify: " + str(e)[:160]
+        SCRAPER_STATE["last_error"] = "apify: " + (str(e) or type(e).__name__)[:160]
         return []
     if not isinstance(items, list):
         SCRAPER_STATE["last_error"] = "apify: " + str(items)[:160]
@@ -1109,6 +1123,8 @@ async def run_scrape_cycle(reason: str = "scheduled"):
     found = qualified = 0
     try:
         for src in cfg.get("sources", []):
+            if src.get("provider") in ("apify_reddit", "reddit_apify"):
+                continue  # paid Reddit runs on its own hourly budget-guarded cycle
             for cand in await fetch_source(src):
                 found += 1
                 if await _process_candidate(cand, use_ai, ai_model, min_score):
@@ -1122,6 +1138,69 @@ async def run_scrape_cycle(reason: str = "scheduled"):
         SCRAPER_STATE["status"] = "idle"
         SCRAPER_STATE["last_run"] = datetime.now(timezone.utc).isoformat()
         logger.info("Scrape cycle (%s): found=%d qualified=%d", reason, found, qualified)
+
+# ---- Paid Apify Reddit cycle (hourly, hard daily $ budget guard) ----
+APIFY_COST_PER_RESULT = float(os.environ.get("APIFY_COST_PER_RESULT", "0.0034"))
+APIFY_DAILY_BUDGET_USD = float(os.environ.get("APIFY_DAILY_BUDGET_USD", "5"))
+REDDIT_INTERVAL_MIN = int(os.environ.get("REDDIT_INTERVAL_MIN", "60"))
+
+async def _apify_budget_remaining_items() -> int:
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    doc = await db.apify_usage.find_one({"_id": "usage"}) or {}
+    used = doc.get("results", 0) if doc.get("date") == today else 0
+    cap = int(APIFY_DAILY_BUDGET_USD / max(APIFY_COST_PER_RESULT, 1e-6))
+    return max(0, cap - used)
+
+async def _apify_record(n: int):
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    doc = await db.apify_usage.find_one({"_id": "usage"}) or {}
+    base = doc.get("results", 0) if doc.get("date") == today else 0
+    total = base + n
+    await db.apify_usage.update_one({"_id": "usage"},
+        {"$set": {"date": today, "results": total, "spend": round(total * APIFY_COST_PER_RESULT, 4)}}, upsert=True)
+
+async def run_reddit_cycle(reason: str = "scheduled"):
+    if SCRAPER_STATE.get("reddit_status") == "running":
+        return
+    if not os.environ.get("APIFY_TOKEN"):
+        return
+    cfg = await get_scraper_config()
+    if not cfg.get("enabled"):
+        return
+    sources = [s for s in cfg.get("sources", []) if s.get("provider") in ("apify_reddit", "reddit_apify")]
+    if not sources:
+        return
+    remaining = await _apify_budget_remaining_items()
+    if remaining <= 0:
+        SCRAPER_STATE["reddit_last_error"] = f"daily Apify budget (${APIFY_DAILY_BUDGET_USD:.2f}) reached"
+        return
+    SCRAPER_STATE["reddit_status"] = "running"
+    SCRAPER_STATE["reddit_last_error"] = None
+    min_score = cfg.get("min_score", 55)
+    use_ai = cfg.get("use_ai", True)
+    ai_model = cfg.get("ai_model", "deepseek")
+    found = qualified = 0
+    try:
+        for src in sources:
+            if remaining <= 0:
+                break
+            src = dict(src)
+            src["max_items"] = min(int(src.get("max_items", 30)), remaining)
+            cands = await fetch_source(src)
+            await _apify_record(len(cands))
+            remaining -= len(cands)
+            for cand in cands:
+                found += 1
+                if await _process_candidate(cand, use_ai, ai_model, min_score):
+                    qualified += 1
+        SCRAPER_STATE.update({"found": SCRAPER_STATE["found"] + found,
+                              "qualified": SCRAPER_STATE["qualified"] + qualified})
+    except Exception as e:
+        SCRAPER_STATE["reddit_last_error"] = str(e)[:200]
+    finally:
+        SCRAPER_STATE["reddit_status"] = "idle"
+        SCRAPER_STATE["reddit_last_run"] = datetime.now(timezone.utc).isoformat()
+        logger.info("Reddit cycle (%s): found=%d qualified=%d", reason, found, qualified)
 
 async def _ai_score_candidate(cand: dict, model_key: str) -> Optional[dict]:
     prompt = ("You are a lead-quality filter. Analyze this social post and return ONLY JSON with keys: "
@@ -1141,26 +1220,40 @@ async def _ai_score_candidate(cand: dict, model_key: str) -> Optional[dict]:
         return None
 
 def reschedule(interval_min: int):
-    try:
-        scheduler.remove_job("scrape")
-    except Exception:
-        pass
-    scheduler.add_job(run_scrape_cycle, "interval", minutes=max(5, interval_min),
-                      id="scrape", replace_existing=True, max_instances=1)
+    for jid, fn, mins in [("scrape", run_scrape_cycle, max(5, interval_min)),
+                          ("reddit", run_reddit_cycle, max(15, REDDIT_INTERVAL_MIN))]:
+        try:
+            scheduler.remove_job(jid)
+        except Exception:
+            pass
+        scheduler.add_job(fn, "interval", minutes=mins, id=jid, replace_existing=True, max_instances=1)
 
 @api.get("/scraper/status")
 async def scraper_status(user: dict = Depends(get_current_user)):
     cfg = await get_scraper_config()
     job = scheduler.get_job("scrape")
     nxt = job.next_run_time.isoformat() if job and job.next_run_time else None
+    rjob = scheduler.get_job("reddit")
+    rnxt = rjob.next_run_time.isoformat() if rjob and rjob.next_run_time else None
     scraped = await db.leads.count_documents({"scraped": True})
+    usage = await db.apify_usage.find_one({"_id": "usage"}) or {}
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    reddit_spend = usage.get("spend", 0.0) if usage.get("date") == today else 0.0
     return {**SCRAPER_STATE, "next_run": nxt, "scheduler_running": scheduler.running,
             "enabled": cfg.get("enabled"), "interval_min": cfg.get("interval_min"),
-            "min_score": cfg.get("min_score"), "total_scraped_leads": scraped}
+            "min_score": cfg.get("min_score"), "total_scraped_leads": scraped,
+            "reddit_next_run": rnxt, "reddit_enabled": bool(os.environ.get("APIFY_TOKEN")),
+            "reddit_interval_min": REDDIT_INTERVAL_MIN,
+            "reddit_spend_today_usd": round(reddit_spend, 2), "reddit_daily_budget_usd": APIFY_DAILY_BUDGET_USD}
 
 @api.post("/scraper/trigger")
-async def scraper_trigger(user: dict = Depends(get_current_user)):
+async def scraper_trigger(source: str = "all", user: dict = Depends(get_current_user)):
+    if source == "reddit":
+        asyncio.create_task(run_reddit_cycle("manual"))
+        return {"triggered": True, "status": "reddit cycle started"}
     asyncio.create_task(run_scrape_cycle("manual"))
+    if source == "all":
+        asyncio.create_task(run_reddit_cycle("manual"))
     return {"triggered": True, "status": "cycle started"}
 
 @api.get("/scraper/config")

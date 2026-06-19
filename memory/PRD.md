@@ -75,6 +75,20 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
   Intel. NOTE: BLOCKED — provided password is the account password, not a 16-char Gmail **App Password**
   (Gmail returns 535 Bad Credentials). Needs an App Password (2-Step Verification on) to send.
 
+## Implemented (2026-06-19 — Reddit via Apify, budget-guarded hourly)
+- **Reddit leads via Apify** (Reddit blocks our datacenter IP on all direct methods: json/old.reddit/oauth
+  all 403). Uses Apify actor `trudax/reddit-scraper-lite` over HTTPS (`fetch_apify_reddit`, async
+  start→poll→fetch pattern). Subreddits: tampa, StPetersburgFL, Clearwater, HillsboroughCounty,
+  stpetersburg → service-intent posts → existing intent pipeline (AI scored).
+- **Separate hourly schedule** (`run_reddit_cycle`, REDDIT_INTERVAL_MIN=60) distinct from the 30-min OSM
+  `run_scrape_cycle` (which now skips apify sources). Scheduled by `reschedule()` + worker.py.
+- **Hard $5/day budget guard**: `db.apify_usage` tracks daily results/spend; caps before each run
+  (cost $0.0034/result). Env: APIFY_DAILY_BUDGET_USD, APIFY_COST_PER_RESULT. `/api/scraper/status` exposes
+  reddit_spend_today_usd/budget/next run; `/api/scraper/trigger?source=reddit|all` for manual runs.
+- Verified live: 30 posts fetched ($0.10 spend), 6 Tampa Bay service-intent leads created.
+- NOTE: changes on PREVIEW; REDEPLOY to push to production + ensure APIFY_TOKEN is in production env.
+
+
 ## Known Constraints
 - AI is LIVE: DeepSeek-V3.1 (`deepseek-ai/DeepSeek-V3.1:novita`) + Qwen (`Qwen/Qwen2.5-72B-Instruct`)
   via HF router with a working token (Inference Providers permission granted).
