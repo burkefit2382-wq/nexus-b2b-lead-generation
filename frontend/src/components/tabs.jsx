@@ -13,9 +13,11 @@ import {
 export function Overview({ goTo }) {
   const [stats, setStats] = useState(null);
   const [leads, setLeads] = useState([]);
+  const [intel, setIntel] = useState(null);
   useEffect(() => {
     api.get("/leads/stats").then((r) => setStats(r.data)).catch(() => {});
     api.get("/leads?limit=5").then((r) => setLeads(r.data.leads)).catch(() => {});
+    api.get("/intel/sources").then((r) => setIntel(r.data)).catch(() => {});
   }, []);
   const S = stats || {};
   const cards = [
@@ -79,11 +81,31 @@ export function Overview({ goTo }) {
           </div>
         </div>
       </div>
+
+      <div className="panel" style={{ marginTop: 16 }} data-testid="intel-sources-panel">
+        <div className="panel-head"><h3>Intel Sources</h3>
+          {intel && <span className="mono" style={{ fontSize: 12, color: "var(--accent)" }}>Apify spend today: ${intel.apify_spend_today_usd?.toFixed(2)} / ${intel.apify_budget_usd?.toFixed(0)}</span>}
+        </div>
+        <div className="panel-body" style={{ padding: 0 }}>
+          <table className="tbl">
+            <tbody>
+              {(intel?.sources || []).map((s) => (
+                <tr key={s.key} data-testid={`intel-source-${s.key}`}>
+                  <td className="name">{s.name}<div className="muted">{s.detail}</div></td>
+                  <td className="mono" style={{ fontSize: 12, color: "var(--muted)" }}>{s.cost}</td>
+                  <td style={{ textAlign: "right" }}>
+                    <span className={`badge ${s.status === "live" ? "cold" : "warm"}`}>{s.status === "live" ? "● live" : "○ inactive"}</span>
+                  </td>
+                </tr>
+              ))}
+              {!intel && <tr><td className="muted" style={{ padding: 22 }}>Loading sources…</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
-
-/* ============================ LEADS ============================ */
 /* Leads moved to ./Leads.jsx */
 
 /* ============================ PEOPLE INTELLIGENCE ============================ */
@@ -350,6 +372,9 @@ export function ThreatIntel() {
                       {report.shodan?.org && (<><span className="muted">Host org</span><span>{report.shodan.org}</span></>)}
                       {report.shodan?.ports?.length > 0 && (<><span className="muted">Open ports</span><span className="mono">{report.shodan.ports.join(", ")}</span></>)}
                       {report.shodan?.vulns?.length > 0 && (<><span className="muted">Known CVEs</span><span className="mono" style={{ color: "var(--hot, #e5484d)" }}>{report.shodan.vulns.slice(0, 6).join(", ")}{report.shodan.vulns.length > 6 ? "…" : ""}</span></>)}
+                      {report.ssl?.valid && (<><span className="muted">TLS cert</span><span>{report.ssl.issuer || "valid"} · {report.ssl.protocol}{report.ssl.days_to_expiry != null ? ` · expires in ${report.ssl.days_to_expiry}d` : ""}</span></>)}
+                      {report.ssl && report.ssl.available && !report.ssl.valid && (<><span className="muted">TLS cert</span><span style={{ color: "var(--hot, #e5484d)" }}>invalid/untrusted</span></>)}
+                      {report.ssl && report.ssl.available === false && (<><span className="muted">TLS cert</span><span style={{ color: "var(--hot, #e5484d)" }}>no HTTPS on :443</span></>)}
                     </div>
                   </div>
                 )}

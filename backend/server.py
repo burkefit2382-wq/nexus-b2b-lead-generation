@@ -1246,6 +1246,26 @@ async def scraper_status(user: dict = Depends(get_current_user)):
             "reddit_interval_min": REDDIT_INTERVAL_MIN,
             "reddit_spend_today_usd": round(reddit_spend, 2), "reddit_daily_budget_usd": APIFY_DAILY_BUDGET_USD}
 
+@api.get("/intel/sources")
+async def intel_sources(user: dict = Depends(get_current_user)):
+    usage = await db.apify_usage.find_one({"_id": "usage"}) or {}
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    spend = usage.get("spend", 0.0) if usage.get("date") == today else 0.0
+    has = lambda k: bool(os.environ.get(k))
+    return {"apify_spend_today_usd": round(spend, 2), "apify_budget_usd": APIFY_DAILY_BUDGET_USD,
+            "sources": [
+                {"key": "osm", "name": "OpenStreetMap — Tampa Bay businesses", "status": "live",
+                 "cost": "free", "detail": f"{len(TAMPA_LOCALES)} locales × {len(SERVICE_QUERIES)} categories, every 30 min"},
+                {"key": "reddit", "name": "Reddit (via Apify)", "status": "live" if has("APIFY_TOKEN") else "inactive",
+                 "cost": f"${spend:.2f} / ${APIFY_DAILY_BUDGET_USD:.0f} today", "detail": "hourly, $5/day budget guard"},
+                {"key": "shodan", "name": "Shodan — host & CVE intel", "status": "live" if has("SHODAN_API_KEY") else "inactive",
+                 "cost": "oss plan", "detail": "enriches Threat Intel scans"},
+                {"key": "dns", "name": "DNS · DNSSEC · SSL/TLS", "status": "live",
+                 "cost": "free", "detail": "records, cert expiry, weak protocols"},
+                {"key": "email", "name": "Resend — pitch sending", "status": "live" if has("RESEND_API_KEY") else "inactive",
+                 "cost": "free tier", "detail": os.environ.get("SENDER_EMAIL", "")},
+            ]}
+
 @api.post("/scraper/trigger")
 async def scraper_trigger(source: str = "all", user: dict = Depends(get_current_user)):
     if source == "reddit":
@@ -1741,6 +1761,29 @@ class ThreatScanReq(BaseModel):
     domain: str
     model: str = "deepseek"
 
+def _ssl_cert_sync(domain: str) -> dict:
+    import ssl as _ssl, time as _time
+    ctx = _ssl.create_default_context()
+    try:
+        with socket.create_connection((domain, 443), timeout=6) as sock:
+            with ctx.wrap_socket(sock, server_hostname=domain) as ss:
+                cert = ss.getpeercert()
+                proto = ss.version()
+    except _ssl.SSLCertVerificationError as e:
+        return {"available": True, "valid": False, "error": str(getattr(e, "verify_message", e))[:120]}
+    except Exception as e:
+        return {"available": False, "error": str(e)[:120]}
+    issuer = dict(x[0] for x in cert.get("issuer", []))
+    not_after = cert.get("notAfter")
+    days = None
+    try:
+        days = int((_ssl.cert_time_to_seconds(not_after) - _time.time()) / 86400)
+    except Exception:
+        pass
+    return {"available": True, "valid": True, "protocol": proto, "valid_to": not_after,
+            "days_to_expiry": days,
+            "issuer": issuer.get("organizationName") or issuer.get("commonName", "")}
+
 async def _shodan_host(ip: Optional[str]) -> Optional[dict]:
     """OSINT sensor: Shodan host lookup (org/OS/open ports/services/CVEs). Dormant until SHODAN_API_KEY set."""
     key = os.environ.get("SHODAN_API_KEY")
@@ -1844,6 +1887,20 @@ async def _gather_threat_signals(domain: str) -> dict:
         except Exception:
             pass
 
+    ssl_info = await asyncio.to_thread(_ssl_cert_sync, domain)
+    if ssl_info.get("available") and not ssl_info.get("valid"):
+        findings.append({"category": "SSL/TLS", "detail": f"Invalid/untrusted certificate: {ssl_info.get('error', '')}", "severity": "high", "weight": 2.0})
+    elif ssl_info.get("valid"):
+        d = ssl_info.get("days_to_expiry")
+        if d is not None and d < 0:
+            findings.append({"category": "SSL/TLS", "detail": "TLS certificate has EXPIRED", "severity": "high", "weight": 2.5})
+        elif d is not None and d < 30:
+            findings.append({"category": "SSL/TLS", "detail": f"TLS certificate expires in {d} days", "severity": "medium", "weight": 1.2})
+        if (ssl_info.get("protocol") or "") in ("SSLv2", "SSLv3", "TLSv1", "TLSv1.1"):
+            findings.append({"category": "SSL/TLS", "detail": f"Weak TLS protocol in use: {ssl_info['protocol']}", "severity": "medium", "weight": 1.5})
+    elif not ssl_info.get("available"):
+        findings.append({"category": "SSL/TLS", "detail": "No HTTPS/TLS reachable on port 443", "severity": "medium", "weight": 1.5})
+
     shodan = await _shodan_host(ip)
     if shodan:
         for p in shodan.get("ports", []):
@@ -1860,7 +1917,7 @@ async def _gather_threat_signals(domain: str) -> dict:
             "sensitive_subdomains": [s["sub"] for s in subs],
             "missing_headers": missing_headers, "findings": findings,
             "dns": dns_rec, "dnssec_enabled": dnssec_enabled,
-            "shodan": shodan or {}, "raw_score": round(raw, 1)}
+            "ssl": ssl_info, "shodan": shodan or {}, "raw_score": round(raw, 1)}
 
 async def _threat_ai(signals: dict, model_key: str) -> dict:
     prompt = ("You are a cybersecurity risk analyst. Given the OSINT findings JSON for a company, "
@@ -1940,6 +1997,7 @@ async def _run_threat_scan(domain: str, model_key: str = "deepseek", by: str = "
               "sensitive_subdomains": signals["sensitive_subdomains"],
               "missing_headers": signals["missing_headers"],
               "dns": signals.get("dns") or {}, "dnssec_enabled": signals.get("dnssec_enabled", False),
+              "ssl": signals.get("ssl") or {},
               "shodan": signals.get("shodan") or {},
               "email_draft": email_draft, "email_status": "draft" if email_draft else "n/a",
               "source": source, "by": by, "created_at": datetime.now(timezone.utc).isoformat()}
