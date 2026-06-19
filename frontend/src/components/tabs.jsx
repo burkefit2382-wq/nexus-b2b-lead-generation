@@ -338,6 +338,21 @@ export function ThreatIntel() {
                     <span className="muted">{f.detail}</span>
                   </div>
                 ))}
+                {(report.dns || report.shodan) && (
+                  <div data-testid="threat-dns-panel" style={{ marginTop: 16, padding: 12, border: "1px solid var(--line)", fontSize: 12.5 }}>
+                    <div className="mono" style={{ fontSize: 11, color: "var(--muted)", marginBottom: 8 }}>DNS & INFRASTRUCTURE</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 14px" }}>
+                      <span className="muted">DNSSEC</span><span><span className={`badge ${report.dnssec_enabled ? "cold" : "warm"}`}>{report.dnssec_enabled ? "enabled" : "disabled"}</span></span>
+                      <span className="muted">IP</span><span className="mono">{report.ip || "—"}</span>
+                      {report.dns?.A?.length > 0 && (<><span className="muted">A</span><span className="mono">{report.dns.A.join(", ")}</span></>)}
+                      {report.dns?.NS?.length > 0 && (<><span className="muted">NS</span><span className="mono">{report.dns.NS.join(", ")}</span></>)}
+                      {report.dns?.MX?.length > 0 && (<><span className="muted">MX</span><span className="mono">{report.dns.MX.join(", ")}</span></>)}
+                      {report.shodan?.org && (<><span className="muted">Host org</span><span>{report.shodan.org}</span></>)}
+                      {report.shodan?.ports?.length > 0 && (<><span className="muted">Open ports</span><span className="mono">{report.shodan.ports.join(", ")}</span></>)}
+                      {report.shodan?.vulns?.length > 0 && (<><span className="muted">Known CVEs</span><span className="mono" style={{ color: "var(--hot, #e5484d)" }}>{report.shodan.vulns.slice(0, 6).join(", ")}{report.shodan.vulns.length > 6 ? "…" : ""}</span></>)}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

@@ -1772,7 +1772,7 @@ async def _gather_threat_signals(domain: str) -> dict:
     def _dns():
         import dns.resolver
         rec = {}
-        for rt in ["MX", "TXT"]:
+        for rt in ["A", "AAAA", "MX", "NS", "TXT", "SOA"]:
             try:
                 rec[rt] = [str(x) for x in dns.resolver.resolve(domain, rt, lifetime=5)]
             except Exception:
@@ -1784,6 +1784,16 @@ async def _gather_threat_signals(domain: str) -> dict:
         findings.append({"category": "Email Spoofing", "detail": "No SPF record found", "severity": "medium", "weight": 1.5})
     if "dmarc" not in txt_join:
         findings.append({"category": "Email Spoofing", "detail": "No DMARC policy detected", "severity": "medium", "weight": 1.5})
+
+    def _dnssec():
+        import dns.resolver
+        try:
+            return bool(dns.resolver.resolve(domain, "DNSKEY", lifetime=5))
+        except Exception:
+            return False
+    dnssec_enabled = await asyncio.to_thread(_dnssec)
+    if not dnssec_enabled:
+        findings.append({"category": "DNS Hardening", "detail": "DNSSEC not enabled (DNS responses unsigned)", "severity": "low", "weight": 0.8})
 
     def _subs():
         found = []
@@ -1849,6 +1859,7 @@ async def _gather_threat_signals(domain: str) -> dict:
     return {"domain": domain, "ip": ip, "open_ports": open_ports,
             "sensitive_subdomains": [s["sub"] for s in subs],
             "missing_headers": missing_headers, "findings": findings,
+            "dns": dns_rec, "dnssec_enabled": dnssec_enabled,
             "shodan": shodan or {}, "raw_score": round(raw, 1)}
 
 async def _threat_ai(signals: dict, model_key: str) -> dict:
@@ -1928,6 +1939,7 @@ async def _run_threat_scan(domain: str, model_key: str = "deepseek", by: str = "
               "findings": signals["findings"], "open_ports": signals["open_ports"],
               "sensitive_subdomains": signals["sensitive_subdomains"],
               "missing_headers": signals["missing_headers"],
+              "dns": signals.get("dns") or {}, "dnssec_enabled": signals.get("dnssec_enabled", False),
               "shodan": signals.get("shodan") or {},
               "email_draft": email_draft, "email_status": "draft" if email_draft else "n/a",
               "source": source, "by": by, "created_at": datetime.now(timezone.utc).isoformat()}
