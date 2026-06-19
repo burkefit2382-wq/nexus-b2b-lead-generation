@@ -776,10 +776,14 @@ TAMPA_LOCALES = [
     "Tampa FL", "St Petersburg FL", "Clearwater FL", "Brandon FL", "Largo FL",
     "Riverview FL", "Plant City FL", "Pinellas Park FL", "Palm Harbor FL", "Tarpon Springs FL",
 ]
-SOURCES_VERSION = 3
-# OpenStreetMap/Nominatim (free, no key, cloud-accessible) — local independent-service businesses.
+SOURCES_VERSION = 4
+# OpenStreetMap/Nominatim (free) + Apify Reddit (paid, JSON over HTTPS — dormant until APIFY_TOKEN set).
 DEFAULT_SOURCES = [
     {"provider": "osm", "query": q, "category": cat} for q, cat in SERVICE_QUERIES
+] + [
+    {"provider": "apify_reddit", "category": "services", "max_items": 30,
+     "subreddits": ["tampa", "StPetersburgFL", "Clearwater", "HillsboroughCounty", "stpetersburg"],
+     "queries": []},
 ]
 
 async def get_scraper_config() -> dict:
@@ -928,10 +932,52 @@ async def fetch_osm(src: dict) -> list:
             await asyncio.sleep(1.1)  # Nominatim usage policy: max ~1 request/second
     return out
 
+async def fetch_apify_reddit(src: dict) -> list:
+    """Reddit posts via Apify (trudax/reddit-scraper-lite) — JSON over HTTPS (not IP-blocked)."""
+    token = os.environ.get("APIFY_TOKEN")
+    if not token:
+        SCRAPER_STATE["last_error"] = "apify: set APIFY_TOKEN to enable Reddit"
+        return []
+    subs = src.get("subreddits") or ["tampa", "StPetersburgFL", "Clearwater"]
+    start_urls = [{"url": f"https://www.reddit.com/r/{s}/new/"} for s in subs]
+    max_items = int(src.get("max_items", 30))
+    payload = {"startUrls": start_urls, "searches": src.get("queries") or [],
+               "searchPosts": True, "searchComments": False, "searchCommunities": False,
+               "searchUsers": False, "skipComments": True, "sort": "new", "time": "month",
+               "maxItems": max_items, "maxPostCount": max_items,
+               "proxy": {"useApifyProxy": True}}
+    url = f"https://api.apify.com/v2/acts/trudax~reddit-scraper-lite/run-sync-get-dataset-items?token={token}"
+    out = []
+    try:
+        async with httpx.AsyncClient(timeout=180) as c:
+            items = (await c.post(url, json=payload)).json()
+    except Exception as e:
+        SCRAPER_STATE["last_error"] = "apify: " + str(e)[:160]
+        return []
+    if not isinstance(items, list):
+        SCRAPER_STATE["last_error"] = "apify: " + str(items)[:160]
+        return []
+    for it in items:
+        if it.get("dataType") and it.get("dataType") != "post":
+            continue
+        title = it.get("title") or ""
+        body = it.get("body") or it.get("text") or ""
+        text = (title + " — " + body).strip()
+        if not text or text == "—":
+            continue
+        author = it.get("username") or it.get("author") or "anon"
+        out.append({"full_name": "u/" + author, "raw_text": text[:2000],
+                    "source_site": "Reddit", "category": src.get("category", "services"),
+                    "source_url": it.get("url") or it.get("link") or "",
+                    "city": "", "state": "", "company": "", "title": title})
+    return out
+
 async def fetch_source(src: dict) -> list:
     p = src.get("provider", "osm")
     if p in ("osm", "nominatim"):
         return await fetch_osm(src)
+    if p in ("apify_reddit", "reddit_apify"):
+        return await fetch_apify_reddit(src)
     if p == "hackernews":
         return await fetch_hackernews(src)
     if p == "github":
