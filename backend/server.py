@@ -1741,6 +1741,23 @@ class ThreatScanReq(BaseModel):
     domain: str
     model: str = "deepseek"
 
+async def _shodan_host(ip: Optional[str]) -> Optional[dict]:
+    """OSINT sensor: Shodan host lookup (org/OS/open ports/services/CVEs). Dormant until SHODAN_API_KEY set."""
+    key = os.environ.get("SHODAN_API_KEY")
+    if not key or not ip:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=15) as c:
+            r = await c.get(f"https://api.shodan.io/shodan/host/{ip}?key={key}")
+        if r.status_code != 200:
+            return None
+        d = r.json()
+        return {"org": d.get("org"), "isp": d.get("isp"), "os": d.get("os"),
+                "hostnames": d.get("hostnames", []), "ports": d.get("ports", []),
+                "tags": d.get("tags", []), "vulns": list(d.get("vulns", []) or [])}
+    except Exception:
+        return None
+
 async def _gather_threat_signals(domain: str) -> dict:
     domain = normalize_domain(domain) or domain
     findings = []
@@ -1817,11 +1834,22 @@ async def _gather_threat_signals(domain: str) -> dict:
         except Exception:
             pass
 
+    shodan = await _shodan_host(ip)
+    if shodan:
+        for p in shodan.get("ports", []):
+            if p in RISKY_PORTS and p not in open_ports:
+                open_ports.append(p)
+                findings.append({"category": "Open Port", "detail": f"Shodan: risky service {RISKY_PORTS[p]} (port {p})", "severity": "high", "weight": 2.5})
+        for v in (shodan.get("vulns") or [])[:8]:
+            findings.append({"category": "Known CVE", "detail": f"Shodan-reported vulnerability: {v}", "severity": "high", "weight": 3.0})
+        for t in (shodan.get("tags") or [])[:5]:
+            findings.append({"category": "Shodan Flag", "detail": f"Exposure tag: {t}", "severity": "medium", "weight": 1.0})
+
     raw = min(sum(f["weight"] for f in findings), 10.0)
     return {"domain": domain, "ip": ip, "open_ports": open_ports,
             "sensitive_subdomains": [s["sub"] for s in subs],
             "missing_headers": missing_headers, "findings": findings,
-            "raw_score": round(raw, 1)}
+            "shodan": shodan or {}, "raw_score": round(raw, 1)}
 
 async def _threat_ai(signals: dict, model_key: str) -> dict:
     prompt = ("You are a cybersecurity risk analyst. Given the OSINT findings JSON for a company, "
@@ -1900,6 +1928,7 @@ async def _run_threat_scan(domain: str, model_key: str = "deepseek", by: str = "
               "findings": signals["findings"], "open_ports": signals["open_ports"],
               "sensitive_subdomains": signals["sensitive_subdomains"],
               "missing_headers": signals["missing_headers"],
+              "shodan": signals.get("shodan") or {},
               "email_draft": email_draft, "email_status": "draft" if email_draft else "n/a",
               "source": source, "by": by, "created_at": datetime.now(timezone.utc).isoformat()}
     res = await db.threat_reports.insert_one(dict(report))
