@@ -1867,6 +1867,18 @@ def _send_gmail_sync(to_addr: str, subject: str, body: str, from_name: str = "")
         s.sendmail(user, [to_addr], msg.as_string())
 
 async def send_email(to_addr: str, subject: str, body: str, from_name: str = ""):
+    api_key = os.environ.get("RESEND_API_KEY")
+    if api_key:
+        import resend
+        resend.api_key = api_key
+        sender = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+        params = {"from": f"{from_name} <{sender}>" if from_name else sender,
+                  "to": [to_addr], "subject": subject,
+                  "html": body.replace("\n", "<br>"), "text": body}
+        res = await asyncio.to_thread(resend.Emails.send, params)
+        if isinstance(res, dict) and res.get("error"):
+            raise RuntimeError(str(res["error"]))
+        return
     await asyncio.to_thread(_send_gmail_sync, to_addr, subject, body, from_name)
 
 async def _run_threat_scan(domain: str, model_key: str = "deepseek", by: str = "system", source: str = "manual") -> dict:
