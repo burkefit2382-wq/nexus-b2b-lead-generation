@@ -47,7 +47,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        REACT_APP_BACKEND_URL: "https://nexuscloud.ai"
+        REACT_APP_BACKEND_URL: "https://nexuscloud.io"
     container_name: nexus_web
     restart: always
     ports:
