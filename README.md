@@ -91,6 +91,12 @@ deploy/    nexus.service (systemd)
 docker-compose.yml · SELF_HOST.md · DEPLOY.md
 ```
 
+## 📚 Documentation
+
+- **API Reference:** [`docs/API.md`](./docs/API.md) — every endpoint, auth, and error contract.
+- **Contributing:** [`CONTRIBUTING.md`](./CONTRIBUTING.md) — local setup and PR workflow.
+- **Deployment:** [`SELF_HOST.md`](./SELF_HOST.md).
+
 ## 📄 License
 
 MIT — see [`LICENSE`](./LICENSE).
