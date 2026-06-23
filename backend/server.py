@@ -431,7 +431,9 @@ async def export_csv(category: Optional[str] = None, min_score: float = 0.0,
     out = io.StringIO(); w = csv.writer(out)
     w.writerow(["ID", "Category", "Status", "Score", "Name", "Email", "Phone",
                 "City", "State", "AI Summary", "Budget", "Tags", "Source"])
-    async for l in db.leads.find(q).sort("score", -1).limit(5000):
+    async for l in db.leads.find(q, {"category": 1, "status": 1, "score": 1, "full_name": 1,
+                                     "email": 1, "phone": 1, "city": 1, "state": 1, "ai_summary": 1,
+                                     "ai_budget_est": 1, "tags": 1, "source_url": 1}).sort("score", -1).limit(5000):
         w.writerow([str(l["_id"]), l.get("category"), l.get("status"), l.get("score"),
                     l.get("full_name"), l.get("email"), l.get("phone"), l.get("city"),
                     l.get("state"), l.get("ai_summary"), l.get("ai_budget_est"),
