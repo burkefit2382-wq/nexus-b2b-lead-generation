@@ -2370,10 +2370,52 @@ async def storefront_leads(city: Optional[str] = None, state: Optional[str] = No
     base_q = {"ready_to_sell": True, "purchase_status": "available"}
     industries = await db.leads.distinct("category", base_q)
     states = await db.leads.distinct("state", base_q)
-    return {"total": total, "leads": leads,
+    bundle_pipeline = [
+        {"$match": base_q},
+        {"$group": {"_id": "$category", "count": {"$sum": 1},
+                    "avg_confidence": {"$avg": "$data_confidence_score"},
+                    "from_price": {"$min": "$price_per_lead"},
+                    "strategic": {"$sum": {"$cond": [
+                        {"$eq": ["$operational_value_tier", "Strategic"]}, 1, 0]}}}},
+        {"$sort": {"count": -1}},
+    ]
+    bundles = [{"industry": b["_id"], "count": b["count"],
+                "avg_confidence": round(b.get("avg_confidence") or 0, 1),
+                "from_price": int(b.get("from_price") or 1), "strategic": b.get("strategic", 0)}
+               async for b in db.leads.aggregate(bundle_pipeline) if b.get("_id")]
+    return {"total": total, "leads": leads, "bundles": bundles,
             "filters": {"industries": [i for i in industries if i],
                         "states": [s for s in states if s],
                         "tiers": ["Strategic", "Tactical", "Operational"]}}
+
+class RFPRequest(BaseModel):
+    agency_name: str
+    contact_name: str
+    email: EmailStr
+    regions: str = ""
+    sectors: str = ""
+    budget: str = ""
+    timeline: str = ""
+    classification: str = "Unclassified"
+    scope: str = ""
+
+@api.post("/storefront/rfp")
+async def submit_rfp(body: RFPRequest, user: dict = Depends(get_current_user)):
+    """Government / municipal custom-intelligence scope request (RFP intake)."""
+    doc = body.model_dump()
+    doc.update({"user_id": user["id"], "status": "new",
+                "created_at": datetime.now(timezone.utc).isoformat()})
+    res = await db.rfp_requests.insert_one(doc)
+    return {"id": str(res.inserted_id), "status": "received",
+            "message": "Agency scope request received. Our intelligence desk will respond within 1 business day."}
+
+@api.get("/storefront/rfp")
+async def list_rfp(user: dict = Depends(require_admin)):
+    out = []
+    async for r in db.rfp_requests.find().sort("created_at", -1).limit(200):
+        r["id"] = str(r.pop("_id"))
+        out.append(r)
+    return {"requests": out, "total": len(out)}
 
 class PurchaseLeadsReq(BaseModel):
     lead_ids: List[str]

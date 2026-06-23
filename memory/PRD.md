@@ -103,6 +103,14 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - P2: People-intel rate limiting; lead unlock receipts/exports; usage analytics dashboard.
 
 ## Changelog
+- 2026-06-23 — **Intel Marketplace UI v2 (enterprise SOC) + RFP portal**: bundle catalog strip (sector
+  aggregates: count/avg-confidence/from-price/strategic via Mongo aggregation in `GET /storefront/leads`);
+  cards refined to "Llama 3 · Accuracy Vector" score, geometric tier badges (▲ Strategic / ▪ Tactical /
+  ● Operational), Threat-Level pill (derived from risk_matrix), friendly verification node badges
+  ([MX Match] [Registry Verified] [Footprint Consistent]…). New **Request Agency Scope / Submit RFP** modal
+  (gov/municipal intake: agency, contact, email, regions, sectors, budget, timeline, classification, scope)
+  → `POST /api/storefront/rfp` (+ admin `GET /api/storefront/rfp`). Verified via curl + UI (bundle filter,
+  RFP submit success). Design blueprint: `/app/design_guidelines.json`. PREVIEW only — REDEPLOY to push.
 - 2026-06-23 — **Intelligence Marketplace (per-lead storefront + gov-grade enrichment)**:
   Llama 3 (`meta-llama/Llama-3.3-70B-Instruct` via HF router, deepseek fallback) + OSINT verification
   produce an Intelligence Payload: `data_confidence_score` (0-100), `cross_verification`
