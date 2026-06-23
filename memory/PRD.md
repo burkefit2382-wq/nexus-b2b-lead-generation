@@ -99,9 +99,21 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 ## Backlog / Next
 - P0: HF "Inference Providers" permission; Reddit OAuth creds.
 - P1: API-access subscription tier (recurring) on top of one-time credit packs.
+- P1 (tech debt): split server.py (~2540 lines) into modules (auth/leads/enrichment/storefront/threat/osint/payments).
 - P2: People-intel rate limiting; lead unlock receipts/exports; usage analytics dashboard.
 
 ## Changelog
+- 2026-06-23 — **Intelligence Marketplace (per-lead storefront + gov-grade enrichment)**:
+  Llama 3 (`meta-llama/Llama-3.3-70B-Instruct` via HF router, deepseek fallback) + OSINT verification
+  produce an Intelligence Payload: `data_confidence_score` (0-100), `cross_verification`
+  (Email_Syntax_Valid/Domain_MX_Match/Public_Registry_Verified/Social_Footprint_Consistent/
+  Phone_Format_Valid/Geo_Located), `risk_matrix` ([{flag,severity}]), `operational_value_tier`
+  (Strategic/Tactical/Operational). New lead fields: `price_per_lead` (credits 5/3/1), `purchase_status`
+  (available/reserved/sold), `buyer_user_id`, `ready_to_sell` (legacy leads backfilled at startup).
+  Endpoints: `POST /api/enrichment/process-leads` (admin), `GET /api/storefront/leads` (masked browse +
+  facet filters), `POST /api/storefront/purchase-leads` (credit-based, atomic available->sold, returns
+  full payload). Frontend: new **Intel Marketplace** tab (`Storefront.jsx`). testing_agent 14/14 backend +
+  full frontend, 0 issues. PREVIEW only — REDEPLOY to push.
 - 2026-06-23 — Recruiter-ready repo docs: `docs/API.md` (full endpoint reference), `CONTRIBUTING.md`,
   `frontend/.env.example`, README Documentation section.
 - 2026-06-23 — Deployment readiness: removed `.env`/`.env.*`/`*.env` from `.gitignore` (platform needs
