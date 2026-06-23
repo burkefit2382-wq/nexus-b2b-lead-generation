@@ -21,6 +21,10 @@ log = logging.getLogger("nexus-worker")
 
 
 async def main():
+    # Motor client must be created inside the running event loop (mirrors server startup).
+    server.client = server.AsyncIOMotorClient(server.mongo_url)
+    server.db = server.client[server.db_name]
+    log.info("Worker: MongoDB client initialized inside event loop")
     cfg = await server.get_scraper_config()
     interval = max(5, int(cfg.get("interval_min", 30)))
     sched = AsyncIOScheduler(timezone="UTC")

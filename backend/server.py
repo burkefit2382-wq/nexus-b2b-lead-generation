@@ -29,9 +29,14 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger("nexus")
 
 # ----------------------------------------------------------------------------- DB
+# NOTE: the Motor client must be created INSIDE the running event loop (in the
+# startup handler), not at import time. Creating it at import binds to a loop
+# that doesn't exist yet and silently breaks connections under MongoDB Atlas
+# (mongodb+srv) in production. These are populated in the startup event.
 mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db_name = os.environ['DB_NAME']
+client = None
+db = None
 
 # ----------------------------------------------------------------------------- Auth helpers
 JWT_ALGORITHM = "HS256"
@@ -2112,6 +2117,10 @@ SAMPLE_LEADS = [
 
 @app.on_event("startup")
 async def startup():
+    global client, db
+    client = AsyncIOMotorClient(mongo_url)
+    db = client[db_name]
+    logger.info("MongoDB client initialized inside event loop")
     await db.users.create_index("email", unique=True)
     await db.api_keys.create_index("key_hash")
     await db.leads.create_index([("score", -1)])
@@ -2158,4 +2167,7 @@ async def startup():
 
 @app.on_event("shutdown")
 async def shutdown():
-    client.close()
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
+    if client is not None:
+        client.close()

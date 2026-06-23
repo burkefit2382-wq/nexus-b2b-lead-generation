@@ -100,3 +100,15 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - P0: HF "Inference Providers" permission; Reddit OAuth creds.
 - P1: API-access subscription tier (recurring) on top of one-time credit packs.
 - P2: People-intel rate limiting; lead unlock receipts/exports; usage analytics dashboard.
+
+## Changelog
+- 2026-06-23 — Recruiter-ready repo docs: `docs/API.md` (full endpoint reference), `CONTRIBUTING.md`,
+  `frontend/.env.example`, README Documentation section.
+- 2026-06-23 — Deployment readiness: removed `.env`/`.env.*`/`*.env` from `.gitignore` (platform needs
+  env files); deployment_agent PASS.
+- 2026-06-23 — **Prod crash-loop fix**: `AsyncIOMotorClient` was created at module-import time (before the
+  event loop), causing silent connection failures / pod restarts under Atlas (mongodb+srv). Moved client
+  creation into the `startup` event (server.py) and into `worker.py main()`; added graceful
+  `scheduler.shutdown()` on app shutdown. Verified in preview (clean boot + login). REDEPLOY required.
+- Resend custom domain: DNS for `mail.nexuscloud.sh`/`nexuscloud.sh` not yet verified in Resend dashboard;
+  app sends from `onboarding@resend.dev` until verified.
