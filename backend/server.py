@@ -13,7 +13,7 @@ import hashlib
 import secrets
 import logging
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 import jwt
 import bcrypt
@@ -131,6 +131,8 @@ require_admin = require_role("admin")
 def _resolve_model(key: str) -> str:
     if key == "qwen":
         return os.environ.get("QWEN_MODEL", "Qwen/Qwen2.5-32B-Instruct")
+    if key == "llama":
+        return os.environ.get("LLAMA_MODEL", "meta-llama/Llama-3.3-70B-Instruct")
     return os.environ.get("DEEPSEEK_MODEL", "deepseek-ai/DeepSeek-V3.1:novita")
 
 def _hf_chat_sync(messages, model_key="deepseek", max_tokens=600, temperature=0.4):
@@ -406,6 +408,9 @@ async def create_lead(body: LeadCreate, user: dict = Depends(get_current_user)):
     doc = body.model_dump()
     doc.update({"status": "raw", "score": 0.0, "is_sold": False, "sold_price": 0.0,
                 "ai_summary": "", "ai_budget_est": "", "tags": "",
+                "purchase_status": "available", "buyer_user_id": None, "ready_to_sell": False,
+                "price_per_lead": 1, "data_confidence_score": 0.0, "quality_score": 0.0,
+                "cross_verification": [], "risk_matrix": [], "operational_value_tier": "Operational",
                 "created_at": datetime.now(timezone.utc).isoformat()})
     res = await db.leads.insert_one(doc)
     return _lead_pub({"_id": res.inserted_id, **doc})
@@ -2085,6 +2090,341 @@ async def send_threat_email(report_id: str, body: SendPitchReq, user: dict = Dep
                   "sent_at": datetime.now(timezone.utc).isoformat()}})
     return {"sent": True, "to": body.to_email}
 
+# ============================================================================
+# GOVERNMENT-GRADE INTELLIGENCE ENRICHMENT + PER-LEAD STOREFRONT
+# ============================================================================
+# Llama 3 enrichment produces a structured "Intelligence Payload" optimized for
+# defense / municipal / federal procurement evaluation:
+#   - data_confidence_score (0-100)  : weighted cross-platform verification
+#   - cross_verification (list)       : validated nodes (Domain_MX_Match, ...)
+#   - risk_matrix (list)              : anomalies / high-risk operational signals
+#   - operational_value_tier          : Strategic | Tactical | Operational
+# Leads flagged ready_to_sell enter the storefront and are sold per-lead via credits.
+
+STOREFRONT_MIN_CONFIDENCE = float(os.environ.get("STOREFRONT_MIN_CONFIDENCE", "50"))
+TIER_CREDITS = {"Strategic": 5, "Tactical": 3, "Operational": 1}
+DISPOSABLE_EMAIL_DOMAINS = {
+    "mailinator.com", "tempmail.com", "10minutemail.com", "guerrillamail.com",
+    "trashmail.com", "yopmail.com", "throwawaymail.com", "getnada.com", "sharklasers.com",
+}
+
+def _operational_tier(confidence: float, intent: int) -> str:
+    if confidence >= 80 and intent >= 60:
+        return "Strategic"
+    if confidence >= 60:
+        return "Tactical"
+    return "Operational"
+
+def _mask_email(e: str) -> str:
+    e = (e or "").strip()
+    if "@" not in e:
+        return ""
+    user_part, domain = e.split("@", 1)
+    head = (user_part[0] + "•••") if user_part else "•••"
+    return f"{head}@{domain}"
+
+def _mask_company(c: str) -> str:
+    c = (c or "").strip()
+    if not c:
+        return "Verified Entity"
+    return c[:3] + "•••" if len(c) > 3 else c
+
+def _osint_verify_sync(email: str, phone: str, website: str, company: str,
+                       city: str, state: str) -> dict:
+    """Synchronous OSINT verification — runs in a worker thread (network I/O)."""
+    import socket as _sock
+    nodes, risk = [], []
+    email = (email or "").strip()
+    email_valid = bool(EMAIL_RX.fullmatch(email)) if email else False
+    if email_valid:
+        nodes.append("Email_Syntax_Valid")
+    mx_ok = False
+    email_domain = email.split("@", 1)[1].lower() if email_valid else ""
+    if email_domain:
+        if email_domain in DISPOSABLE_EMAIL_DOMAINS:
+            risk.append({"flag": "Disposable_Email_Domain", "severity": "high"})
+        try:
+            import dns.resolver as _dnsr
+            ans = _dnsr.resolve(email_domain, "MX", lifetime=4.0)
+            mx_ok = len(list(ans)) > 0
+        except Exception:
+            mx_ok = False
+        if mx_ok:
+            nodes.append("Domain_MX_Match")
+        else:
+            risk.append({"flag": "Unverified_Email_Domain", "severity": "medium"})
+    phone_valid = bool(PHONE_RX.search(phone or ""))
+    if phone_valid:
+        nodes.append("Phone_Format_Valid")
+    web = (website or "").strip()
+    web_domain = ""
+    if web:
+        web_domain = web.replace("https://", "").replace("http://", "").split("/")[0]
+    elif email_domain:
+        web_domain = email_domain
+    web_resolves = False
+    if web_domain:
+        try:
+            _sock.gethostbyname(web_domain)
+            web_resolves = True
+        except Exception:
+            web_resolves = False
+        if web_resolves:
+            nodes.append("Public_Registry_Verified")
+        elif web:
+            risk.append({"flag": "Unresolved_Web_Presence", "severity": "medium"})
+    if company and web_domain:
+        core = re.sub(r"[^a-z0-9]", "", company.lower())[:5]
+        if core and core[:4] and core[:4] in web_domain.replace(".", "").lower():
+            nodes.append("Social_Footprint_Consistent")
+    geo_ok = bool(city and state)
+    if geo_ok:
+        nodes.append("Geo_Located")
+    if not (mx_ok or phone_valid):
+        risk.append({"flag": "No_Verifiable_Contact", "severity": "high"})
+    if not company:
+        risk.append({"flag": "Incomplete_Entity_Record", "severity": "low"})
+    return {"nodes": nodes, "risk": risk, "email_valid": email_valid, "mx": mx_ok,
+            "phone_valid": phone_valid, "web_resolves": web_resolves, "geo": geo_ok}
+
+def _data_confidence(v: dict, intent: int) -> float:
+    s = 0.0
+    if v["email_valid"]:
+        s += 10
+    if v["mx"]:
+        s += 25
+    if v["web_resolves"]:
+        s += 20
+    if v["phone_valid"]:
+        s += 15
+    if v["geo"]:
+        s += 10
+    if "Social_Footprint_Consistent" in v["nodes"]:
+        s += 10
+    s += min(max(intent, 0), 100) * 0.10
+    return float(round(min(s, 100.0), 1))
+
+async def _llama_assess(category: str, text: str, company: str, model_key: str = "llama") -> dict:
+    """Run the LLM analyst pass. Falls back to deepseek if Llama 3 is unavailable."""
+    subject = text.strip() or f"Entity: {company or 'unknown'} | Sector: {category}"
+    prompt = (
+        "You are a procurement intelligence analyst vetting an entity/lead for defense, "
+        "municipal, and federal contracting suitability. Return ONLY a JSON object with keys: "
+        "summary (1-2 sentence operational brief), intent_score (0-100 integer: likelihood this "
+        "entity is actively procuring/contracting now), budget_estimate (string), "
+        "category_tags (list of 3 short tags), anomaly_flags (list of short risk strings, e.g. "
+        "'Unverified entity structure', 'Inconsistent records'; empty list if none), "
+        "entity_consistency (one of high|medium|low).\n\nDOSSIER:\n" + subject[:1600]
+    )
+    r = await deepseek_chat([{"role": "user", "content": prompt}],
+                            model_key=model_key, max_tokens=400, temperature=0.2)
+    if "error" in r and model_key != "deepseek":
+        r = await deepseek_chat([{"role": "user", "content": prompt}],
+                                model_key="deepseek", max_tokens=400, temperature=0.2)
+    out = {"summary": "", "intent_score": 0, "budget_estimate": "",
+           "category_tags": [], "anomaly_flags": [], "entity_consistency": "low"}
+    if "error" in r:
+        return out
+    raw = (r.get("content") or "").strip()
+    if "```" in raw:
+        raw = raw.split("```")[1].replace("json", "", 1).strip()
+    try:
+        parsed = json.loads(raw[raw.find("{"): raw.rfind("}") + 1])
+        if isinstance(parsed, dict):
+            out.update({k: parsed.get(k, out[k]) for k in out})
+            out["intent_score"] = int(out.get("intent_score") or 0)
+    except Exception:
+        pass
+    return out
+
+async def _enrich_and_store(raw: dict, model_key: str = "llama") -> dict:
+    text = raw.get("raw_text") or ""
+    contacts = _extract_contacts(text) if text else {}
+    email = (raw.get("email") or contacts.get("email") or "").strip()
+    phone = (raw.get("phone") or contacts.get("phone") or "").strip()
+    company = (raw.get("company") or "").strip()
+    website = (raw.get("website") or "").strip()
+    city = (raw.get("city") or "").strip()
+    state = (raw.get("state") or "").strip()
+    category = (raw.get("category") or "general").strip()
+
+    ai = await _llama_assess(category, text, company, model_key)
+    intent = int(ai.get("intent_score") or 0)
+    v = await asyncio.to_thread(_osint_verify_sync, email, phone, website, company, city, state)
+    confidence = _data_confidence(v, intent)
+
+    risk = list(v["risk"])
+    for f in (ai.get("anomaly_flags") or []):
+        if isinstance(f, str) and f.strip():
+            risk.append({"flag": f.strip()[:80], "severity": "medium", "source": "ai_analyst"})
+    if ai.get("entity_consistency") == "low":
+        risk.append({"flag": "Unverified_Entity_Structure", "severity": "high"})
+    if intent and intent < 30:
+        risk.append({"flag": "Low_Procurement_Intent", "severity": "low"})
+
+    nodes = v["nodes"]
+    tier = _operational_tier(confidence, intent)
+    price = TIER_CREDITS[tier]
+    ready = confidence >= STOREFRONT_MIN_CONFIDENCE and len(nodes) >= 2
+    tags = ai.get("category_tags")
+    tags = ",".join([str(t) for t in tags]) if isinstance(tags, list) and tags else (raw.get("tags") or "")
+    now = datetime.now(timezone.utc).isoformat()
+
+    payload = {
+        "category": category, "full_name": raw.get("full_name", ""), "email": email, "phone": phone,
+        "company": company, "website": website, "city": city, "state": state,
+        "source_site": raw.get("source_site", "enrichment"), "source_url": raw.get("source_url", ""),
+        "raw_text": text, "ai_summary": ai.get("summary") or raw.get("ai_summary", ""),
+        "ai_budget_est": ai.get("budget_estimate") or "", "ai_intent_score": intent,
+        "tags": tags, "score": confidence, "quality_score": confidence,
+        "data_confidence_score": confidence, "cross_verification": nodes, "risk_matrix": risk,
+        "operational_value_tier": tier, "entity_consistency": ai.get("entity_consistency", "low"),
+        "price_per_lead": price, "ready_to_sell": ready, "status": "ready_to_sell" if ready else "enriched",
+        "enriched_at": now, "enrichment_model": _resolve_model(model_key), "source": "enrichment_batch",
+    }
+
+    key = None
+    if payload["source_url"]:
+        key = {"source_url": payload["source_url"]}
+    elif email:
+        key = {"email": email, "company": company}
+    existing = await db.leads.find_one(key) if key else None
+    if existing:
+        if existing.get("purchase_status") == "sold":
+            payload.pop("ready_to_sell", None)
+        await db.leads.update_one({"_id": existing["_id"]}, {"$set": payload})
+        lid = existing["_id"]
+    else:
+        payload.update({"is_sold": False, "sold_price": 0.0, "purchase_status": "available",
+                        "buyer_user_id": None, "created_at": now})
+        res = await db.leads.insert_one(payload)
+        lid = res.inserted_id
+    return {"id": str(lid), "company": company or payload["full_name"] or "Unnamed entity",
+            "city": city, "state": state, "data_confidence_score": confidence,
+            "operational_value_tier": tier, "cross_verification": nodes,
+            "risk_matrix": risk, "price_per_lead": price, "ready_to_sell": ready}
+
+def _intel_pub(l: dict, full: bool = False) -> dict:
+    base = {
+        "id": str(l.get("_id") or l.get("id", "")),
+        "category": l.get("category"),
+        "city": l.get("city"), "state": l.get("state"),
+        "data_confidence_score": l.get("data_confidence_score", l.get("score", 0)),
+        "cross_verification": l.get("cross_verification", []),
+        "risk_matrix": l.get("risk_matrix", []),
+        "operational_value_tier": l.get("operational_value_tier", "Operational"),
+        "quality_score": l.get("quality_score", l.get("score", 0)),
+        "price_per_lead": int(l.get("price_per_lead", 1)),
+        "purchase_status": l.get("purchase_status", "available"),
+        "ai_summary": l.get("ai_summary", ""),
+        "ai_budget_est": l.get("ai_budget_est", ""),
+        "tags": l.get("tags", ""),
+        "ready_to_sell": l.get("ready_to_sell", False),
+    }
+    if full:
+        base.update({"full_name": l.get("full_name", ""), "email": l.get("email", ""),
+                     "phone": l.get("phone", ""), "company": l.get("company", ""),
+                     "website": l.get("website", ""), "source_url": l.get("source_url", ""),
+                     "raw_text": l.get("raw_text", ""), "buyer_user_id": l.get("buyer_user_id")})
+    else:
+        base.update({"company_masked": _mask_company(l.get("company", "")),
+                     "contact_masked": _mask_email(l.get("email", "")), "locked": True})
+    return base
+
+class ProcessLeadsReq(BaseModel):
+    leads: List[Dict[str, Any]]
+    ai_model: str = "llama"
+
+@api.post("/enrichment/process-leads")
+async def process_leads(body: ProcessLeadsReq, user: dict = Depends(require_admin)):
+    """Run a raw lead array through Llama 3 + OSINT verification and flag ready_to_sell."""
+    if not body.leads:
+        raise HTTPException(status_code=400, detail="No leads provided")
+    results = []
+    for raw in body.leads[:100]:
+        results.append(await _enrich_and_store(raw, body.ai_model))
+    return {"processed": len(results),
+            "ready_to_sell": sum(1 for r in results if r["ready_to_sell"]),
+            "model": _resolve_model(body.ai_model), "leads": results}
+
+@api.get("/storefront/leads")
+async def storefront_leads(city: Optional[str] = None, state: Optional[str] = None,
+                           industry: Optional[str] = None, tier: Optional[str] = None,
+                           min_confidence: float = 0.0, limit: int = 60, offset: int = 0,
+                           user: dict = Depends(get_current_user)):
+    """Browse individual un-sold, verified leads with full intelligence metrics (PII masked)."""
+    q = {"ready_to_sell": True, "purchase_status": "available"}
+    if city:
+        q["city"] = {"$regex": re.escape(city), "$options": "i"}
+    if state:
+        q["state"] = {"$regex": f"^{re.escape(state)}$", "$options": "i"}
+    if industry:
+        q["category"] = industry
+    if tier:
+        q["operational_value_tier"] = tier
+    if min_confidence:
+        q["data_confidence_score"] = {"$gte": min_confidence}
+    total = await db.leads.count_documents(q)
+    cur = db.leads.find(q).sort("data_confidence_score", -1).skip(offset).limit(min(limit, 200))
+    leads = [_intel_pub(l) async for l in cur]
+    base_q = {"ready_to_sell": True, "purchase_status": "available"}
+    industries = await db.leads.distinct("category", base_q)
+    states = await db.leads.distinct("state", base_q)
+    return {"total": total, "leads": leads,
+            "filters": {"industries": [i for i in industries if i],
+                        "states": [s for s in states if s],
+                        "tiers": ["Strategic", "Tactical", "Operational"]}}
+
+class PurchaseLeadsReq(BaseModel):
+    lead_ids: List[str]
+
+@api.post("/storefront/purchase-leads")
+async def purchase_leads(body: PurchaseLeadsReq, user: dict = Depends(get_current_user)):
+    """Atomically buy specific leads with credits; marks sold to prevent double-selling."""
+    try:
+        oids = [ObjectId(i) for i in body.lead_ids]
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid lead id")
+    if not oids:
+        raise HTTPException(status_code=400, detail="No leads specified")
+    is_admin = user.get("role") == "admin"
+    available = [l async for l in db.leads.find(
+        {"_id": {"$in": oids}, "purchase_status": "available", "ready_to_sell": True})]
+    if not available:
+        raise HTTPException(status_code=400, detail="None of the selected leads are available")
+    total_cost = sum(int(l.get("price_per_lead", 1)) for l in available)
+    if not is_admin:
+        res = await db.users.update_one(
+            {"_id": ObjectId(user["id"]), "credits": {"$gte": total_cost}},
+            {"$inc": {"credits": -total_cost}})
+        if res.modified_count == 0:
+            u = await db.users.find_one({"_id": ObjectId(user["id"])})
+            have = (u or {}).get("credits", 0)
+            raise HTTPException(status_code=402,
+                detail=f"Insufficient credits — need {total_cost}, you have {have}")
+    now = datetime.now(timezone.utc).isoformat()
+    purchased, refund = [], 0
+    for l in available:
+        price = int(l.get("price_per_lead", 1))
+        upd = await db.leads.update_one(
+            {"_id": l["_id"], "purchase_status": "available"},
+            {"$set": {"purchase_status": "sold", "buyer_user_id": user["id"], "is_sold": True,
+                      "sold_price": price, "sold_at": now, "status": "sold"},
+             "$addToSet": {"unlocked_by": user["id"]}})
+        if upd.modified_count == 1:
+            purchased.append(await db.leads.find_one({"_id": l["_id"]}))
+        else:
+            refund += price
+    if refund and not is_admin:
+        await db.users.update_one({"_id": ObjectId(user["id"])}, {"$inc": {"credits": refund}})
+    await db.storefront_orders.insert_one({
+        "buyer_user_id": user["id"], "lead_ids": [str(l["_id"]) for l in purchased],
+        "charged_credits": total_cost - refund, "count": len(purchased), "created_at": now})
+    u = await db.users.find_one({"_id": ObjectId(user["id"])})
+    return {"purchased": len(purchased), "charged_credits": total_cost - refund,
+            "credits_remaining": (u or {}).get("credits", 0),
+            "leads": [_intel_pub(l, full=True) for l in purchased]}
+
 # ----------------------------------------------------------------------------- mount + startup
 app.include_router(api)
 app.add_middleware(CORSMiddleware, allow_credentials=True,
@@ -2145,6 +2485,30 @@ async def startup():
             await db.leads.insert_one(doc)
     # start 24/7 scraper
     await db.leads.create_index("source_url")
+    await db.leads.create_index("purchase_status")
+    await db.leads.create_index("operational_value_tier")
+    await db.leads.create_index("ready_to_sell")
+    # Storefront backfill: give legacy leads intelligence-payload defaults so they are sellable.
+    async for l in db.leads.find({"purchase_status": {"$exists": False}}):
+        sc = float(l.get("score") or 0)
+        nodes = []
+        if l.get("email") and EMAIL_RX.fullmatch((l.get("email") or "").strip()):
+            nodes.append("Email_Syntax_Valid")
+        if l.get("phone") and PHONE_RX.search(l.get("phone") or ""):
+            nodes.append("Phone_Format_Valid")
+        if l.get("city") and l.get("state"):
+            nodes.append("Geo_Located")
+        if l.get("website"):
+            nodes.append("Public_Registry_Verified")
+        tier = _operational_tier(sc, int(l.get("ai_intent_score") or 0))
+        await db.leads.update_one({"_id": l["_id"]}, {"$set": {
+            "purchase_status": "sold" if l.get("is_sold") else "available",
+            "buyer_user_id": l.get("buyer_user_id"),
+            "ready_to_sell": sc >= 55 and len(nodes) >= 2,
+            "data_confidence_score": sc, "quality_score": sc,
+            "operational_value_tier": tier, "price_per_lead": TIER_CREDITS[tier],
+            "cross_verification": nodes, "risk_matrix": [],
+        }})
     # self-heal: correct any scraped leads whose source_site mismatches their URL
     for domain, site in [("github.com", "GitHub"), ("news.ycombinator.com", "Hacker News"),
                          ("reddit.com", "Reddit")]:

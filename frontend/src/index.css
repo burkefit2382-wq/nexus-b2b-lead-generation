@@ -224,3 +224,38 @@ input, textarea, select { font-family: var(--body); }
 
 .loader-screen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 18px; background: var(--bg); z-index: 50; }
 .loader-screen .mono { color: var(--muted); letter-spacing: .2em; font-size: 12px; }
+
+/* ---- Intelligence Marketplace (storefront) ---- */
+.sf-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 18px; }
+.sf-filters .select, .sf-filters .search-input { min-width: 150px; }
+.sf-conf { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.intel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+.intel-card { position: relative; background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--line-2); padding: 18px; display: flex; flex-direction: column; gap: 12px; transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease; }
+.intel-card:hover { border-color: var(--accent-dim); transform: translateY(-3px); box-shadow: 0 14px 34px rgba(0,0,0,.45); }
+.intel-card.picked { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 14px 34px rgba(0,0,0,.5); }
+.intel-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.tier-badge { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; padding: 4px 9px; border: 1px solid; font-weight: 700; }
+.tier-strategic { color: #ffcf4d; border-color: rgba(255,207,77,.4); background: rgba(255,207,77,.08); }
+.tier-tactical { color: var(--accent); border-color: var(--accent-dim); background: rgba(182,255,58,.07); }
+.tier-operational { color: #5fb6ff; border-color: rgba(95,182,255,.4); background: rgba(95,182,255,.08); }
+.conf-block { display: flex; align-items: center; gap: 14px; padding: 10px 0; border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line); }
+.conf-num { font-family: var(--mono); font-size: 30px; font-weight: 800; line-height: 1; }
+.conf-num small { font-size: 13px; color: var(--muted); font-weight: 500; }
+.conf-meta { flex: 1; }
+.conf-label { font-family: var(--mono); font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.conf-bar { height: 6px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.conf-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent-dim), var(--accent)); }
+.node-row, .risk-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.node-chip { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 10px; padding: 3px 7px; color: var(--accent); border: 1px solid var(--accent-dim); background: rgba(182,255,58,.06); }
+.risk-chip { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 10px; padding: 3px 7px; border: 1px solid; }
+.risk-high { color: var(--danger); border-color: rgba(255,82,82,.45); background: rgba(255,82,82,.08); }
+.risk-medium { color: #ffb547; border-color: rgba(255,181,71,.4); background: rgba(255,181,71,.07); }
+.risk-low { color: var(--muted); border-color: var(--line-2); }
+.intel-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+.intel-price { font-family: var(--mono); font-weight: 700; color: var(--accent); }
+.sf-section-label { font-family: var(--mono); font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.sf-cart-bar { position: sticky; bottom: 0; margin-top: 18px; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 18px; background: var(--panel-2); border: 1px solid var(--accent-dim); box-shadow: 0 -8px 24px rgba(0,0,0,.4); }
+.sf-modal-wrap { position: fixed; inset: 0; background: rgba(3,6,7,.78); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: 60; padding: 24px; }
+.sf-modal { background: var(--panel); border: 1px solid var(--line-2); max-width: 640px; width: 100%; max-height: 84vh; overflow-y: auto; padding: 26px; }
+.sf-unlocked-row { border: 1px solid var(--line); padding: 12px 14px; margin-bottom: 10px; }
+.sf-unlocked-row .mono { color: var(--accent); }

@@ -1,0 +1,30 @@
+{
+  "summary": "Validated NEXUS AI Intelligence enrichment + per-lead storefront refactor end-to-end. Backend: 14/14 pytest cases pass covering admin login, /api/enrichment/process-leads (admin-only 200 with model=meta-llama/Llama-3.3-70B-Instruct, per-lead intel payload with data_confidence_score 0-100, cross_verification, risk_matrix, operational_value_tier in {Strategic,Tactical,Operational}, price_per_lead, ready_to_sell; weak lead with mailinator.com email yields risk_matrix flags and lower confidence than strong Stripe lead; non-admin -> 403), GET /api/storefront/leads (only available+ready_to_sell, PII masked: company_masked/contact_masked/locked=true, no raw email/phone; full intel metrics; filters.industries/states/tiers returned with tiers exactly ['Strategic','Tactical','Operational']; min_confidence, tier and state filters honored), POST /api/storefront/purchase-leads (admin purchase returns purchased=1 + full unmasked payload with email/phone/company; lead leaves storefront; double-sell returns HTTP 400 'None of the selected leads are available'; freshly registered user with 0 credits -> HTTP 402 'Insufficient credits' and lead stays available). Frontend: admin login + nav-storefront opens Intel Marketplace (28 verified packages). 29 intel-card-* rendered, each with intel-tier-<id> (Strategic/Tactical/Operational), intel-confidence-<id> e.g. '100/100', cross-verification chips, risk-matrix badges, price (5/3/1 credits), intel-acquire-<id> button. Tier filter (storefront-tier-filter=Strategic) reduces grid to 17 cards all Strategic; min-confidence range filter (storefront-confidence-filter=70) reduces grid to 22 cards each >=70. Acquire flow opens storefront-result-modal with unlocked email/phone; after closing the purchased card no longer appears in the grid. Authoritative intel UI matches backend payload.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_intel_storefront.py",
+    "/app/test_reports/pytest/intel_storefront.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now ~2540 lines — well past the 700-line guideline. Strongly consider splitting into modules (auth, leads, enrichment, storefront, threat, osint, payments). Cumulative tech debt from prior iterations.",
+    "_resolve_model returns deepseek for any unknown key (no validation). A typo in ai_model silently falls back to DeepSeek even when caller intended Llama. Consider raising 400 on unknown model keys or whitelisting.",
+    "/api/storefront/purchase-leads: when one of many lead IDs is unavailable post-credit-deduction, refund logic only refunds the price of that single lead — but admin path skips deduction entirely. Edge case is fine, but consider wrapping deduction + status flip in a Mongo transaction (replica-set) for true atomicity rather than the current optimistic check+update.",
+    "process-leads accepts up to 100 leads and runs sequential awaits — each lead does LLM + OSINT (multi-second). A 100-lead batch can block the worker for minutes; consider concurrency limit via asyncio.gather with semaphore and/or a background task with status polling.",
+    "_intel_pub leaks ObjectId only via the str() cast which is correct; verified no _id present in JSON responses. Good.",
+    "Storefront filter q['category'] uses exact match while industries are returned from db.leads.distinct - case-sensitive mismatch could surprise UI; consider regex/i match like city does."
+  ],
+  "updated_files": ["/app/backend/tests/test_intel_storefront.py"],
+  "success_rate": { "backend": "100% (14/14)", "frontend": "100%" },
+  "test_credentials": "Admin: admin@nexus.io / nexus123 (from /app/memory/test_credentials.md). Insufficient-credits test registers TEST_buyer_<uuid>@example.com / Test123!Pass at runtime.",
+  "seed_data_creation": "Two leads enriched via /api/enrichment/process-leads (Stripe strong-lead, ShadyCo mailinator weak-lead). One available storefront lead purchased by admin during testing (purchase_status flipped to sold).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Cookie-based auth + Bearer fallback both work. Llama model resolves to meta-llama/Llama-3.3-70B-Instruct from LLAMA_MODEL env. Storefront pulls only ready_to_sell+available leads sorted by confidence desc. Admin bypasses credit deduction. New user starts at 0 credits — perfect for 402 path. /api/storefront/leads filter 'industry' maps to 'category' field with exact match; 'state' uses case-insensitive exact regex; 'city' uses case-insensitive substring regex. Frontend Intel Marketplace lives under nav id 'storefront' (data-testid='nav-storefront'). Result modal test id is storefront-result-modal, close button storefront-result-close.",
+  "rca of the issue": "N/A — no functional issues found in this iteration."
+}
