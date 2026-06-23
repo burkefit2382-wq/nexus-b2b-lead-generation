@@ -1,0 +1,109 @@
+{
+  "identity": {
+    "theme": "Dark",
+    "archetype": "Elite Security Operations (Tactical/Terminal SOC)",
+    "tone": "Authoritative, Data-dense, Enterprise-grade, Secure"
+  },
+  "design_system": {
+    "colors": {
+      "palette": {
+        "bg": "var(--bg, #070a0b)",
+        "bg-2": "var(--bg-2, #0d1315)",
+        "panel": "var(--panel, #101719)",
+        "panel-2": "var(--panel-2, #142022)",
+        "line": "var(--line, #1f2c2e)",
+        "line-2": "var(--line-2, #28393b)",
+        "muted": "var(--muted, #6f8784)",
+        "accent": "var(--accent, #b6ff3a)",
+        "accent-dim": "var(--accent-dim, #7fae2a)",
+        "danger": "var(--danger, #ff5252)",
+        "warning": "#ffb84d",
+        "info": "#00d2ff"
+      }
+    },
+    "typography": {
+      "headings": "Chivo, IBM Plex Sans, or Outfit (Avoid Inter/Roboto)",
+      "body": "System Sans-serif (clean and readable)",
+      "monospace": "IBM Plex Mono or Space Mono (Critical for all data labels, scores, and badges)",
+      "scale": {
+        "h1": "text-3xl font-bold tracking-tighter uppercase",
+        "h2": "text-xl font-semibold tracking-tight text-white",
+        "h3": "text-sm font-medium tracking-wide text-[var(--muted)]",
+        "label": "text-[10px] md:text-xs font-mono uppercase tracking-[0.15em]"
+      }
+    },
+    "layout": {
+      "strategy": "Control Room Grid (Dense, rigid, high data density). 0px to 2px max border-radius for sharp, tactical feel.",
+      "spacing": "Dense paddings (p-4 to p-6) inside panels. Sharp delineations using 1px borders instead of soft shadows."
+    }
+  },
+  "components": {
+    "intel_catalog_grid": {
+      "class": ".intel-grid",
+      "layout": "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 align-items-start",
+      "card_class": ".intel-card",
+      "card_style": "bg-[var(--panel)] border border-[var(--line)] rounded-sm relative transition-all duration-300 hover:border-[var(--accent-dim)] hover:shadow-[0_0_15px_rgba(182,255,58,0.1)] p-5 flex flex-col gap-4"
+    },
+    "data_confidence_score": {
+      "class": ".conf-block",
+      "style": "flex items-center gap-3",
+      "number_class": ".conf-num",
+      "number_style": "text-2xl font-mono font-bold text-[var(--accent)] drop-shadow-[0_0_8px_rgba(182,255,58,0.4)]",
+      "bar_class": ".conf-bar",
+      "bar_style": "h-1.5 flex-1 bg-[var(--bg-2)] overflow-hidden rounded-none border border-[var(--line)]",
+      "bar_fill_style": "h-full bg-[var(--accent)] shadow-[0_0_10px_rgba(182,255,58,0.5)]"
+    },
+    "threat_risk_level": {
+      "class": ".risk-chip",
+      "style": "flex items-center gap-2 px-2.5 py-1 text-[11px] font-mono font-bold uppercase tracking-wider border",
+      "variants": {
+        "high": "text-[var(--danger)] border-[var(--danger)] bg-[rgba(255,82,82,0.05)]",
+        "medium": "text-[var(--warning)] border-[var(--warning)] bg-[rgba(255,170,0,0.05)]",
+        "low": "text-[var(--accent)] border-[var(--accent)] bg-[rgba(182,255,58,0.05)]"
+      }
+    },
+    "operational_value_tier": {
+      "class": ".tier-badge",
+      "style": "absolute top-0 right-0 px-3 py-1 bg-[var(--panel-2)] border-l border-b border-[var(--line)] text-xs font-mono text-[var(--muted)] uppercase tracking-widest",
+      "iconography": "Minimal geometric SVG shapes (triangle for Strategic, square for Tactical) alongside text."
+    },
+    "verification_node_badges": {
+      "class": ".node-chip",
+      "style": "inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-mono uppercase tracking-wide border border-[var(--line-2)] text-[var(--muted)] bg-[var(--bg)] rounded-sm",
+      "icon": "Prefix with a small solid dot or Lucide icon (e.g., CheckCircle2) that lights up in --accent if verified."
+    },
+    "rfp_agency_modal": {
+      "class": ".sf-modal",
+      "layout": "fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4",
+      "panel_style": "w-full max-w-2xl bg-[var(--bg)] border-2 border-[var(--line)] shadow-[0_0_40px_rgba(0,0,0,0.9)] p-6 md:p-8 rounded-sm relative",
+      "header": "Border-b border-[var(--line)] pb-4 mb-6",
+      "trust_signals": "'SECURE ENCLAVE / AES-256' micro-text in the header. Add digital noise/grain subtle background texture.",
+      "fields": "Agency Name, Contact, Email, Target Regions, Sectors, Budget, Timeline, Classification Level. Use Shadcn-style inputs but override with sharp borders focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]",
+      "submit_button": "w-full bg-[var(--accent)] text-black font-bold uppercase font-mono tracking-widest py-3 px-6 hover:bg-white transition-colors mt-4"
+    },
+    "secure_checkout_cart_bar": {
+      "class": ".sf-cart-bar",
+      "layout": "sticky bottom-0 z-40 w-full p-4 border-t border-[var(--accent-dim)] bg-[var(--bg)]/95 backdrop-blur flex items-center justify-between",
+      "content": "Left: Selected packages count. Right: Total credits & Atomic Purchase CTA.",
+      "atomic_button": "px-6 py-2 bg-[var(--bg-2)] border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-black font-mono uppercase transition-all shadow-[0_0_15px_rgba(182,255,58,0.2)]"
+    }
+  },
+  "interactions": {
+    "animations": "Minimal. Use sharp, fast transitions (duration-150 ease-out). No bouncy springs. Everything should snap like military hardware.",
+    "hover_states": "Cards highlight border. Buttons invert colors (terminal style)."
+  },
+  "accessibility_and_testing": {
+    "contrast": "Ensure text-[var(--muted)] meets 4.5:1 on bg-[var(--panel)]",
+    "data_testid_rules": "All interactive elements, buttons, inputs, and intelligence cards MUST include data-testid. Examples: data-testid='intel-card-mx-match', data-testid='rfp-submit', data-testid='checkout-atomic-btn'."
+  },
+  "instructions_to_main_agent": [
+    "1. Enhance /app/frontend/src/components/Storefront.jsx using the tactical/SOC identity without changing the core file structure.",
+    "2. Ensure all CSS modifications are scoped inside the existing variables from /app/frontend/src/index.css.",
+    "3. Implement the rigid 'Control Room Grid' for .intel-grid.",
+    "4. Build the RFP modal with sharp borders, monospace inputs, and prominent trust signals.",
+    "5. Style the cart bar as a tactical HUD element anchored to the bottom.",
+    "6. Do NOT introduce new UI libraries for layout; stick to Tailwind + the existing component pattern.",
+    "7. Ensure the Llama 3 'Data Confidence Score' dominates the visual hierarchy of the intel cards using neon lime dropshadows.",
+    "8. MUST add 'data-testid' to all key interactive elements."
+  ]
+}
