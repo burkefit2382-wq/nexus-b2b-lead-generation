@@ -120,8 +120,16 @@ Copy `.env.example` and set values for your environment:
 
 ## Cloudflare Workers deployment
 
+`wrangler` is installed as a local devDependency. Use `npm run` scripts or `npx` — do **not** call `wrangler` directly on the command line.
+
 ```bash
+# Authenticate with Cloudflare (run once)
+npm run wrangler:login
+# or: npx wrangler login
+
+# Deploy the Worker
 npm run cf:deploy
+# or: npx wrangler deploy
 ```
 
 ### Custom domain (optional)
