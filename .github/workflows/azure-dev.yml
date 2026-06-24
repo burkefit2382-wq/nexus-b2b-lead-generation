@@ -23,6 +23,8 @@ jobs:
 
       - name: Install azd
         uses: Azure/setup-azd@v2
+        with:
+          version: "1.11.0"
 
       - name: Log in with Azure (Federated Credentials)
         run: azd auth login --client-id ${{ env.AZURE_CLIENT_ID }} --federated-credential-provider github --tenant-id ${{ env.AZURE_TENANT_ID }}

@@ -71,8 +71,26 @@ PYTHONPATH=. python -m pytest backend/tests
 
 ### Prerequisites
 
-- [Install azd](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd)
+- [Install azd](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd) **v1.11.0 or later** (CI uses `1.11.0`)
 - An Azure subscription with contributor access
+
+To check your installed version:
+
+```bash
+azd version
+```
+
+To install or upgrade on Windows:
+
+```powershell
+winget install microsoft.azd
+```
+
+On macOS/Linux:
+
+```bash
+curl -fsSL https://aka.ms/install-azd.sh | bash
+```
 
 ### First-time setup
 
