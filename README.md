@@ -11,21 +11,25 @@ This repository now includes a runnable MVP structure for local testing and CI v
 - `/backend/requirements.txt` — runtime Python dependencies
 - `/backend/requirements-dev.txt` — development/test dependencies
 - `/frontend` — Vite + TypeScript frontend that calls backend endpoints
-- `/.github/workflows/azure-webapps-node.yml` — CI build/test + Azure deployment workflow
+- `/infra/main.bicep` — Bicep subscription-level orchestration template
+- `/infra/resources.bicep` — App Service + Static Web App resource definitions
+- `/azure.yaml` — Azure Developer CLI service definitions
+- `/.github/workflows/azure-webapps-node.yml` — CI build/test + Azure Web Apps deploy workflow
+- `/.github/workflows/azure-dev.yml` — Azure Developer CLI provision + deploy workflow
 - `/.env.example` — shared local/cloud environment template
 
 ## Key technologies
 
 - **Backend:** Python 3.10+, FastAPI, Uvicorn, Pytest
 - **Frontend:** TypeScript, Vite
-- **CI/CD:** GitHub Actions, Azure Web Apps deploy action
+- **CI/CD:** GitHub Actions, Azure Web Apps deploy action, Azure Developer CLI (`azd`)
+- **Infrastructure as Code:** Bicep
 
 ## Local launch (testing)
 
 ### 1) Backend
 
 ```bash
-cd /home/runner/work/nexus-b2b-lead-generation/nexus-b2b-lead-generation
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install -r backend/requirements-dev.txt
@@ -37,7 +41,7 @@ uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 In a new terminal:
 
 ```bash
-cd /home/runner/work/nexus-b2b-lead-generation/nexus-b2b-lead-generation/frontend
+cd frontend
 npm install
 npm run dev
 ```
@@ -47,7 +51,6 @@ Open the Vite URL (default `http://localhost:5173`) and verify backend health + 
 ## Local validation
 
 ```bash
-cd /home/runner/work/nexus-b2b-lead-generation/nexus-b2b-lead-generation
 npm --prefix frontend run build
 PYTHONPATH=. python -m pytest backend/tests
 ```
@@ -61,6 +64,51 @@ PYTHONPATH=. python -m pytest backend/tests
    - `AZURE_WEBAPP_NAME`
 4. Push to `main` (or run workflow manually).
 5. Open deployed app URL from workflow output and run smoke checks.
+
+## Deploy with Azure Developer CLI (`azd`)
+
+`azd` provisions all Azure infrastructure **and** deploys both services in one command.
+
+### Prerequisites
+
+- [Install azd](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd)
+- An Azure subscription with contributor access
+
+### First-time setup
+
+```bash
+# 1. Authenticate
+azd auth login
+
+# 2. Initialise the environment (pick a short name, e.g. "nexus-dev")
+azd init
+
+# 3. Provision resources + deploy in one step
+azd up
+```
+
+`azd up` creates a resource group, an App Service (Python 3.11) for the FastAPI backend, and an Azure Static Web App for the Vite frontend, then deploys both services.
+
+### Subsequent deploys
+
+```bash
+azd deploy          # re-deploy code changes only
+azd provision       # re-apply infrastructure changes only
+```
+
+### CI/CD with GitHub Actions
+
+Set the following repository **variables** (not secrets) in GitHub → Settings → Secrets and variables → Actions:
+
+| Variable | Description |
+|---|---|
+| `AZURE_CLIENT_ID` | Service principal / managed identity client ID |
+| `AZURE_TENANT_ID` | Azure AD tenant ID |
+| `AZURE_SUBSCRIPTION_ID` | Target subscription ID |
+| `AZURE_ENV_NAME` | `azd` environment name (e.g. `nexus-dev`) |
+| `AZURE_LOCATION` | Azure region (e.g. `eastus`) |
+
+Then run `azd pipeline config` to wire up federated credentials automatically, or push to `main` to trigger `.github/workflows/azure-dev.yml`.
 
 ## Environment variables
 

@@ -1,0 +1,12 @@
+# Azure Developer CLI (azd) service definitions.
+# Run `azd up` to provision resources and deploy both services.
+name: nexus-b2b-lead-generation
+services:
+  api:
+    project: ./backend
+    language: py
+    host: appservice
+  web:
+    project: ./frontend
+    language: js
+    host: staticwebapp
