@@ -1,0 +1,13 @@
+name = "raspy-hat-15da"
+compatibility_date = "2024-09-23"
+main = "worker.js"
+
+[build]
+command = "npm --prefix frontend install && npm --prefix frontend run build"
+
+[assets]
+directory = "frontend/dist"
+binding = "ASSETS"
+
+[[custom_domains]]
+hostname = "mail.nexus.sh"
