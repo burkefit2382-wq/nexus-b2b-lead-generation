@@ -2,13 +2,23 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 150;
 
 async function fetchWithRetry(binding, request, retries) {
+  let lastResponse;
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const response = await binding.fetch(request.clone());
       if (response.ok || response.status < 500) {
-        return response;
+        const headers = new Headers(response.headers);
+        if (attempt > 1) {
+          headers.set("X-Retry-Count", String(attempt - 1));
+        }
+        return new Response(response.body, { status: response.status, headers });
       }
-      if (attempt === retries) return response;
+      lastResponse = response;
+      if (attempt === retries) {
+        const headers = new Headers(lastResponse.headers);
+        headers.set("X-Retry-Count", String(attempt));
+        return new Response(lastResponse.body, { status: lastResponse.status, headers });
+      }
     } catch (err) {
       if (attempt === retries) throw err;
     }
