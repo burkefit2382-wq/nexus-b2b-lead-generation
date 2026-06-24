@@ -69,3 +69,19 @@ Copy `.env.example` and set values for your environment:
 - `VITE_API_BASE_URL`
 - `API_PORT`
 - `CORS_ORIGINS`
+
+## Cloudflare Workers deployment
+
+```bash
+npm run cf:deploy
+```
+
+### Custom domain (optional)
+
+The Worker ships with a `[[custom_domains]]` block in `wrangler.toml`. To activate it:
+
+1. Open `wrangler.toml` and replace `YOUR_CUSTOM_DOMAIN` with your domain (e.g. `app.example.com`).
+2. Ensure the domain's zone is already in your Cloudflare account.
+3. Run `npm run cf:deploy` — Wrangler will create the DNS record automatically.
+
+Without this step the Worker is reachable on its default `raspy-hat-15da.<your-subdomain>.workers.dev` URL.
