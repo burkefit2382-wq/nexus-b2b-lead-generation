@@ -103,6 +103,16 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - P2: People-intel rate limiting; lead unlock receipts/exports; usage analytics dashboard.
 
 ## Changelog
+- 2026-06-23 — **AI provider switch (Emergent Universal Key)**: HF Inference account hit 402 (out of
+  credits), blocking all AI (enrichment, scraper scoring, NEXUS AI chat). Routed the central
+  `deepseek_chat` helper through the Emergent Universal Key via `emergentintegrations` LlmChat
+  (default `gemini/gemini-3-flash-preview`; env AI_PROVIDER/EMERGENT_AI_PROVIDER/EMERGENT_AI_MODEL),
+  HF router as fallback. Restores AI app-wide. ⚠️ Production needs these env vars on redeploy.
+- 2026-06-23 — **Pinellas real estate lead batch (real data)**: 52 real estate firms in Pinellas County
+  from OpenStreetMap (Overpass + Nominatim, keyless), OSINT-verified + full Gemini 3 Flash analyst
+  enrichment → 10 verified & live in Intel Marketplace (category `real_estate`). Generators:
+  `backend/seed_realestate.py`, `backend/enrich_realestate.py`. OSM caps ~52 for Pinellas; reaching 200
+  needs broader geography or a paid real-estate data API. Preview DB only.
 - 2026-06-23 — **Intel Marketplace UI v2 (enterprise SOC) + RFP portal**: bundle catalog strip (sector
   aggregates: count/avg-confidence/from-price/strategic via Mongo aggregation in `GET /storefront/leads`);
   cards refined to "Llama 3 · Accuracy Vector" score, geometric tier badges (▲ Strategic / ▪ Tactical /

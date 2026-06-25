@@ -49,7 +49,7 @@ async def main():
                 "cross_verification": nodes, "risk_matrix": risk,
                 "operational_value_tier": tier, "price_per_lead": TIER_CREDITS[tier],
                 "status": "ready_to_sell" if ready else "enriched",
-                "enriched_at": now, "enrichment_model": server._resolve_model("llama"),
+                "enriched_at": now, "enrichment_model": server._active_ai_model("llama"),
             }
             if l.get("purchase_status") != "sold":
                 upd["ready_to_sell"] = ready

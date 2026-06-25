@@ -62,7 +62,7 @@ function IntelCard({ lead, picked, onToggle, onAcquire }) {
           {conf}<small>%</small>
         </div>
         <div className="conf-meta">
-          <div className="conf-label">Llama 3 · Accuracy Vector</div>
+          <div className="conf-label">AI Analyst · Accuracy Vector</div>
           <div className="conf-bar"><i style={{ width: `${Math.min(conf, 100)}%` }} /></div>
         </div>
       </div>
