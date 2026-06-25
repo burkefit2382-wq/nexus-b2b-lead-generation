@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import {
   ShieldCheck, AlertTriangle, Lock, MapPin, CreditCard, X, Layers,
   BadgeCheck, Crosshair, RefreshCw, FileText, Send, Triangle, Square, Circle, ShieldAlert,
+  Radar, Sparkles,
 } from "lucide-react";
 
 const TIER_CLASS = { Strategic: "tier-strategic", Tactical: "tier-tactical", Operational: "tier-operational" };
@@ -238,6 +239,83 @@ function RFPModal({ onClose }) {
   );
 }
 
+function GenerateModal({ onClose, onDone }) {
+  const [sectors, setSectors] = useState([]);
+  const [form, setForm] = useState({ sector: "real_estate", county: "Pinellas County", limit: 100, ai_enrich: true });
+  const [busy, setBusy] = useState(false);
+  const [res, setRes] = useState(null);
+  const [err, setErr] = useState("");
+
+  useEffect(() => { api.get("/storefront/sectors").then((r) => setSectors(r.data.sectors || [])).catch(() => {}); }, []);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true); setErr("");
+    try {
+      const r = await api.post("/storefront/generate-leads", form);
+      setRes(r.data);
+      onDone && onDone();
+    } catch (e2) { setErr(e2.response?.data?.detail || e2.message); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="sf-modal-wrap" data-testid="generate-modal">
+      <div className="sf-modal fade-in" style={{ maxWidth: 520 }}>
+        <div className="rfp-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div>
+            <h2 style={{ fontSize: 18 }}>
+              <Radar size={18} style={{ verticalAlign: -3, marginRight: 8, color: "var(--accent)" }} />
+              Generate Intel (Live OSM Harvest)
+            </h2>
+            <div className="rfp-trust"><Sparkles size={11} /> OpenStreetMap · OSINT verified · AI enriched</div>
+          </div>
+          <button className="icon-btn" onClick={onClose} data-testid="generate-close"><X size={16} /></button>
+        </div>
+
+        {res ? (
+          <div className="rfp-ok" data-testid="generate-success">
+            <ShieldCheck size={42} style={{ color: "var(--accent)" }} />
+            <h3 style={{ marginTop: 14 }}>{res.new} new · {res.generated} harvested</h3>
+            <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>{res.message}</div>
+            <button className="btn" style={{ marginTop: 20 }} onClick={onClose} data-testid="generate-done-btn">View Marketplace</button>
+          </div>
+        ) : (
+          <form onSubmit={submit}>
+            <div className="rfp-field" style={{ marginBottom: 14 }}>
+              <label>Sector</label>
+              <select className="select" value={form.sector} onChange={(e) => setForm({ ...form, sector: e.target.value })} data-testid="generate-sector">
+                {(sectors.length ? sectors : ["real_estate"]).map((s) => (
+                  <option key={s} value={s}>{s.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase())}</option>
+                ))}
+              </select>
+            </div>
+            <div className="rfp-field" style={{ marginBottom: 14 }}>
+              <label>County / City</label>
+              <input className="input" value={form.county} onChange={(e) => setForm({ ...form, county: e.target.value })}
+                placeholder="e.g. Pinellas County" data-testid="generate-county" />
+            </div>
+            <div className="rfp-field" style={{ marginBottom: 14 }}>
+              <label>Max records</label>
+              <input className="input" type="number" min="1" max="300" value={form.limit}
+                onChange={(e) => setForm({ ...form, limit: Number(e.target.value) })} data-testid="generate-limit" />
+            </div>
+            <label className="muted" style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 8 }}>
+              <input type="checkbox" checked={form.ai_enrich} onChange={(e) => setForm({ ...form, ai_enrich: e.target.checked })}
+                style={{ accentColor: "var(--accent)" }} data-testid="generate-aienrich" />
+              Run deep AI enrichment (background)
+            </label>
+            {err && <div className="err-box" style={{ marginTop: 14 }} data-testid="generate-error">{err}</div>}
+            <button className="btn" type="submit" disabled={busy} style={{ width: "100%", marginTop: 18 }} data-testid="generate-submit">
+              {busy ? <span className="spinner" /> : <><Radar size={14} style={{ verticalAlign: -2, marginRight: 8 }} />Harvest Live Leads</>}
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ResultModal({ result, onClose }) {
   return (
     <div className="sf-modal-wrap" data-testid="storefront-result-modal">
@@ -274,6 +352,7 @@ export function Storefront() {
   const [purchasing, setPurchasing] = useState(false);
   const [result, setResult] = useState(null);
   const [rfpOpen, setRfpOpen] = useState(false);
+  const [genOpen, setGenOpen] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -324,6 +403,11 @@ export function Storefront() {
           <button className="rfp-open-btn" onClick={() => setRfpOpen(true)} data-testid="rfp-open-btn">
             <FileText size={13} /> Request Agency Scope
           </button>
+          {user?.role === "admin" && (
+            <button className="rfp-open-btn" onClick={() => setGenOpen(true)} data-testid="generate-open-btn">
+              <Radar size={13} /> Generate Leads
+            </button>
+          )}
         </div>
       </div>
 
@@ -375,6 +459,7 @@ export function Storefront() {
       )}
 
       {rfpOpen && <RFPModal onClose={() => setRfpOpen(false)} />}
+      {genOpen && <GenerateModal onClose={() => { setGenOpen(false); load(); }} onDone={load} />}
       {result && <ResultModal result={result} onClose={() => setResult(null)} />}
     </div>
   );

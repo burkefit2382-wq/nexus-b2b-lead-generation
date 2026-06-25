@@ -2391,7 +2391,7 @@ async def storefront_leads(city: Optional[str] = None, state: Optional[str] = No
                            min_confidence: float = 0.0, limit: int = 60, offset: int = 0,
                            user: dict = Depends(get_current_user)):
     """Browse individual un-sold, verified leads with full intelligence metrics (PII masked)."""
-    q = {"ready_to_sell": True, "purchase_status": "available"}
+    q = {"purchase_status": {"$ne": "sold"}}
     if city:
         q["city"] = {"$regex": re.escape(city), "$options": "i"}
     if state:
@@ -2405,7 +2405,7 @@ async def storefront_leads(city: Optional[str] = None, state: Optional[str] = No
     total = await db.leads.count_documents(q)
     cur = db.leads.find(q).sort("data_confidence_score", -1).skip(offset).limit(min(limit, 200))
     leads = [_intel_pub(l) async for l in cur]
-    base_q = {"ready_to_sell": True, "purchase_status": "available"}
+    base_q = {"purchase_status": {"$ne": "sold"}}
     industries = await db.leads.distinct("category", base_q)
     states = await db.leads.distinct("state", base_q)
     bundle_pipeline = [
@@ -2469,7 +2469,7 @@ async def purchase_leads(body: PurchaseLeadsReq, user: dict = Depends(get_curren
         raise HTTPException(status_code=400, detail="No leads specified")
     is_admin = user.get("role") == "admin"
     available = [l async for l in db.leads.find(
-        {"_id": {"$in": oids}, "purchase_status": "available", "ready_to_sell": True})]
+        {"_id": {"$in": oids}, "purchase_status": {"$ne": "sold"}})]
     if not available:
         raise HTTPException(status_code=400, detail="None of the selected leads are available")
     total_cost = sum(int(l.get("price_per_lead", 1)) for l in available)
@@ -2487,7 +2487,7 @@ async def purchase_leads(body: PurchaseLeadsReq, user: dict = Depends(get_curren
     for l in available:
         price = int(l.get("price_per_lead", 1))
         upd = await db.leads.update_one(
-            {"_id": l["_id"], "purchase_status": "available"},
+            {"_id": l["_id"], "purchase_status": {"$ne": "sold"}},
             {"$set": {"purchase_status": "sold", "buyer_user_id": user["id"], "is_sold": True,
                       "sold_price": price, "sold_at": now, "status": "sold"},
              "$addToSet": {"unlocked_by": user["id"]}})
@@ -2504,6 +2504,158 @@ async def purchase_leads(body: PurchaseLeadsReq, user: dict = Depends(get_curren
     return {"purchased": len(purchased), "charged_credits": total_cost - refund,
             "credits_remaining": (u or {}).get("credits", 0),
             "leads": [_intel_pub(l, full=True) for l in purchased]}
+
+# ---- On-demand lead generator (OSM + OSINT + background AI enrichment) ----
+SECTOR_OSM_TAGS = {
+    "real_estate": ['"office"="estate_agent"', '"shop"="estate_agent"', '"office"="property_management"'],
+    "legal": ['"office"="lawyer"'],
+    "healthcare": ['"amenity"="clinic"', '"amenity"="doctors"', '"healthcare"="clinic"'],
+    "dental": ['"amenity"="dentist"'],
+    "construction": ['"craft"="builder"', '"office"="construction_company"'],
+    "automotive": ['"shop"="car"', '"shop"="car_repair"'],
+    "restaurant": ['"amenity"="restaurant"'],
+    "financial": ['"office"="financial"', '"office"="accountant"', '"office"="insurance"'],
+    "veterinary": ['"amenity"="veterinary"'],
+    "fitness": ['"leisure"="fitness_centre"'],
+}
+
+async def _overpass_generate(sector: str, county: str, limit: int = 200) -> list:
+    tags = SECTOR_OSM_TAGS.get(sector, [])
+    raws = []
+    if tags:
+        parts = "".join(f"node[{t}](area.a);way[{t}](area.a);" for t in tags)
+        q = (f'[out:json][timeout:90];area["name"="{county}"]["admin_level"~"6|8"]->.a;'
+             f'({parts});out center tags {limit};')
+        try:
+            async with httpx.AsyncClient(timeout=120, headers={"User-Agent": "NEXUS-LeadBot/1.0"}) as c:
+                els = (await c.post("https://overpass-api.de/api/interpreter",
+                                    data={"data": q})).json().get("elements", [])
+        except Exception as e:
+            logger.warning("overpass generate error: %s", e)
+            els = []
+        for e in els:
+            t = e.get("tags", {})
+            name = t.get("name") or t.get("operator")
+            if not name:
+                continue
+            raws.append({"company": name, "website": t.get("website") or t.get("contact:website") or "",
+                         "phone": t.get("phone") or t.get("contact:phone") or "",
+                         "email": t.get("email") or t.get("contact:email") or "",
+                         "city": t.get("addr:city") or "", "state": t.get("addr:state") or ""})
+    seen, uniq = set(), []
+    for r in raws:
+        k = (r["company"].lower(), r["city"].lower())
+        if k[0] and k not in seen:
+            seen.add(k)
+            uniq.append(r)
+    return uniq[:limit]
+
+async def _store_generated(raw: dict, sector: str, county: str) -> bool:
+    company = (raw.get("company") or "").strip()
+    city = (raw.get("city") or "").strip()
+    v = await asyncio.to_thread(_osint_verify_sync, raw.get("email", ""), raw.get("phone", ""),
+                                raw.get("website", ""), company, city, raw.get("state", ""))
+    intent = 40 + (20 if raw.get("website") else 0) + (15 if raw.get("phone") else 0)
+    conf = _data_confidence(v, intent)
+    tier = _operational_tier(conf, intent)
+    nodes = v["nodes"]
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "category": sector, "full_name": "", "company": company, "email": raw.get("email", ""),
+        "phone": raw.get("phone", ""), "website": raw.get("website", ""), "city": city,
+        "state": raw.get("state") or "", "source_site": "OpenStreetMap", "source": "generator",
+        "source_url": raw.get("website") or "",
+        "raw_text": f"{company} — {sector.replace('_', ' ')} in {city or county}. {raw.get('website','')} {raw.get('phone','')}".strip(),
+        "ai_summary": f"{sector.replace('_', ' ').title()} business in {city or county}.",
+        "ai_budget_est": "", "ai_intent_score": intent,
+        "tags": f"{sector},{county.lower().replace(' ', '_')}",
+        "score": conf, "quality_score": conf, "data_confidence_score": conf,
+        "cross_verification": nodes, "risk_matrix": list(v["risk"]),
+        "operational_value_tier": tier, "price_per_lead": TIER_CREDITS[tier],
+        "ready_to_sell": conf >= STOREFRONT_MIN_CONFIDENCE and len(nodes) >= 2,
+        "status": "enriched", "enriched_at": now, "enrichment_model": "osint_verify",
+    }
+    existing = await db.leads.find_one({"company": company, "city": city, "source": "generator"})
+    if existing:
+        await db.leads.update_one({"_id": existing["_id"]}, {"$set": doc})
+        return False
+    doc.update({"is_sold": False, "sold_price": 0.0, "purchase_status": "available",
+                "buyer_user_id": None, "created_at": now})
+    await db.leads.insert_one(doc)
+    return True
+
+async def _bg_ai_enrich(lead_ids: list):
+    for lid in lead_ids:
+        l = await db.leads.find_one({"_id": lid})
+        if not l:
+            continue
+        ai = await _llama_assess(l.get("category", "general"), l.get("raw_text", ""), l.get("company", ""), "llama")
+        intent = int(ai.get("intent_score") or 0)
+        v = await asyncio.to_thread(_osint_verify_sync, l.get("email", ""), l.get("phone", ""),
+                                    l.get("website", ""), l.get("company", ""), l.get("city", ""), l.get("state", ""))
+        conf = _data_confidence(v, intent)
+        risk = list(v["risk"])
+        for f in (ai.get("anomaly_flags") or []):
+            if isinstance(f, str) and f.strip():
+                risk.append({"flag": f.strip()[:80], "severity": "medium", "source": "ai_analyst"})
+        if ai.get("entity_consistency") == "low":
+            risk.append({"flag": "Unverified_Entity_Structure", "severity": "high"})
+        tier = _operational_tier(conf, intent)
+        nodes = v["nodes"]
+        tags = ai.get("category_tags")
+        tags = ",".join(str(t) for t in tags) if isinstance(tags, list) and tags else l.get("tags", "")
+        upd = {"ai_summary": ai.get("summary") or l.get("ai_summary", ""),
+               "ai_budget_est": ai.get("budget_estimate") or "", "ai_intent_score": intent, "tags": tags,
+               "score": conf, "quality_score": conf, "data_confidence_score": conf,
+               "cross_verification": nodes, "risk_matrix": risk, "operational_value_tier": tier,
+               "price_per_lead": TIER_CREDITS[tier], "enrichment_model": _active_ai_model("llama"),
+               "enriched_at": datetime.now(timezone.utc).isoformat()}
+        if l.get("purchase_status") != "sold":
+            upd["ready_to_sell"] = conf >= STOREFRONT_MIN_CONFIDENCE and len(nodes) >= 2
+        await db.leads.update_one({"_id": lid}, {"$set": upd})
+
+class GenerateReq(BaseModel):
+    sector: str
+    county: str = "Pinellas County"
+    limit: int = 100
+    ai_enrich: bool = True
+
+@api.get("/storefront/sectors")
+async def storefront_sectors(user: dict = Depends(get_current_user)):
+    return {"sectors": sorted(SECTOR_OSM_TAGS.keys())}
+
+@api.post("/storefront/generate-leads")
+async def generate_leads(body: GenerateReq, user: dict = Depends(require_admin)):
+    """Pull real businesses for a sector+county from OSM, OSINT-verify, store as storefront leads."""
+    sector = body.sector.strip().lower().replace(" ", "_")
+    if sector not in SECTOR_OSM_TAGS:
+        raise HTTPException(status_code=400,
+                            detail=f"Unsupported sector. Options: {', '.join(sorted(SECTOR_OSM_TAGS))}")
+    county = body.county.strip() or "Pinellas County"
+    raws = await _overpass_generate(sector, county, min(max(body.limit, 1), 300))
+    if not raws:
+        return {"generated": 0, "new": 0, "sector": sector, "county": county,
+                "message": f"No {sector.replace('_', ' ')} entities found in {county} on OpenStreetMap."}
+    sem = asyncio.Semaphore(20)
+    new_ids = []
+
+    async def proc(r):
+        async with sem:
+            created = await _store_generated(r, sector, county)
+        if created:
+            doc = await db.leads.find_one(
+                {"company": r["company"].strip(), "city": r.get("city", "").strip(), "source": "generator"})
+            if doc:
+                new_ids.append(doc["_id"])
+
+    await asyncio.gather(*(proc(r) for r in raws))
+    if body.ai_enrich and new_ids:
+        asyncio.create_task(_bg_ai_enrich(new_ids))
+    avail = await db.leads.count_documents({"category": sector, "purchase_status": {"$ne": "sold"}})
+    return {"generated": len(raws), "new": len(new_ids), "sector": sector, "county": county,
+            "available_in_storefront": avail,
+            "message": f"Ingested {len(raws)} {sector.replace('_', ' ')} entities from {county}." +
+                       (" Deep AI enrichment is running in the background." if body.ai_enrich and new_ids else "")}
 
 # ----------------------------------------------------------------------------- mount + startup
 app.include_router(api)

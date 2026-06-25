@@ -103,6 +103,14 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - P2: People-intel rate limiting; lead unlock receipts/exports; usage analytics dashboard.
 
 ## Changelog
+- 2026-06-23 — **On-demand lead generator + full-catalog storefront**: (1) Storefront now lists EVERY
+  non-sold lead (relaxed query/purchase from `ready_to_sell+available` to `purchase_status != sold`);
+  total jumped to 160+ across all sector bundles. (2) New `POST /api/storefront/generate-leads` (admin) +
+  `GET /api/storefront/sectors`: harvests real businesses for a sector+county from OSM (Overpass area
+  query, 10 mapped sectors: real_estate, legal, healthcare, dental, construction, automotive, restaurant,
+  financial, veterinary, fitness), OSINT-verifies, stores as available, and runs deep AI enrichment in a
+  background task. Frontend: **Generate Leads** modal (sector/county/limit/ai_enrich) in Storefront header
+  (admin-only). Verified: dental Pinellas harvested 38; purchase + double-sell guard intact.
 - 2026-06-23 — **AI provider switch (Emergent Universal Key)**: HF Inference account hit 402 (out of
   credits), blocking all AI (enrichment, scraper scoring, NEXUS AI chat). Routed the central
   `deepseek_chat` helper through the Emergent Universal Key via `emergentintegrations` LlmChat
