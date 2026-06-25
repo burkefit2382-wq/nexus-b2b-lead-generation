@@ -25,3 +25,14 @@ class LeadSearchResponse(BaseModel):
     leads: list[Lead]
     total: int
     query: str
+
+
+class NotifyRequest(BaseModel):
+    to: str
+    leads: list[Lead]
+    query: str
+
+
+class NotifyResponse(BaseModel):
+    message_id: str
+    recipient: str
