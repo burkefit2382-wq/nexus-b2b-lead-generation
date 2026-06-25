@@ -25,6 +25,8 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, EmailStr
 
+import governance as gov
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("nexus")
 
@@ -125,7 +127,15 @@ def require_role(*roles: str):
         return user
     return _checker
 
-require_admin = require_role("admin")
+require_admin = require_role("admin", "owner")
+
+def require_min_role(min_role: str):
+    """Granular RBAC: pass if the user's role level >= min_role's level."""
+    async def _checker(user: dict = Depends(get_current_user)) -> dict:
+        if gov.role_level(user.get("role")) < gov.role_level(min_role):
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        return user
+    return _checker
 
 # ----------------------------------------------------------------------------- DeepSeek / Qwen (HF router)
 def _resolve_model(key: str) -> str:
@@ -204,6 +214,7 @@ class RegisterReq(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6)
     name: str = "Operator"
+    org_name: Optional[str] = None
 
 class LoginReq(BaseModel):
     email: EmailStr
@@ -211,29 +222,47 @@ class LoginReq(BaseModel):
 
 def _pub(u: dict) -> dict:
     return {"id": u["id"], "email": u["email"], "name": u.get("name", ""),
-            "role": u.get("role", "user"), "credits": u.get("credits", 0)}
+            "role": u.get("role", "user"), "credits": u.get("credits", 0),
+            "tenant_id": u.get("tenant_id") or gov.DEFAULT_TENANT,
+            "tenant_name": u.get("tenant_name", "")}
 
 @api.post("/auth/register")
-async def register(body: RegisterReq, response: Response):
+async def register(body: RegisterReq, request: Request, response: Response):
     email = body.email.lower()
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Email already registered")
+    # Provision an isolated tenant (org) for this operator — they administer their own workspace.
+    tenant_id = secrets.token_hex(8)
+    domain_part = email.split("@")[-1].split(".")[0] if "@" in email else "operator"
+    org_name = (body.org_name or "").strip() or f"{domain_part.title()} Org"
+    await db.tenants.insert_one({
+        "tenant_id": tenant_id, "name": org_name, "owner_email": email, "status": "active",
+        "created_at": datetime.now(timezone.utc).isoformat()})
     doc = {"email": email, "password_hash": hash_password(body.password),
-           "name": body.name, "role": "user", "credits": 0,
+           "name": body.name, "role": "tenant_admin", "credits": 0,
+           "tenant_id": tenant_id, "tenant_name": org_name,
            "created_at": datetime.now(timezone.utc).isoformat()}
     res = await db.users.insert_one(doc)
     uid = str(res.inserted_id)
     set_auth_cookies(response, create_access_token(uid, email), create_refresh_token(uid))
+    await gov.audit_log("user.register", user={"id": uid, **doc}, request=request,
+                        target=tenant_id, meta={"org": org_name})
     return _pub({"id": uid, **doc})
 
 @api.post("/auth/login")
-async def login(body: LoginReq, response: Response):
+async def login(body: LoginReq, request: Request, response: Response):
     email = body.email.lower()
+    await gov.check_lockout(request, email)
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(body.password, user["password_hash"]):
+        await gov.record_failed_login(request, email)
+        await gov.audit_log("user.login", user={"email": email}, request=request,
+                            status="failure", meta={"reason": "bad_credentials"})
         raise HTTPException(status_code=401, detail="Invalid email or password")
+    await gov.clear_login_attempts(request, email)
     uid = str(user["_id"])
     set_auth_cookies(response, create_access_token(uid, email), create_refresh_token(uid))
+    await gov.audit_log("user.login", user={"id": uid, **user}, request=request)
     return _pub({"id": uid, **user})
 
 @api.post("/auth/logout")
@@ -276,12 +305,15 @@ def _key_pub(k: dict) -> dict:
             "calls": k.get("calls", 0), "revoked": k.get("revoked", False)}
 
 @api.post("/keys")
-async def create_api_key(body: ApiKeyCreate, user: dict = Depends(get_current_user)):
+async def create_api_key(body: ApiKeyCreate, request: Request, user: dict = Depends(get_current_user)):
     raw = "nxs_" + secrets.token_urlsafe(32)
-    doc = {"user_id": user["id"], "name": body.name, "key_hash": hash_api_key(raw),
-           "prefix": raw[:12], "created_at": datetime.now(timezone.utc).isoformat(),
+    doc = {"user_id": user["id"], "tenant_id": gov.tenant_id_of(user), "name": body.name,
+           "key_hash": hash_api_key(raw), "prefix": raw[:12],
+           "created_at": datetime.now(timezone.utc).isoformat(),
            "last_used": None, "calls": 0, "revoked": False}
     res = await db.api_keys.insert_one(doc)
+    await gov.audit_log("apikey.create", user=user, request=request,
+                        target=str(res.inserted_id), meta={"name": body.name})
     # full key returned ONCE only
     return {"id": str(res.inserted_id), "name": body.name, "api_key": raw,
             "prefix": doc["prefix"], "warning": "Store this key now — it will not be shown again."}
@@ -294,26 +326,33 @@ async def list_api_keys(user: dict = Depends(get_current_user)):
     return [_key_pub(k) async for k in cur]
 
 @api.delete("/keys/{key_id}")
-async def revoke_api_key(key_id: str, user: dict = Depends(get_current_user)):
+async def revoke_api_key(key_id: str, request: Request, user: dict = Depends(get_current_user)):
     await db.api_keys.update_one({"_id": ObjectId(key_id), "user_id": user["id"]},
                                  {"$set": {"revoked": True}})
+    await gov.audit_log("apikey.revoke", user=user, request=request, target=key_id)
     return {"revoked": key_id}
 
 # ====================== ADMIN (role-gated) ======================
 @api.get("/admin/users")
 async def admin_list_users(user: dict = Depends(require_admin)):
-    cur = db.users.find({}, {"email": 1, "name": 1, "role": 1, "created_at": 1}).sort("created_at", -1).limit(200)
+    cur = db.users.find({}, {"email": 1, "name": 1, "role": 1, "credits": 1, "tenant_id": 1,
+                             "tenant_name": 1, "created_at": 1}).sort("created_at", -1).limit(500)
     return [{"id": str(u["_id"]), "email": u["email"], "name": u.get("name"),
-             "role": u.get("role"), "created_at": u.get("created_at")} async for u in cur]
+             "role": u.get("role"), "credits": u.get("credits", 0),
+             "tenant_id": u.get("tenant_id") or gov.DEFAULT_TENANT,
+             "tenant_name": u.get("tenant_name", ""),
+             "created_at": u.get("created_at")} async for u in cur]
 
 class RoleUpdate(BaseModel):
     role: str
 
 @api.patch("/admin/users/{user_id}/role")
-async def admin_set_role(user_id: str, body: RoleUpdate, user: dict = Depends(require_admin)):
-    if body.role not in ("user", "admin"):
-        raise HTTPException(status_code=400, detail="role must be user or admin")
+async def admin_set_role(user_id: str, body: RoleUpdate, request: Request, user: dict = Depends(require_admin)):
+    if body.role not in gov.VALID_ROLES:
+        raise HTTPException(status_code=400, detail=f"role must be one of: {', '.join(gov.VALID_ROLES)}")
     await db.users.update_one({"_id": ObjectId(user_id)}, {"$set": {"role": body.role}})
+    await gov.audit_log("admin.set_role", user=user, request=request, target=user_id,
+                        meta={"role": body.role})
     return {"updated": user_id, "role": body.role}
 
 # ====================== LEADS ======================
@@ -557,9 +596,11 @@ async def ai_chat(body: ChatReq, user: dict = Depends(get_current_user)):
     return {"response": r["content"], "model": r.get("model")}
 
 # ====================== OSINT TOOLS (cloud-native) ======================
-async def _save_report(target, tool, result):
+async def _save_report(target, tool, result, user=None):
     await db.osint_reports.insert_one({"target": target, "tool_used": tool,
                                        "result_json": json.dumps(result, default=str)[:5000],
+                                       "tenant_id": gov.tenant_id_of(user) if user else gov.DEFAULT_TENANT,
+                                       "by": (user or {}).get("id"),
                                        "created_at": datetime.now(timezone.utc).isoformat()})
 
 class TargetReq(BaseModel):
@@ -592,7 +633,7 @@ async def osint_ip(body: TargetReq, user: dict = Depends(get_current_user)):
         except Exception:
             geo = {}
     res = {"tool": "ip_lookup", "target": body.target, "geo": geo}
-    await _save_report(body.target, "ip_lookup", res)
+    await _save_report(body.target, "ip_lookup", res, user)
     return res
 
 @api.post("/osint/dns")
@@ -608,7 +649,7 @@ async def osint_dns(body: TargetReq, user: dict = Depends(get_current_user)):
         return rec
     records = await asyncio.to_thread(run)
     res = {"tool": "dns", "target": body.target, "records": records}
-    await _save_report(body.target, "dns", res)
+    await _save_report(body.target, "dns", res, user)
     return res
 
 @api.post("/osint/whois")
