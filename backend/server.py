@@ -2644,35 +2644,42 @@ async def _store_generated(raw: dict, sector: str, county: str) -> bool:
     await db.leads.insert_one(doc)
     return True
 
-async def _bg_ai_enrich(lead_ids: list):
+async def _bg_ai_enrich(lead_ids: list, job_id: str = None):
+    done = 0
     for lid in lead_ids:
         l = await db.leads.find_one({"_id": lid})
-        if not l:
-            continue
-        ai = await _llama_assess(l.get("category", "general"), l.get("raw_text", ""), l.get("company", ""), "llama")
-        intent = int(ai.get("intent_score") or 0)
-        v = await asyncio.to_thread(_osint_verify_sync, l.get("email", ""), l.get("phone", ""),
-                                    l.get("website", ""), l.get("company", ""), l.get("city", ""), l.get("state", ""))
-        conf = _data_confidence(v, intent)
-        risk = list(v["risk"])
-        for f in (ai.get("anomaly_flags") or []):
-            if isinstance(f, str) and f.strip():
-                risk.append({"flag": f.strip()[:80], "severity": "medium", "source": "ai_analyst"})
-        if ai.get("entity_consistency") == "low":
-            risk.append({"flag": "Unverified_Entity_Structure", "severity": "high"})
-        tier = _operational_tier(conf, intent)
-        nodes = v["nodes"]
-        tags = ai.get("category_tags")
-        tags = ",".join(str(t) for t in tags) if isinstance(tags, list) and tags else l.get("tags", "")
-        upd = {"ai_summary": ai.get("summary") or l.get("ai_summary", ""),
-               "ai_budget_est": ai.get("budget_estimate") or "", "ai_intent_score": intent, "tags": tags,
-               "score": conf, "quality_score": conf, "data_confidence_score": conf,
-               "cross_verification": nodes, "risk_matrix": risk, "operational_value_tier": tier,
-               "price_per_lead": TIER_CREDITS[tier], "enrichment_model": _active_ai_model("llama"),
-               "enriched_at": datetime.now(timezone.utc).isoformat()}
-        if l.get("purchase_status") != "sold":
-            upd["ready_to_sell"] = conf >= STOREFRONT_MIN_CONFIDENCE and len(nodes) >= 2
-        await db.leads.update_one({"_id": lid}, {"$set": upd})
+        if l:
+            ai = await _llama_assess(l.get("category", "general"), l.get("raw_text", ""), l.get("company", ""), "llama")
+            intent = int(ai.get("intent_score") or 0)
+            v = await asyncio.to_thread(_osint_verify_sync, l.get("email", ""), l.get("phone", ""),
+                                        l.get("website", ""), l.get("company", ""), l.get("city", ""), l.get("state", ""))
+            conf = _data_confidence(v, intent)
+            risk = list(v["risk"])
+            for f in (ai.get("anomaly_flags") or []):
+                if isinstance(f, str) and f.strip():
+                    risk.append({"flag": f.strip()[:80], "severity": "medium", "source": "ai_analyst"})
+            if ai.get("entity_consistency") == "low":
+                risk.append({"flag": "Unverified_Entity_Structure", "severity": "high"})
+            tier = _operational_tier(conf, intent)
+            nodes = v["nodes"]
+            tags = ai.get("category_tags")
+            tags = ",".join(str(t) for t in tags) if isinstance(tags, list) and tags else l.get("tags", "")
+            upd = {"ai_summary": ai.get("summary") or l.get("ai_summary", ""),
+                   "ai_budget_est": ai.get("budget_estimate") or "", "ai_intent_score": intent, "tags": tags,
+                   "score": conf, "quality_score": conf, "data_confidence_score": conf,
+                   "cross_verification": nodes, "risk_matrix": risk, "operational_value_tier": tier,
+                   "price_per_lead": TIER_CREDITS[tier], "enrichment_model": _active_ai_model("llama"),
+                   "enriched_at": datetime.now(timezone.utc).isoformat()}
+            if l.get("purchase_status") != "sold":
+                upd["ready_to_sell"] = conf >= STOREFRONT_MIN_CONFIDENCE and len(nodes) >= 2
+            await db.leads.update_one({"_id": lid}, {"$set": upd})
+        done += 1
+        if job_id:
+            await db.generate_jobs.update_one({"job_id": job_id}, {"$set": {"done": done}})
+    if job_id:
+        await db.generate_jobs.update_one({"job_id": job_id},
+            {"$set": {"status": "complete", "done": done,
+                      "finished_at": datetime.now(timezone.utc).isoformat()}})
 
 class GenerateReq(BaseModel):
     sector: str
@@ -2710,15 +2717,33 @@ async def generate_leads(body: GenerateReq, request: Request, user: dict = Depen
                 new_ids.append(doc["_id"])
 
     await asyncio.gather(*(proc(r) for r in raws))
+    job_id = None
     if body.ai_enrich and new_ids:
-        asyncio.create_task(_bg_ai_enrich(new_ids))
+        job_id = secrets.token_hex(12)
+        await db.generate_jobs.insert_one({
+            "job_id": job_id, "total": len(new_ids), "done": 0, "status": "running",
+            "sector": sector, "county": county, "tenant_id": gov.tenant_id_of(user),
+            "by": user["id"], "started_at": datetime.now(timezone.utc).isoformat(),
+            "expires_at": datetime.now(timezone.utc) + timedelta(hours=6)})
+        asyncio.create_task(_bg_ai_enrich(new_ids, job_id))
     avail = await db.leads.count_documents({"category": sector, "purchase_status": {"$ne": "sold"}})
     await gov.audit_log("lead.generate", user=user, request=request, target=sector,
                         meta={"county": county, "generated": len(raws), "new": len(new_ids)})
     return {"generated": len(raws), "new": len(new_ids), "sector": sector, "county": county,
-            "available_in_storefront": avail,
+            "available_in_storefront": avail, "job_id": job_id,
+            "enrich_total": len(new_ids) if job_id else 0,
             "message": f"Ingested {len(raws)} {sector.replace('_', ' ')} entities from {county}." +
                        (" Deep AI enrichment is running in the background." if body.ai_enrich and new_ids else "")}
+
+@api.get("/storefront/generate-status/{job_id}")
+async def generate_status(job_id: str, user: dict = Depends(require_admin)):
+    job = await db.generate_jobs.find_one({"job_id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"job_id": job_id, "total": job.get("total", 0), "done": job.get("done", 0),
+            "status": job.get("status", "running"), "sector": job.get("sector"),
+            "county": job.get("county"), "started_at": job.get("started_at"),
+            "finished_at": job.get("finished_at")}
 
 # ====================== GOVERNANCE (multi-tenant, RBAC, audit, monitoring) ======================
 @api.get("/governance/me")
@@ -2847,6 +2872,8 @@ async def startup():
     await db.users.create_index("tenant_id")
     try:
         await db.login_attempts.create_index("expires_at", expireAfterSeconds=0)
+        await db.generate_jobs.create_index("job_id", unique=True)
+        await db.generate_jobs.create_index("expires_at", expireAfterSeconds=0)
     except Exception:
         pass
     # Default platform tenant + backfill legacy users so isolation filters work.

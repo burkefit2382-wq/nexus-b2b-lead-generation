@@ -1,5 +1,6 @@
 import "@/index.css";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { Toaster } from "@/components/ui/sonner";
 import Login from "@/components/Login";
 import Dashboard from "@/components/Dashboard";
 
@@ -20,6 +21,7 @@ export default function App() {
   return (
     <AuthProvider>
       <Gate />
+      <Toaster position="bottom-right" theme="dark" richColors closeButton />
     </AuthProvider>
   );
 }

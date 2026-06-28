@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import api from "../lib/api";
+import { toast } from "./ui/sonner";
 import { useAuth } from "../context/AuthContext";
 import {
   ShieldCheck, AlertTriangle, Lock, MapPin, CreditCard, X, Layers,
@@ -248,6 +249,33 @@ function GenerateModal({ onClose, onDone }) {
 
   useEffect(() => { api.get("/storefront/sectors").then((r) => setSectors(r.data.sectors || [])).catch(() => {}); }, []);
 
+  const trackEnrichment = useCallback((jobId, total, sector) => {
+    const tid = `enrich-${jobId}`;
+    const label = (sector || "").replace(/_/g, " ");
+    toast.loading(`Enriching ${label} leads · 0/${total}`, {
+      id: tid, description: "AI analyst + OSINT verification running…", duration: Infinity,
+    });
+    const poll = setInterval(async () => {
+      try {
+        const { data } = await api.get(`/storefront/generate-status/${jobId}`);
+        if (data.status === "complete") {
+          clearInterval(poll);
+          toast.success(`Enrichment complete · ${data.done}/${data.total} ${label} leads`, {
+            id: tid, description: "Marketplace updated with verified intel.", duration: 6000,
+          });
+          onDone && onDone();
+        } else {
+          toast.loading(`Enriching ${label} leads · ${data.done}/${data.total}`, {
+            id: tid, description: "AI analyst + OSINT verification running…", duration: Infinity,
+          });
+        }
+      } catch (err) {
+        clearInterval(poll);
+        toast.error("Enrichment tracking lost", { id: tid, description: "Leads were still saved.", duration: 5000 });
+      }
+    }, 2000);
+  }, [onDone]);
+
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true); setErr("");
@@ -255,6 +283,9 @@ function GenerateModal({ onClose, onDone }) {
       const r = await api.post("/storefront/generate-leads", form);
       setRes(r.data);
       onDone && onDone();
+      if (r.data.job_id && r.data.enrich_total > 0) {
+        trackEnrichment(r.data.job_id, r.data.enrich_total, r.data.sector);
+      }
     } catch (e2) { setErr(e2.response?.data?.detail || e2.message); }
     finally { setBusy(false); }
   };

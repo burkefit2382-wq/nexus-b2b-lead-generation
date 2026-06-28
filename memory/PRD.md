@@ -103,6 +103,14 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - P2: People-intel rate limiting; lead unlock receipts/exports; usage analytics dashboard.
 
 ## Changelog
+- 2026-06-28 — **Real-time lead-generation progress toast**: background AI enrichment after a harvest
+  now reports live progress. Backend: `db.generate_jobs` job tracking (job_id/total/done/status,
+  TTL-cleaned); `_bg_ai_enrich(lead_ids, job_id)` increments `done` per lead and marks `complete`;
+  `POST /storefront/generate-leads` returns `job_id`+`enrich_total`; new `GET /storefront/generate-status/{job_id}`
+  (admin) for polling. Frontend: mounted sonner `<Toaster>` (bottom-right, dark) in App.js; GenerateModal
+  polls every 2s and drives a loading→success toast ("Enriching {sector} · done/total" → "Enrichment
+  complete · N leads"), refreshing the marketplace on completion. Self-tested: curl job 0→8→complete +
+  UI toast 0/6→2/6→complete (4/4 automotive). PREVIEW only — REDEPLOY to push.
 - 2026-06-28 — **Gov-Ready application layer (multi-tenancy, RBAC, audit, security, monitoring)**:
   Translated the user's "Gov-Ready Azure Architecture (do it ur way)" guide into application-level code
   (the Emergent platform already provides the K8s/VNET/WAF/CI-CD/health-probe infra). New `backend/governance.py`:
