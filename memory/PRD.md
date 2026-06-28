@@ -103,6 +103,28 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - P2: People-intel rate limiting; lead unlock receipts/exports; usage analytics dashboard.
 
 ## Changelog
+- 2026-06-28 — **OSINT-wired live scraper → HQ-only FL B2B marketplace**: the 24/7 scrape cycle now
+  runs every harvested entity through the OSINT verifier inline (free, no LLM) and only surfaces
+  high-quality leads. (1) **Source pivot**: continuous scraper switched from Nominatim home-services to
+  **Overpass** area queries over 6 high-value B2B sectors (financial_services, legal, insurance,
+  real_estate, healthcare, b2b_tech — FinServ & Legal prioritised) × 5 counties (Hillsborough, Pinellas,
+  Manatee, Pasco, Hernando). One area query per sector+county (`fetch_overpass_county` → `_overpass_generate`),
+  SOURCES_VERSION=5. (2) **OSINT HQ filter inline**: `_process_business`/`_process_candidate` now compute
+  `_osint_verify_sync` + `_data_confidence` and build the full storefront payload (cross_verification,
+  risk_matrix, operational_value_tier, price_per_lead, purchase_status) with `ready_to_sell` gated at
+  **confidence ≥ 65 & ≥2 nodes** (`_osint_fields`, STOREFRONT_MIN_CONFIDENCE=65). (3) **Stronger OSINT**:
+  `_osint_verify_sync` now also MX-checks the *website* domain (a resolving company domain that can receive
+  mail is a strong legitimacy signal — lifts website-having firms to HQ). (4) **HQ-only + FL-only storefront**:
+  `/storefront/leads` now filters `ready_to_sell:true, purchase_status≠sold` AND Florida residency
+  (state ∈ FL/Florida/empty) on both the lead list and the bundle/facet base. (5) **Cost-controlled AI**:
+  OSINT-only in the cycle; `_bg_ai_enrich` runs in the background on *HQ-qualified leads only*. (6) **Florida
+  bbox fix**: ambiguous county names (e.g. "Hillsborough County" exists in FL *and* NH) were pulling
+  out-of-state firms — `_overpass_generate` now constrains to a Florida bbox [24.3,-87.7,31.1,-79.8] and
+  retries across 3 Overpass mirrors. (7) **Startup re-score** (`_bg_reosint_all`) re-OSINTs all non-sold
+  leads to the live HQ bar on boot. Verified: live cycle harvested 605 FL firms (FinServ/Legal/Insurance/
+  Healthcare/RealEstate), 34 HQ; testing_agent 9/10 backend pass (FL-leak edge case then fixed + cleaned up
+  6 legacy non-FL leads). deployment_agent: **PASS** (fixed .gitignore re-blocking .env). Frontend Generate
+  modal now uses a 5-county FL dropdown, default sector financial_services. PREVIEW only — REDEPLOY to push.
 - 2026-06-28 — **Real-time lead-generation progress toast**: background AI enrichment after a harvest
   now reports live progress. Backend: `db.generate_jobs` job tracking (job_id/total/done/status,
   TTL-cleaned); `_bg_ai_enrich(lead_ids, job_id)` increments `done` per lead and marks `complete`;
