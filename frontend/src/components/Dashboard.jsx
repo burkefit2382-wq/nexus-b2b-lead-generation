@@ -71,7 +71,7 @@ function Sidebar({ nav, tab, setTab, user, logout }) {
           <div className="avatar">{(user.name || user.email)[0].toUpperCase()}</div>
           <div className="meta">
             <b>{user.name || "Operator"}</b>
-            <span>{user.role.toUpperCase()}</span>
+            <span>{user.role.toUpperCase()}{user.tenant_name ? ` · ${user.tenant_name}` : ""}</span>
           </div>
         </div>
         <button className="nav-item" onClick={logout} data-testid="logout-btn"><LogOut /> Sign out</button>
@@ -100,9 +100,9 @@ function Topbar({ current, credits, onCreditsClick }) {
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const [tab, setTab] = useDashboardTab();
-  const nav = [...NAV, ...(user.role === "admin" ? [
+  const nav = [...NAV, ...(["admin", "owner"].includes(user.role) ? [
     { id: "threat", label: "Threat Intel", icon: ShieldAlert, tag: "PRO" },
-    { id: "admin", label: "Admin", icon: ShieldCheck },
+    { id: "admin", label: "Governance", icon: ShieldCheck, tag: "GOV" },
   ] : [])];
   const current = nav.find((n) => n.id === tab) || nav[0];
 

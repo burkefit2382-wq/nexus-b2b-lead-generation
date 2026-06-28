@@ -6,7 +6,8 @@ import {
   Send, Bot, Trash2, RefreshCw, Plus, KeyRound,
   Copy, ShieldAlert, Crosshair, Globe, Network, Smartphone, AtSign,
   MapPin, ScanLine, Server, FileSearch, Search, Users,
-  CreditCard, UserSearch, ShieldCheck, AlertTriangle, Boxes
+  CreditCard, UserSearch, ShieldCheck, AlertTriangle, Boxes,
+  Building2, Activity, Database, ScrollText
 } from "lucide-react";
 
 /* ============================ OVERVIEW ============================ */
@@ -753,41 +754,172 @@ export function Reports() {
 
 /* Scrapers moved to ./Scrapers.jsx */
 
+const GOV_ROLES = ["user", "analyst", "tenant_admin", "admin", "owner"];
+
+function MonitorPanel() {
+  const [m, setM] = useState(null);
+  const [err, setErr] = useState("");
+  const load = () => api.get("/admin/monitoring").then((r) => setM(r.data)).catch((e) => setErr(e.response?.data?.detail || e.message));
+  useEffect(() => { load(); const t = setInterval(load, 15000); return () => clearInterval(t); }, []);
+  if (err) return <div className="empty"><ShieldAlert size={28} /><div>{err}</div></div>;
+  if (!m) return <div className="empty"><RefreshCw size={28} className="spin" /><div>Loading telemetry…</div></div>;
+  const cards = [
+    { k: "DB", v: m.db_connected ? "Connected" : "DOWN", ok: m.db_connected, icon: Database },
+    { k: "Scheduler", v: m.scheduler_running ? "Running" : "Stopped", ok: m.scheduler_running, icon: Activity },
+    { k: "Tenants", v: m.tenants, icon: Building2 },
+    { k: "Users", v: m.users, icon: Users },
+    { k: "Leads (live)", v: m.leads_available, icon: Boxes },
+    { k: "Leads sold", v: m.leads_sold, icon: CreditCard },
+    { k: "Audit events 24h", v: m.audit_events_24h, icon: ScrollText },
+    { k: "Failed logins 24h", v: m.logins_failed_24h, ok: m.logins_failed_24h === 0, icon: ShieldAlert },
+    { k: "Locked identities", v: m.locked_identities, ok: m.locked_identities === 0, icon: ShieldCheck },
+  ];
+  return (
+    <div className="fade-in" data-testid="gov-monitoring">
+      <div className="grid-stats" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(190px,1fr))", gap: 12 }}>
+        {cards.map((c) => {
+          const Ico = c.icon;
+          return (
+            <div key={c.k} className="panel" style={{ padding: 16 }} data-testid={`monitor-${c.k.replace(/\s+/g, "-").toLowerCase()}`}>
+              <div className="muted" style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}><Ico size={14} /> {c.k}</div>
+              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: c.ok === false ? "var(--danger,#ef4444)" : c.ok === true ? "var(--accent)" : "inherit" }}>{c.v}</div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="muted" style={{ marginTop: 12, fontSize: 12 }}>
+        AI provider: <b>{m.ai_provider}</b> · checked {m.checked_at ? new Date(m.checked_at).toLocaleTimeString() : "—"} · auto-refresh 15s
+      </div>
+    </div>
+  );
+}
+
+function TenantsPanel() {
+  const [t, setT] = useState([]);
+  const [err, setErr] = useState("");
+  useEffect(() => { api.get("/admin/tenants").then((r) => setT(r.data.tenants)).catch((e) => setErr(e.response?.data?.detail || e.message)); }, []);
+  if (err) return <div className="empty"><ShieldAlert size={28} /><div>{err}</div></div>;
+  return (
+    <div className="panel" data-testid="gov-tenants">
+      <div className="panel-head"><h3><Building2 size={15} style={{ verticalAlign: -2, marginRight: 8 }} />Tenants ({t.length})</h3></div>
+      <div className="panel-body" style={{ padding: 0 }}>
+        <table className="tbl">
+          <thead><tr><th>Organization</th><th>Owner</th><th>Members</th><th>Status</th><th>Tenant ID</th></tr></thead>
+          <tbody>
+            {t.map((x) => (
+              <tr key={x.tenant_id} data-testid={`tenant-${x.tenant_id}`}>
+                <td className="name">{x.name}</td>
+                <td className="muted">{x.owner_email}</td>
+                <td>{x.members}</td>
+                <td><span className={`badge ${x.status === "active" ? "" : "hot"}`}>{x.status}</span></td>
+                <td className="muted mono" style={{ fontSize: 11 }}>{x.tenant_id}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function AuditPanel() {
+  const [data, setData] = useState({ logs: [], actions: [] });
+  const [filter, setFilter] = useState("");
+  const [err, setErr] = useState("");
+  const load = (action) => api.get(`/admin/audit?limit=200${action ? `&action=${action}` : ""}`).then((r) => setData(r.data)).catch((e) => setErr(e.response?.data?.detail || e.message));
+  useEffect(() => { load(filter); }, [filter]);
+  if (err) return <div className="empty"><ShieldAlert size={28} /><div>{err}</div></div>;
+  return (
+    <div className="panel" data-testid="gov-audit">
+      <div className="panel-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h3><ScrollText size={15} style={{ verticalAlign: -2, marginRight: 8 }} />Audit Trail</h3>
+        <select className="select" value={filter} onChange={(e) => setFilter(e.target.value)} data-testid="audit-action-filter">
+          <option value="">All actions</option>
+          {data.actions.map((a) => <option key={a} value={a}>{a}</option>)}
+        </select>
+      </div>
+      <div className="panel-body" style={{ padding: 0, maxHeight: 520, overflow: "auto" }}>
+        <table className="tbl">
+          <thead><tr><th>Time</th><th>Action</th><th>Actor</th><th>Tenant</th><th>Status</th><th>Detail</th></tr></thead>
+          <tbody>
+            {data.logs.map((l) => (
+              <tr key={l.id} data-testid={`audit-row-${l.id}`}>
+                <td className="muted" style={{ fontSize: 11, whiteSpace: "nowrap" }}>{l.created_at ? new Date(l.created_at).toLocaleString() : "—"}</td>
+                <td><span className="badge">{l.action}</span></td>
+                <td className="muted">{l.user_email || "—"}</td>
+                <td className="muted mono" style={{ fontSize: 11 }}>{l.tenant_id || "—"}</td>
+                <td><span className={`badge ${l.status === "success" ? "" : "hot"}`}>{l.status}</span></td>
+                <td className="muted" style={{ fontSize: 11 }}>{l.target || ""} {l.meta && Object.keys(l.meta).length ? JSON.stringify(l.meta) : ""}</td>
+              </tr>
+            ))}
+            {data.logs.length === 0 && <tr><td colSpan={6} className="muted" style={{ padding: 20, textAlign: "center" }}>No audit events yet.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export function Admin() {
+  const [section, setSection] = useState("operators");
   const [users, setUsers] = useState([]);
   const [err, setErr] = useState("");
   const load = () => api.get("/admin/users").then((r) => setUsers(r.data)).catch((e) => setErr(e.response?.data?.detail || e.message));
-  useEffect(() => { load(); }, []);
+  useEffect(() => { if (section === "operators") load(); }, [section]);
   const setRole = async (id, role) => { await api.patch(`/admin/users/${id}/role`, { role }); load(); };
 
-  if (err) return <div className="empty"><ShieldAlert size={36} /><div>{err}</div></div>;
+  const SECTIONS = [
+    { id: "operators", label: "Operators", icon: Users },
+    { id: "tenants", label: "Tenants", icon: Building2 },
+    { id: "audit", label: "Audit Trail", icon: ScrollText },
+    { id: "monitoring", label: "Monitoring", icon: Activity },
+  ];
+
   return (
     <div className="fade-in">
-      <div className="section-title">Admin · Operator Management</div>
-      <div className="panel">
-        <div className="panel-head"><h3><Users size={15} style={{ verticalAlign: -2, marginRight: 8 }} />All Operators</h3></div>
-        <div className="panel-body" style={{ padding: 0 }}>
-          <table className="tbl">
-            <thead><tr><th>Operator</th><th>Email</th><th>Role</th><th>Joined</th><th></th></tr></thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.id} data-testid={`admin-user-${u.id}`}>
-                  <td className="name">{u.name}</td>
-                  <td className="muted">{u.email}</td>
-                  <td><span className={`badge ${u.role === "admin" ? "hot" : ""}`}>{u.role}</span></td>
-                  <td className="muted">{u.created_at ? new Date(u.created_at).toLocaleDateString() : "—"}</td>
-                  <td>
-                    <select className="select" value={u.role} onChange={(e) => setRole(u.id, e.target.value)} data-testid={`admin-role-${u.id}`}>
-                      <option value="user">user</option>
-                      <option value="admin">admin</option>
-                    </select>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <div className="section-title">Governance Console</div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        {SECTIONS.map((s) => {
+          const Ico = s.icon;
+          return (
+            <button key={s.id} className={`status-pill ${section === s.id ? "active" : ""}`}
+              style={{ cursor: "pointer", borderColor: section === s.id ? "var(--accent)" : undefined, color: section === s.id ? "var(--accent)" : undefined }}
+              onClick={() => setSection(s.id)} data-testid={`gov-tab-${s.id}`}>
+              <Ico size={13} style={{ marginRight: 6, verticalAlign: -2 }} />{s.label}
+            </button>
+          );
+        })}
       </div>
+
+      {section === "operators" && (err ? <div className="empty"><ShieldAlert size={36} /><div>{err}</div></div> : (
+        <div className="panel" data-testid="gov-operators">
+          <div className="panel-head"><h3><Users size={15} style={{ verticalAlign: -2, marginRight: 8 }} />All Operators ({users.length})</h3></div>
+          <div className="panel-body" style={{ padding: 0 }}>
+            <table className="tbl">
+              <thead><tr><th>Operator</th><th>Email</th><th>Tenant</th><th>Role</th><th>Credits</th><th>Assign role</th></tr></thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.id} data-testid={`admin-user-${u.id}`}>
+                    <td className="name">{u.name}</td>
+                    <td className="muted">{u.email}</td>
+                    <td className="muted">{u.tenant_name || u.tenant_id}</td>
+                    <td><span className={`badge ${["admin", "owner"].includes(u.role) ? "hot" : ""}`}>{u.role}</span></td>
+                    <td>{u.credits ?? 0}</td>
+                    <td>
+                      <select className="select" value={u.role} onChange={(e) => setRole(u.id, e.target.value)} data-testid={`admin-role-${u.id}`}>
+                        {GOV_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+      {section === "tenants" && <TenantsPanel />}
+      {section === "audit" && <AuditPanel />}
+      {section === "monitoring" && <MonitorPanel />}
     </div>
   );
 }

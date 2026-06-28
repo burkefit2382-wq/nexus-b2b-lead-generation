@@ -209,6 +209,15 @@ api = APIRouter(prefix="/api")
 async def health():
     return {"status": "online", "version": "2.0.0", "system": "NEXUS"}
 
+@app.get("/api/ready")
+async def ready():
+    """Readiness probe: verifies the app can reach MongoDB (used by platform health checks)."""
+    try:
+        await db.command("ping")
+        return {"ready": True, "db": "connected"}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"not ready: {str(e)[:120]}")
+
 # ====================== AUTH ======================
 class RegisterReq(BaseModel):
     email: EmailStr
@@ -679,7 +688,7 @@ async def osint_phone(body: PhoneReq, user: dict = Depends(get_current_user)):
         except Exception as e:
             return {"error": str(e)}
     res = {"tool": "phone", "target": body.target, **(await asyncio.to_thread(run))}
-    await _save_report(body.target, "phone", res)
+    await _save_report(body.target, "phone", res, user)
     return res
 
 @api.post("/osint/social")
@@ -698,7 +707,7 @@ async def osint_social(body: TargetReq, user: dict = Depends(get_current_user)):
             except Exception:
                 found[pl] = {"exists": False, "url": url}
     res = {"tool": "social", "target": body.target, "platforms": found}
-    await _save_report(body.target, "social", res)
+    await _save_report(body.target, "social", res, user)
     return res
 
 @api.post("/osint/geolocate")
@@ -715,7 +724,7 @@ async def osint_geo(body: TargetReq, user: dict = Depends(get_current_user)):
         except Exception:
             geo = {}
     res = {"tool": "geolocate", "target": body.target, "ip": ip, "geo": geo}
-    await _save_report(body.target, "geolocate", res)
+    await _save_report(body.target, "geolocate", res, user)
     return res
 
 @api.post("/osint/breach")
@@ -728,7 +737,7 @@ async def osint_breach(body: TargetReq, user: dict = Depends(get_current_user)):
                    "breached": resp.status_code == 200, "status": resp.status_code}
         except Exception as e:
             res = {"tool": "breach", "target": body.target, "error": str(e)}
-    await _save_report(body.target, "breach", res)
+    await _save_report(body.target, "breach", res, user)
     return res
 
 @api.post("/osint/subdomains")
@@ -744,7 +753,7 @@ async def osint_subdomains(body: TargetReq, user: dict = Depends(get_current_use
                 pass
         return found
     res = {"tool": "subdomains", "target": body.target, "found": await asyncio.to_thread(run)}
-    await _save_report(body.target, "subdomains", res)
+    await _save_report(body.target, "subdomains", res, user)
     return res
 
 @api.post("/osint/portscan")
@@ -762,7 +771,7 @@ async def osint_portscan(body: PortReq, user: dict = Depends(get_current_user)):
                 pass
         return open_p
     res = {"tool": "portscan", "target": body.target, "open_ports": await asyncio.to_thread(run)}
-    await _save_report(body.target, "portscan", res)
+    await _save_report(body.target, "portscan", res, user)
     return res
 
 @api.post("/osint/metadata")
@@ -782,7 +791,7 @@ async def osint_metadata(body: MetaReq, user: dict = Depends(get_current_user)):
                    "phones": list(set(PHR.findall(txt)))[:20]}
         except Exception as e:
             res = {"tool": "metadata", "url": body.url, "error": str(e)}
-    await _save_report(body.url, "metadata", res)
+    await _save_report(body.url, "metadata", res, user)
     return res
 
 @api.post("/osint/shodan")
@@ -808,12 +817,12 @@ async def osint_dork(body: DorkReq, user: dict = Depends(get_current_user)):
             return {"error": str(e)}
     out = await asyncio.to_thread(run)
     res = {"tool": "dork", "query": body.dork, "results": out}
-    await _save_report(body.dork, "dork", res)
+    await _save_report(body.dork, "dork", res, user)
     return res
 
 @api.get("/osint/reports")
 async def osint_reports(limit: int = 50, user: dict = Depends(get_current_user)):
-    cur = db.osint_reports.find({}, {"target": 1, "tool_used": 1, "created_at": 1}).sort("created_at", -1).limit(limit)
+    cur = db.osint_reports.find(gov.tenant_scope(user), {"target": 1, "tool_used": 1, "created_at": 1}).sort("created_at", -1).limit(limit)
     return [{"id": str(r["_id"]), "target": r.get("target"), "tool": r.get("tool_used"),
              "created_at": r.get("created_at")} async for r in cur]
 
@@ -1516,14 +1525,15 @@ async def people_intel_scan(body: PeopleScanReq, user: dict = Depends(get_curren
                           f"identity confidence {identity['overall_confidence']:.2f}, "
                           f"{len(footprint['accounts'])} accounts, "
                           f"{len(public_records['records'])} records, risk={level}."),
-              "created_at": datetime.now(timezone.utc).isoformat(), "by": user["id"]}
+              "created_at": datetime.now(timezone.utc).isoformat(), "by": user["id"],
+              "tenant_id": gov.tenant_id_of(user)}
     await db.people_reports.insert_one(dict(report))
     report.pop("_id", None)
     return report
 
 @api.get("/people-intel/history")
 async def people_intel_history(limit: int = 20, user: dict = Depends(get_current_user)):
-    q = {} if user.get("role") == "admin" else {"by": user["id"]}
+    q = gov.tenant_scope(user)
     cur = db.people_reports.find(q, {"input": 1, "risk": 1, "summary": 1, "created_at": 1}).sort("created_at", -1).limit(limit)
     return [{"id": str(r["_id"]), "subject": (r.get("input") or {}),
              "risk": (r.get("risk") or {}).get("level"), "summary": r.get("summary"),
@@ -2113,9 +2123,13 @@ async def _auto_threat_pipeline(lead_doc: dict):
         logger.warning("auto threat pipeline error: %s", e)
 
 @api.post("/threat/scan")
-async def threat_scan(body: ThreatScanReq, user: dict = Depends(require_admin)):
+async def threat_scan(body: ThreatScanReq, request: Request, user: dict = Depends(require_admin),
+                      _rl: bool = Depends(gov.rate_limit(int(os.environ.get("RL_THREAT_PER_MIN", "10")), 60))):
     mk = "qwen" if body.model == "qwen" else "deepseek"
-    return await _run_threat_scan(body.domain, mk, by=user["id"], source="manual")
+    result = await _run_threat_scan(body.domain, mk, by=user["id"], source="manual")
+    await gov.audit_log("threat.scan", user=user, request=request, target=body.domain,
+                        meta={"risk_score": result.get("risk_score"), "high_ticket": result.get("high_ticket")})
+    return result
 
 @api.get("/threat/reports")
 async def threat_reports(high_ticket_only: bool = False, limit: int = 50, user: dict = Depends(require_admin)):
@@ -2479,12 +2493,14 @@ class RFPRequest(BaseModel):
     scope: str = ""
 
 @api.post("/storefront/rfp")
-async def submit_rfp(body: RFPRequest, user: dict = Depends(get_current_user)):
+async def submit_rfp(body: RFPRequest, request: Request, user: dict = Depends(get_current_user)):
     """Government / municipal custom-intelligence scope request (RFP intake)."""
     doc = body.model_dump()
-    doc.update({"user_id": user["id"], "status": "new",
+    doc.update({"user_id": user["id"], "tenant_id": gov.tenant_id_of(user), "status": "new",
                 "created_at": datetime.now(timezone.utc).isoformat()})
     res = await db.rfp_requests.insert_one(doc)
+    await gov.audit_log("rfp.submit", user=user, request=request, target=str(res.inserted_id),
+                        meta={"agency": body.agency_name, "classification": body.classification})
     return {"id": str(res.inserted_id), "status": "received",
             "message": "Agency scope request received. Our intelligence desk will respond within 1 business day."}
 
@@ -2500,7 +2516,7 @@ class PurchaseLeadsReq(BaseModel):
     lead_ids: List[str]
 
 @api.post("/storefront/purchase-leads")
-async def purchase_leads(body: PurchaseLeadsReq, user: dict = Depends(get_current_user)):
+async def purchase_leads(body: PurchaseLeadsReq, request: Request, user: dict = Depends(get_current_user)):
     """Atomically buy specific leads with credits; marks sold to prevent double-selling."""
     try:
         oids = [ObjectId(i) for i in body.lead_ids]
@@ -2508,7 +2524,7 @@ async def purchase_leads(body: PurchaseLeadsReq, user: dict = Depends(get_curren
         raise HTTPException(status_code=400, detail="Invalid lead id")
     if not oids:
         raise HTTPException(status_code=400, detail="No leads specified")
-    is_admin = user.get("role") == "admin"
+    is_admin = gov.is_admin(user)
     available = [l async for l in db.leads.find(
         {"_id": {"$in": oids}, "purchase_status": {"$ne": "sold"}})]
     if not available:
@@ -2539,8 +2555,11 @@ async def purchase_leads(body: PurchaseLeadsReq, user: dict = Depends(get_curren
     if refund and not is_admin:
         await db.users.update_one({"_id": ObjectId(user["id"])}, {"$inc": {"credits": refund}})
     await db.storefront_orders.insert_one({
-        "buyer_user_id": user["id"], "lead_ids": [str(l["_id"]) for l in purchased],
+        "buyer_user_id": user["id"], "tenant_id": gov.tenant_id_of(user),
+        "lead_ids": [str(l["_id"]) for l in purchased],
         "charged_credits": total_cost - refund, "count": len(purchased), "created_at": now})
+    await gov.audit_log("lead.purchase", user=user, request=request,
+                        meta={"count": len(purchased), "charged_credits": total_cost - refund})
     u = await db.users.find_one({"_id": ObjectId(user["id"])})
     return {"purchased": len(purchased), "charged_credits": total_cost - refund,
             "credits_remaining": (u or {}).get("credits", 0),
@@ -2666,7 +2685,8 @@ async def storefront_sectors(user: dict = Depends(get_current_user)):
     return {"sectors": sorted(SECTOR_OSM_TAGS.keys())}
 
 @api.post("/storefront/generate-leads")
-async def generate_leads(body: GenerateReq, user: dict = Depends(require_admin)):
+async def generate_leads(body: GenerateReq, request: Request, user: dict = Depends(require_admin),
+                         _rl: bool = Depends(gov.rate_limit(int(os.environ.get("RL_GENERATE_PER_MIN", "5")), 60))):
     """Pull real businesses for a sector+county from OSM, OSINT-verify, store as storefront leads."""
     sector = body.sector.strip().lower().replace(" ", "_")
     if sector not in SECTOR_OSM_TAGS:
@@ -2693,10 +2713,87 @@ async def generate_leads(body: GenerateReq, user: dict = Depends(require_admin))
     if body.ai_enrich and new_ids:
         asyncio.create_task(_bg_ai_enrich(new_ids))
     avail = await db.leads.count_documents({"category": sector, "purchase_status": {"$ne": "sold"}})
+    await gov.audit_log("lead.generate", user=user, request=request, target=sector,
+                        meta={"county": county, "generated": len(raws), "new": len(new_ids)})
     return {"generated": len(raws), "new": len(new_ids), "sector": sector, "county": county,
             "available_in_storefront": avail,
             "message": f"Ingested {len(raws)} {sector.replace('_', ' ')} entities from {county}." +
                        (" Deep AI enrichment is running in the background." if body.ai_enrich and new_ids else "")}
+
+# ====================== GOVERNANCE (multi-tenant, RBAC, audit, monitoring) ======================
+@api.get("/governance/me")
+async def governance_me(user: dict = Depends(get_current_user)):
+    """Caller's tenant + effective role/permission level."""
+    tenant = await db.tenants.find_one({"tenant_id": gov.tenant_id_of(user)}) or {}
+    members = await db.users.count_documents({"tenant_id": gov.tenant_id_of(user)})
+    return {"tenant_id": gov.tenant_id_of(user), "tenant_name": tenant.get("name", user.get("tenant_name", "")),
+            "role": user.get("role", "user"), "role_level": gov.role_level(user.get("role")),
+            "is_platform_admin": gov.is_admin(user), "members": members,
+            "roles_available": gov.VALID_ROLES}
+
+@api.get("/governance/tenant/members")
+async def tenant_members(user: dict = Depends(require_min_role("tenant_admin"))):
+    """Members of the caller's tenant (platform admins see every tenant)."""
+    q = {} if gov.is_admin(user) else {"tenant_id": gov.tenant_id_of(user)}
+    cur = db.users.find(q, {"email": 1, "name": 1, "role": 1, "credits": 1, "tenant_id": 1,
+                            "tenant_name": 1, "created_at": 1}).sort("created_at", -1).limit(500)
+    return [{"id": str(u["_id"]), "email": u["email"], "name": u.get("name"),
+             "role": u.get("role"), "credits": u.get("credits", 0),
+             "tenant_id": u.get("tenant_id") or gov.DEFAULT_TENANT,
+             "tenant_name": u.get("tenant_name", ""), "created_at": u.get("created_at")} async for u in cur]
+
+@api.get("/admin/tenants")
+async def admin_tenants(user: dict = Depends(require_admin)):
+    pipeline = [{"$group": {"_id": "$tenant_id", "members": {"$sum": 1}}}]
+    counts = {b["_id"]: b["members"] async for b in db.users.aggregate(pipeline)}
+    out = []
+    async for t in db.tenants.find().sort("created_at", -1).limit(500):
+        out.append({"tenant_id": t.get("tenant_id"), "name": t.get("name"),
+                    "owner_email": t.get("owner_email"), "status": t.get("status", "active"),
+                    "members": counts.get(t.get("tenant_id"), 0), "created_at": t.get("created_at")})
+    return {"tenants": out, "total": len(out)}
+
+@api.get("/admin/audit")
+async def admin_audit(limit: int = 100, action: Optional[str] = None,
+                      tenant_id: Optional[str] = None, status: Optional[str] = None,
+                      user: dict = Depends(require_admin)):
+    q = {}
+    if action:
+        q["action"] = action
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    if status:
+        q["status"] = status
+    cur = db.audit_logs.find(q).sort("created_at", -1).limit(min(limit, 500))
+    logs = [gov.audit_pub(r) async for r in cur]
+    actions = await db.audit_logs.distinct("action")
+    return {"logs": logs, "total": len(logs), "actions": sorted(actions)}
+
+@api.get("/admin/monitoring")
+async def admin_monitoring(user: dict = Depends(require_admin)):
+    """Application-level health & operations snapshot (for per-environment monitoring)."""
+    db_ok = True
+    try:
+        await db.command("ping")
+    except Exception:
+        db_ok = False
+    since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    return {
+        "db_connected": db_ok,
+        "scheduler_running": scheduler.running,
+        "scraper_status": SCRAPER_STATE.get("status"),
+        "tenants": await db.tenants.count_documents({}),
+        "users": await db.users.count_documents({}),
+        "leads_total": await db.leads.count_documents({}),
+        "leads_available": await db.leads.count_documents({"purchase_status": {"$ne": "sold"}}),
+        "leads_sold": await db.leads.count_documents({"purchase_status": "sold"}),
+        "audit_events_24h": await db.audit_logs.count_documents({"created_at": {"$gte": since}}),
+        "logins_failed_24h": await db.audit_logs.count_documents(
+            {"action": "user.login", "status": "failure", "created_at": {"$gte": since}}),
+        "locked_identities": await db.login_attempts.count_documents({"count": {"$gte": gov.MAX_FAILED}}),
+        "ai_provider": _active_ai_model(),
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 # ----------------------------------------------------------------------------- mount + startup
 app.include_router(api)
@@ -2735,18 +2832,38 @@ async def startup():
     global client, db
     client = AsyncIOMotorClient(mongo_url)
     db = client[db_name]
+    gov.set_db(db)
     logger.info("MongoDB client initialized inside event loop")
     await db.users.create_index("email", unique=True)
     await db.api_keys.create_index("key_hash")
     await db.leads.create_index([("score", -1)])
     await db.leads.create_index("category")
     await db.leads.create_index("status")
+    # --- Gov-ready: multi-tenancy, audit, brute-force defense indexes ---
+    await db.audit_logs.create_index([("created_at", -1)])
+    await db.audit_logs.create_index("tenant_id")
+    await db.audit_logs.create_index("action")
+    await db.tenants.create_index("tenant_id", unique=True)
+    await db.users.create_index("tenant_id")
+    try:
+        await db.login_attempts.create_index("expires_at", expireAfterSeconds=0)
+    except Exception:
+        pass
+    # Default platform tenant + backfill legacy users so isolation filters work.
+    await db.tenants.update_one({"tenant_id": gov.DEFAULT_TENANT},
+        {"$setOnInsert": {"tenant_id": gov.DEFAULT_TENANT, "name": "Platform (NEXUS)",
+                          "owner_email": os.environ.get("ADMIN_EMAIL", "admin@nexus.io").lower(),
+                          "status": "active", "created_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True)
+    await db.users.update_many({"tenant_id": {"$exists": False}},
+        {"$set": {"tenant_id": gov.DEFAULT_TENANT, "tenant_name": "Platform (NEXUS)"}})
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@nexus.io").lower()
     admin_pw = os.environ.get("ADMIN_PASSWORD", "nexus123")
     existing = await db.users.find_one({"email": admin_email})
     if existing is None:
         await db.users.insert_one({"email": admin_email, "password_hash": hash_password(admin_pw),
                                    "name": "Admin", "role": "admin",
+                                   "tenant_id": gov.DEFAULT_TENANT, "tenant_name": "Platform (NEXUS)",
                                    "created_at": datetime.now(timezone.utc).isoformat()})
     elif not verify_password(admin_pw, existing["password_hash"]):
         await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_pw)}})
