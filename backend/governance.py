@@ -76,8 +76,10 @@ async def audit_log(action: str, user: Optional[dict] = None, request: Optional[
     }
     try:
         await _db.audit_logs.insert_one(doc)
-    except Exception:
-        pass
+    except Exception as e:
+        # Never let auditing break a request, but a lost security-audit record must be visible.
+        import logging
+        logging.getLogger("nexus").error("audit_log write failed for %s: %s", action, e)
 
 
 def audit_pub(r: dict) -> dict:
