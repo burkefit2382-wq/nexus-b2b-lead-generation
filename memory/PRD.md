@@ -103,6 +103,23 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - P2: People-intel rate limiting; lead unlock receipts/exports; usage analytics dashboard.
 
 ## Changelog
+- 2026-06-28 — **Gov-Ready application layer (multi-tenancy, RBAC, audit, security, monitoring)**:
+  Translated the user's "Gov-Ready Azure Architecture (do it ur way)" guide into application-level code
+  (the Emergent platform already provides the K8s/VNET/WAF/CI-CD/health-probe infra). New `backend/governance.py`:
+  (1) **Granular RBAC** hierarchy user<analyst<tenant_admin<admin<owner (`require_min_role`); `require_admin`
+  now accepts admin+owner. (2) **Multi-tenancy**: `tenant_id`/`tenant_name` on users; new registrations
+  provision their own tenant (registrant = tenant_admin); seeded admin in `default` tenant; legacy users
+  backfilled on startup. Row-level isolation (`tenant_scope`) on OSINT reports + people-intel history
+  (platform admins bypass); storefront marketplace stays cross-tenant. (3) **Brute-force lockout** (Mongo
+  login_attempts, 5/15min, TTL-cleaned, HTTP 429). (4) **Audit log** (db.audit_logs) on login/register/
+  role-change/apikey/threat-scan/rfp/purchase/generate + admin viewer `GET /api/admin/audit`. (5) **Rate
+  limiting** on generate-leads (5/min) + threat-scan (10/min). (6) **Health/monitoring**: `/api/ready`
+  (DB readiness probe) + `/api/admin/monitoring` ops snapshot. New endpoints: /api/governance/me,
+  /api/governance/tenant/members, /api/admin/tenants, /api/admin/audit, /api/admin/monitoring, /api/ready.
+  Frontend: Admin tab → **Governance Console** (Operators w/ granular roles + tenant column / Tenants /
+  Audit Trail / Monitoring auto-refresh). Sidebar shows role · tenant. deployment_agent: PASS (no blockers).
+  Smoke-tested via curl + UI. server.py refactor into /routes still deferred (P1 tech debt).
+
 - 2026-06-23 — **On-demand lead generator + full-catalog storefront**: (1) Storefront now lists EVERY
   non-sold lead (relaxed query/purchase from `ready_to_sell+available` to `purchase_status != sold`);
   total jumped to 160+ across all sector bundles. (2) New `POST /api/storefront/generate-leads` (admin) +

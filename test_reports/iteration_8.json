@@ -1,0 +1,39 @@
+{
+  "summary": "Validated NEXUS gov-ready backend (tenancy + granular RBAC + audit + brute-force lockout + monitoring + readiness) end-to-end and ran regression on storefront + auth. 22/22 pytest cases pass against the EXTERNAL preview URL. Coverage: (1) admin login -> /auth/me returns role=admin, tenant_id=default, tenant_name='Platform (NEXUS)'. (2) GET /api/governance/me for admin -> tenant_id=default, role=admin, role_level=4, is_platform_admin=true, members>=1, roles_available=['user','analyst','tenant_admin','admin','owner']. (3) Registration (POST /api/auth/register w/ org_name) -> role='tenant_admin' + fresh non-default tenant_id; new tenant visible in GET /api/admin/tenants with correct name + owner_email (case-insensitive). (4) Brute-force lockout: 5 wrong logins for throwaway email -> 401, 6th -> 429. (5) Audit: GET /api/admin/audit returns success user.login entries for admin@nexus.io with tenant_id=default and a populated 'actions' list; same endpoint returns 403 for buyer@test.io. (6) Admin-only gates: /api/admin/tenants, /api/admin/monitoring, /api/admin/audit -> 200 for admin, 403 for buyer (parametrized). (7) /api/admin/monitoring payload includes db_connected=true, scheduler_running, tenants/users/leads_total/audit_events_24h/logins_failed_24h/locked_identities/ai_provider. (8) PATCH /api/admin/users/{id}/role cycles buyer through analyst -> tenant_admin -> owner -> user, then rejects 'superuser' with 400, and restores buyer to 'user'. (9) /api/governance/tenant/members -> 200 for admin, 403 for buyer. (10) /api/ready -> {ready:true, db:'connected'}. (11) Storefront regression: admin GETs masked /api/storefront/leads, purchases an available lead (full unmasked payload), re-purchase same id -> HTTP 400 'None of the selected leads are available'. (12) Insufficient credits: fresh registered user (0 credits) purchasing -> HTTP 402, lead remains available. (13) /api/auth/me OK, /api/leads OK, /api/auth/logout clears cookies (subsequent /auth/me -> 401).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_governance.py",
+    "/app/test_reports/pytest/governance.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now ~2930 lines — still well past the 700-line guideline; recommend splitting (auth, governance, leads, enrichment, storefront, threat, osint) before next feature push.",
+    "Brute-force lockout records lock-time on EVERY failed attempt (record_failed_login always sets locked_until). This is fine because check_lockout only enforces when count >= MAX_FAILED, but it means the lock window is effectively rolling/extends on each new fail. Intentional? Worth a code comment.",
+    "Login lockout uses ip:email key. Behind a proxy, _client_ip relies on X-Forwarded-For; if missing, all unauthenticated lockouts collapse to a single 'unknown' bucket per email. Acceptable for the preview URL (CDN sets XFF), but document the proxy requirement.",
+    "/api/governance/me returns is_platform_admin only true for admin/owner (gov.is_admin). tenant_admin users get role_level=3 but is_platform_admin=false — verified, matches RBAC spec.",
+    "PATCH /api/admin/users/{id}/role response shape is {user: {...role...}} (server returns _pub). Worth standardising error/response envelopes across admin endpoints (some return {logs, total, actions}, some return {tenants, total}, some return bare lists).",
+    "_pub leaks tenant_name='' (empty string) for users provisioned before backfill if startup migration hasn't filled tenant_name yet; backfill currently only sets default tenant. Minor cosmetic.",
+    "audit_log swallows exceptions silently (bare except). For a security audit trail, consider at least logging the failure so a broken Mongo write doesn't silently lose the audit record."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_governance.py"
+  ],
+  "success_rate": {
+    "backend": "100% (22/22)",
+    "frontend": "not tested (backend-only review requested)"
+  },
+  "test_credentials": "Admin: admin@nexus.io / nexus123, Buyer: buyer@test.io / buyer123 (from /app/memory/test_credentials.md). Throwaway lockout email randomised per run.",
+  "seed_data_creation": "Each run registers 1 fresh tenant_admin (TEST_op_<uuid>@example.com) for the tenant-isolation test and 1 fresh zero-credit user (TEST_zero_<uuid>@example.com) for the 402 test. Admin purchases 1 storefront lead per run (state flips to sold). lockme_<uuid>@example.com appears 5x in failed audit logs (expected).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Full gov-ready suite lives at /app/backend/tests/test_governance.py (22 cases, ~5s). Combined with /app/backend/tests/test_intel_storefront.py (14 cases) it covers tenancy, RBAC, audit, brute-force, monitoring, storefront atomic purchase + 402, /api/ready, and auth regression. Brute-force test always uses throwaway lockme_<uuid> emails — safe to re-run repeatedly. Server lowercases email on register/login (compare case-insensitively in any new test). Admin bypasses credit deduction on storefront purchase. /api/storefront/leads only lists ready_to_sell+available; double-sell guard returns HTTP 400 with phrase 'None of the selected leads are available'. /api/admin/tenants payload shape: {tenants:[{tenant_id,name,owner_email,status,members,created_at}], total}. /api/admin/audit payload: {logs:[...], total, actions:[...]}. /api/governance/me returns role_level and is_platform_admin.",
+  "rca of the issue": "N/A — all 22 tests passing. Only test-side fix applied: email comparison made case-insensitive because the backend correctly lowercases emails on registration (test expected exact-case match)."
+}
