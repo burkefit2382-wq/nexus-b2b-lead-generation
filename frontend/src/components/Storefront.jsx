@@ -241,8 +241,9 @@ function RFPModal({ onClose }) {
 }
 
 function GenerateModal({ onClose, onDone }) {
+  const COUNTIES = ["Hillsborough County", "Pinellas County", "Manatee County", "Pasco County", "Hernando County"];
   const [sectors, setSectors] = useState([]);
-  const [form, setForm] = useState({ sector: "real_estate", county: "Pinellas County", limit: 100, ai_enrich: true });
+  const [form, setForm] = useState({ sector: "financial_services", county: "Hillsborough County", limit: 100, ai_enrich: true });
   const [busy, setBusy] = useState(false);
   const [res, setRes] = useState(null);
   const [err, setErr] = useState("");
@@ -322,9 +323,10 @@ function GenerateModal({ onClose, onDone }) {
               </select>
             </div>
             <div className="rfp-field" style={{ marginBottom: 14 }}>
-              <label>County / City</label>
-              <input className="input" value={form.county} onChange={(e) => setForm({ ...form, county: e.target.value })}
-                placeholder="e.g. Pinellas County" data-testid="generate-county" />
+              <label>County</label>
+              <select className="select" value={form.county} onChange={(e) => setForm({ ...form, county: e.target.value })} data-testid="generate-county">
+                {COUNTIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
             </div>
             <div className="rfp-field" style={{ marginBottom: 14 }}>
               <label>Max records</label>

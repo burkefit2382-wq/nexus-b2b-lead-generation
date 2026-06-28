@@ -846,19 +846,24 @@ PHONE_RX = re.compile(r"\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}")
 
 # Tampa Bay service market: Hillsborough + Pinellas (and adjacent) — geo scope for local independent-service leads.
 TAMPA_CITIES = [
-    "tampa bay", "hillsborough", "pinellas", "tampa", "st. petersburg", "st petersburg",
+    "tampa bay", "hillsborough", "pinellas", "manatee", "pasco", "hernando",
+    "tampa", "st. petersburg", "st petersburg",
     "saint petersburg", "clearwater", "brandon", "largo", "riverview", "plant city", "valrico",
     "wesley chapel", "palm harbor", "dunedin", "pinellas park", "seminole", "oldsmar",
     "temple terrace", "apollo beach", "ruskin", "lutz", "gibsonton", "carrollwood", "westchase",
     "odessa", "tarpon springs", "safety harbor", "thonotosassa", "town n country", "town 'n' country",
     "sun city center", "land o lakes",
+    "bradenton", "palmetto", "lakewood ranch", "parrish", "ellenton",
+    "new port richey", "port richey", "zephyrhills", "dade city", "holiday",
+    "spring hill", "brooksville", "weeki wachee",
 ]
 
 def _detect_tampa_geo(text: str) -> tuple:
     low = (text or "").lower()
     for c in TAMPA_CITIES:
         if c in low:
-            label = "Tampa Bay" if c in ("tampa bay", "hillsborough", "pinellas") else c.title()
+            label = "Tampa Bay" if c in ("tampa bay", "hillsborough", "pinellas",
+                                         "manatee", "pasco", "hernando") else c.title()
             return label, "FL"
     return "", ""
 
@@ -876,10 +881,16 @@ TAMPA_LOCALES = [
     "Tampa FL", "St Petersburg FL", "Clearwater FL", "Brandon FL", "Largo FL",
     "Riverview FL", "Plant City FL", "Pinellas Park FL", "Palm Harbor FL", "Tarpon Springs FL",
 ]
-SOURCES_VERSION = 4
-# OpenStreetMap/Nominatim (free) + Apify Reddit (paid, JSON over HTTPS — dormant until APIFY_TOKEN set).
+SOURCES_VERSION = 5
+# High-value B2B sectors across the 5-county Tampa Bay region, harvested via Overpass
+# (one area query per sector+county) -> OSINT HQ filter -> storefront. Financial Services
+# and Legal are prioritised. Apify Reddit stays a separate budget-guarded social source.
+SCRAPER_SECTORS = ["financial_services", "legal", "insurance", "real_estate", "healthcare", "b2b_tech"]
+SCRAPER_COUNTIES = ["Hillsborough County", "Pinellas County", "Manatee County",
+                    "Pasco County", "Hernando County"]
 DEFAULT_SOURCES = [
-    {"provider": "osm", "query": q, "category": cat} for q, cat in SERVICE_QUERIES
+    {"provider": "overpass", "sector": s, "county": c, "category": s, "limit": 60}
+    for s in SCRAPER_SECTORS for c in SCRAPER_COUNTIES
 ] + [
     {"provider": "apify_reddit", "category": "services", "max_items": 30,
      "subreddits": ["tampa", "StPetersburgFL", "Clearwater", "HillsboroughCounty", "stpetersburg"],
@@ -1086,8 +1097,31 @@ async def fetch_apify_reddit(src: dict) -> list:
                     "city": "", "state": "", "company": "", "title": title})
     return out
 
+async def fetch_overpass_county(src: dict) -> list:
+    """High-value B2B businesses in a whole county via one Overpass area query (OSINT HQ pipeline)."""
+    sector = src.get("sector", "financial_services")
+    county = src.get("county", "Pinellas County")
+    raws = await _overpass_generate(sector, county, int(src.get("limit", 60)))
+    out = []
+    cat_label = sector.replace("_", " ")
+    for r in raws:
+        company = (r.get("company") or "").strip()
+        if not company:
+            continue
+        website = r.get("website", ""); phone = r.get("phone", ""); email = r.get("email", "")
+        city = r.get("city", ""); state = r.get("state") or "FL"
+        text = f"{company} — {cat_label} firm in {city or county}, FL. {website} {phone}".strip()
+        out.append({"kind": "business", "full_name": "", "company": company,
+                    "raw_text": text[:2000], "source_site": "OpenStreetMap",
+                    "category": sector, "source_url": website or "", "website": website,
+                    "city": city, "state": state, "phone": phone, "email": email, "title": company})
+    await asyncio.sleep(1.5)  # be gentle to the public Overpass endpoint
+    return out
+
 async def fetch_source(src: dict) -> list:
     p = src.get("provider", "osm")
+    if p == "overpass":
+        return await fetch_overpass_county(src)
     if p in ("osm", "nominatim"):
         return await fetch_osm(src)
     if p in ("apify_reddit", "reddit_apify"):
@@ -1158,58 +1192,58 @@ def _build_lead_doc(cand: dict, text: str, scored: dict) -> dict:
             "is_sold": False, "sold_price": 0.0, "scraped": True,
             "created_at": datetime.now(timezone.utc).isoformat()}
 
-async def _process_candidate(cand: dict, use_ai: bool, ai_model: str, min_score: float) -> bool:
-    """Returns True if the candidate was stored as a qualified lead."""
-    if await db.leads.find_one({"source_url": cand["source_url"]}):
-        return False
+async def _process_candidate(cand: dict, use_ai: bool, ai_model: str, min_score: float):
+    """Store a qualified lead; returns {'id','hq'} when stored, else None."""
+    if cand.get("source_url") and await db.leads.find_one({"source_url": cand["source_url"]}):
+        return None
     if cand.get("kind") == "business":
         return await _process_business(cand, min_score)
     text = cand["raw_text"]
     if not _passes_intent_gate(text):
-        return False
+        return None
     cand.update(_extract_contacts(text))
     scored = await _score_candidate(cand, text, use_ai, ai_model, min_score)
     if not scored["keep"]:
-        return False
+        return None
+    intent = int(scored["score"] or 0)
+    v = await asyncio.to_thread(_osint_verify_sync, cand.get("email", ""), cand.get("phone", ""),
+                                "", "", cand.get("city", ""), cand.get("state", ""))
+    conf = _data_confidence(v, intent)
     doc = _build_lead_doc(cand, text, scored)
-    await db.leads.insert_one(doc)
+    doc.update(_osint_fields(v, conf, intent))
+    res = await db.leads.insert_one(doc)
     asyncio.create_task(_auto_threat_pipeline(doc))
-    return True
+    return {"id": res.inserted_id, "hq": doc["ready_to_sell"]}
 
-async def _process_business(cand: dict, min_score: float) -> bool:
-    """Store an independent-service business lead (Tampa Bay) and feed scan-to-pipeline."""
+async def _process_business(cand: dict, min_score: float):
+    """Store a verified business lead, OSINT HQ-filtered into the storefront pipeline."""
     company = (cand.get("company") or "").strip()
     if not company:
-        return False
-    if await db.leads.find_one({"company": company, "city": cand.get("city", ""), "scraped": True}):
-        return False
-    score = 0
-    if cand.get("website"):
-        score += 30
-    if cand.get("phone"):
-        score += 25
-    if company:
-        score += 20
-    if cand.get("city"):
-        score += 15
-    if cand.get("email"):
-        score += 10
-    score = float(min(score, 100))
-    if score < min_score and not cand.get("website"):
-        return False
-    doc = {"category": cand["category"], "full_name": "", "email": cand.get("email", ""),
-           "phone": cand.get("phone", ""), "company": company,
-           "city": cand.get("city", ""), "state": cand.get("state", "FL"),
-           "source_site": cand.get("source_site", "OpenStreetMap"),
-           "source_url": cand.get("source_url", ""), "website": cand.get("website", ""),
-           "raw_text": cand.get("raw_text", ""), "status": "enriched", "score": score,
-           "ai_summary": f"Independent {cand['category'].replace('_', ' ')} business in {cand.get('city') or 'Tampa Bay'}, FL.",
-           "ai_intent_score": score, "ai_budget_est": "", "tags": "business,local," + cand["category"],
+        return None
+    website = cand.get("website", ""); phone = cand.get("phone", ""); email = cand.get("email", "")
+    if not website and not phone:
+        return None  # no verifiable contact channel — skip
+    city = cand.get("city", ""); state = cand.get("state", "FL")
+    if await db.leads.find_one({"company": company, "city": city, "scraped": True}):
+        return None
+    intent = 40 + (20 if website else 0) + (15 if phone else 0) + (10 if email else 0)
+    v = await asyncio.to_thread(_osint_verify_sync, email, phone, website, company, city, state)
+    conf = _data_confidence(v, intent)
+    fields = _osint_fields(v, conf, intent)
+    now = datetime.now(timezone.utc).isoformat()
+    cat_label = cand["category"].replace("_", " ")
+    doc = {"category": cand["category"], "full_name": "", "email": email, "phone": phone,
+           "company": company, "website": website, "city": city, "state": state,
+           "source_site": cand.get("source_site", "OpenStreetMap"), "source": "scraper",
+           "source_url": cand.get("source_url", ""), "raw_text": cand.get("raw_text", ""),
+           "ai_summary": f"{cat_label.title()} firm operating in {city or 'Tampa Bay'}, FL.",
+           "ai_intent_score": intent, "ai_budget_est": "", "tags": "business," + cand["category"],
            "is_sold": False, "sold_price": 0.0, "scraped": True,
-           "created_at": datetime.now(timezone.utc).isoformat()}
-    await db.leads.insert_one(doc)
+           "status": "ready_to_sell" if fields["ready_to_sell"] else "enriched",
+           "created_at": now, **fields}
+    res = await db.leads.insert_one(doc)
     asyncio.create_task(_auto_threat_pipeline(doc))
-    return True
+    return {"id": res.inserted_id, "hq": fields["ready_to_sell"]}
 
 async def run_scrape_cycle(reason: str = "scheduled"):
     if SCRAPER_STATE["status"] == "running":
@@ -1221,14 +1255,25 @@ async def run_scrape_cycle(reason: str = "scheduled"):
     use_ai = cfg.get("use_ai", True)
     ai_model = cfg.get("ai_model", "deepseek")
     found = qualified = 0
+    hq_ids = []
+    sem = asyncio.Semaphore(15)
+
+    async def handle(cand):
+        nonlocal qualified
+        async with sem:
+            res = await _process_candidate(cand, use_ai, ai_model, min_score)
+        if res:
+            qualified += 1
+            if res.get("hq"):
+                hq_ids.append(res["id"])
+
     try:
         for src in cfg.get("sources", []):
             if src.get("provider") in ("apify_reddit", "reddit_apify"):
                 continue  # paid Reddit runs on its own hourly budget-guarded cycle
-            for cand in await fetch_source(src):
-                found += 1
-                if await _process_candidate(cand, use_ai, ai_model, min_score):
-                    qualified += 1
+            cands = await fetch_source(src)
+            found += len(cands)
+            await asyncio.gather(*(handle(c) for c in cands))
         SCRAPER_STATE.update({"found": SCRAPER_STATE["found"] + found,
                               "qualified": SCRAPER_STATE["qualified"] + qualified,
                               "cycles": SCRAPER_STATE["cycles"] + 1})
@@ -1237,7 +1282,9 @@ async def run_scrape_cycle(reason: str = "scheduled"):
     finally:
         SCRAPER_STATE["status"] = "idle"
         SCRAPER_STATE["last_run"] = datetime.now(timezone.utc).isoformat()
-        logger.info("Scrape cycle (%s): found=%d qualified=%d", reason, found, qualified)
+        logger.info("Scrape cycle (%s): found=%d qualified=%d hq=%d", reason, found, qualified, len(hq_ids))
+    if hq_ids:
+        asyncio.create_task(_bg_ai_enrich(hq_ids))
 
 # ---- Paid Apify Reddit cycle (hourly, hard daily $ budget guard) ----
 APIFY_COST_PER_RESULT = float(os.environ.get("APIFY_COST_PER_RESULT", "0.0034"))
@@ -1280,6 +1327,7 @@ async def run_reddit_cycle(reason: str = "scheduled"):
     use_ai = cfg.get("use_ai", True)
     ai_model = cfg.get("ai_model", "deepseek")
     found = qualified = 0
+    hq_ids = []
     try:
         for src in sources:
             if remaining <= 0:
@@ -1291,8 +1339,11 @@ async def run_reddit_cycle(reason: str = "scheduled"):
             remaining -= len(cands)
             for cand in cands:
                 found += 1
-                if await _process_candidate(cand, use_ai, ai_model, min_score):
+                res = await _process_candidate(cand, use_ai, ai_model, min_score)
+                if res:
                     qualified += 1
+                    if res.get("hq"):
+                        hq_ids.append(res["id"])
         SCRAPER_STATE.update({"found": SCRAPER_STATE["found"] + found,
                               "qualified": SCRAPER_STATE["qualified"] + qualified})
     except Exception as e:
@@ -1301,6 +1352,8 @@ async def run_reddit_cycle(reason: str = "scheduled"):
         SCRAPER_STATE["reddit_status"] = "idle"
         SCRAPER_STATE["reddit_last_run"] = datetime.now(timezone.utc).isoformat()
         logger.info("Reddit cycle (%s): found=%d qualified=%d", reason, found, qualified)
+    if hq_ids:
+        asyncio.create_task(_bg_ai_enrich(hq_ids))
 
 async def _ai_score_candidate(cand: dict, model_key: str) -> Optional[dict]:
     prompt = ("You are a lead-quality filter. Analyze this social post and return ONLY JSON with keys: "
@@ -1354,8 +1407,8 @@ async def intel_sources(user: dict = Depends(get_current_user)):
     has = lambda k: bool(os.environ.get(k))
     return {"apify_spend_today_usd": round(spend, 2), "apify_budget_usd": APIFY_DAILY_BUDGET_USD,
             "sources": [
-                {"key": "osm", "name": "OpenStreetMap — Tampa Bay businesses", "status": "live",
-                 "cost": "free", "detail": f"{len(TAMPA_LOCALES)} locales × {len(SERVICE_QUERIES)} categories, every 30 min"},
+                {"key": "osm", "name": "OpenStreetMap / Overpass — B2B firms", "status": "live",
+                 "cost": "free", "detail": f"{len(SCRAPER_SECTORS)} HQ sectors × {len(SCRAPER_COUNTIES)} counties, OSINT-filtered, every 30 min"},
                 {"key": "reddit", "name": "Reddit (via Apify)", "status": "live" if has("APIFY_TOKEN") else "inactive",
                  "cost": f"${spend:.2f} / ${APIFY_DAILY_BUDGET_USD:.0f} today", "detail": "hourly, $5/day budget guard"},
                 {"key": "shodan", "name": "Shodan — host & CVE intel", "status": "live" if has("SHODAN_API_KEY") else "inactive",
@@ -2194,7 +2247,7 @@ async def send_threat_email(report_id: str, body: SendPitchReq, user: dict = Dep
 #   - operational_value_tier          : Strategic | Tactical | Operational
 # Leads flagged ready_to_sell enter the storefront and are sold per-lead via credits.
 
-STOREFRONT_MIN_CONFIDENCE = float(os.environ.get("STOREFRONT_MIN_CONFIDENCE", "50"))
+STOREFRONT_MIN_CONFIDENCE = float(os.environ.get("STOREFRONT_MIN_CONFIDENCE", "65"))
 TIER_CREDITS = {"Strategic": 5, "Tactical": 3, "Operational": 1}
 DISPOSABLE_EMAIL_DOMAINS = {
     "mailinator.com", "tempmail.com", "10minutemail.com", "guerrillamail.com",
@@ -2266,6 +2319,17 @@ def _osint_verify_sync(email: str, phone: str, website: str, company: str,
             nodes.append("Public_Registry_Verified")
         elif web:
             risk.append({"flag": "Unresolved_Web_Presence", "severity": "medium"})
+    # A resolving company domain that can also receive mail (MX) is a strong legitimacy signal,
+    # even when no contact email was published (common for OSM business records).
+    if web_domain and not mx_ok:
+        try:
+            import dns.resolver as _dnsr2
+            if len(list(_dnsr2.resolve(web_domain, "MX", lifetime=4.0))) > 0:
+                mx_ok = True
+                if "Domain_MX_Match" not in nodes:
+                    nodes.append("Domain_MX_Match")
+        except Exception:
+            pass
     if company and web_domain:
         core = re.sub(r"[^a-z0-9]", "", company.lower())[:5]
         if core and core[:4] and core[:4] in web_domain.replace(".", "").lower():
@@ -2296,6 +2360,19 @@ def _data_confidence(v: dict, intent: int) -> float:
         s += 10
     s += min(max(intent, 0), 100) * 0.10
     return float(round(min(s, 100.0), 1))
+
+def _osint_fields(v: dict, conf: float, intent: int) -> dict:
+    """Storefront intelligence-payload fields derived from an OSINT verification.
+    `ready_to_sell` is the HQ gate (confidence >= STOREFRONT_MIN_CONFIDENCE and >=2 nodes)."""
+    tier = _operational_tier(conf, intent)
+    nodes = v["nodes"]
+    return {
+        "data_confidence_score": conf, "quality_score": conf, "score": conf,
+        "cross_verification": nodes, "risk_matrix": list(v["risk"]),
+        "operational_value_tier": tier, "price_per_lead": TIER_CREDITS[tier],
+        "purchase_status": "available", "buyer_user_id": None,
+        "ready_to_sell": conf >= STOREFRONT_MIN_CONFIDENCE and len(nodes) >= 2,
+    }
 
 async def _llama_assess(category: str, text: str, company: str, model_key: str = "llama") -> dict:
     """Run the LLM analyst pass. Falls back to deepseek if Llama 3 is unavailable."""
@@ -2446,11 +2523,15 @@ async def storefront_leads(city: Optional[str] = None, state: Optional[str] = No
                            min_confidence: float = 0.0, limit: int = 60, offset: int = 0,
                            user: dict = Depends(get_current_user)):
     """Browse individual un-sold, verified leads with full intelligence metrics (PII masked)."""
-    q = {"purchase_status": {"$ne": "sold"}}
+    fl_clause = [{"state": {"$regex": "^(fl|florida)$", "$options": "i"}},
+                 {"state": {"$in": [None, ""]}}]  # FL-only marketplace (Tampa Bay region)
+    q = {"ready_to_sell": True, "purchase_status": {"$ne": "sold"}}
     if city:
         q["city"] = {"$regex": re.escape(city), "$options": "i"}
     if state:
         q["state"] = {"$regex": f"^{re.escape(state)}$", "$options": "i"}
+    else:
+        q["$or"] = fl_clause
     if industry:
         q["category"] = industry
     if tier:
@@ -2460,7 +2541,7 @@ async def storefront_leads(city: Optional[str] = None, state: Optional[str] = No
     total = await db.leads.count_documents(q)
     cur = db.leads.find(q).sort("data_confidence_score", -1).skip(offset).limit(min(limit, 200))
     leads = [_intel_pub(l) async for l in cur]
-    base_q = {"purchase_status": {"$ne": "sold"}}
+    base_q = {"ready_to_sell": True, "purchase_status": {"$ne": "sold"}, "$or": fl_clause}
     industries = await db.leads.distinct("category", base_q)
     states = await db.leads.distinct("state", base_q)
     bundle_pipeline = [
@@ -2568,8 +2649,12 @@ async def purchase_leads(body: PurchaseLeadsReq, request: Request, user: dict = 
 # ---- On-demand lead generator (OSM + OSINT + background AI enrichment) ----
 SECTOR_OSM_TAGS = {
     "real_estate": ['"office"="estate_agent"', '"shop"="estate_agent"', '"office"="property_management"'],
-    "legal": ['"office"="lawyer"'],
-    "healthcare": ['"amenity"="clinic"', '"amenity"="doctors"', '"healthcare"="clinic"'],
+    "legal": ['"office"="lawyer"', '"office"="notary"'],
+    "financial_services": ['"office"="financial"', '"office"="accountant"',
+                           '"office"="financial_advisor"', '"office"="tax_advisor"'],
+    "insurance": ['"office"="insurance"'],
+    "b2b_tech": ['"office"="it"', '"office"="telecommunication"'],
+    "healthcare": ['"amenity"="clinic"', '"amenity"="doctors"', '"healthcare"="clinic"', '"amenity"="dentist"'],
     "dental": ['"amenity"="dentist"'],
     "construction": ['"craft"="builder"', '"office"="construction_company"'],
     "automotive": ['"shop"="car"', '"shop"="car_repair"'],
@@ -2579,20 +2664,33 @@ SECTOR_OSM_TAGS = {
     "fitness": ['"leisure"="fitness_centre"'],
 }
 
+OVERPASS_ENDPOINTS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+]
+
 async def _overpass_generate(sector: str, county: str, limit: int = 200) -> list:
     tags = SECTOR_OSM_TAGS.get(sector, [])
     raws = []
     if tags:
         parts = "".join(f"node[{t}](area.a);way[{t}](area.a);" for t in tags)
-        q = (f'[out:json][timeout:90];area["name"="{county}"]["admin_level"~"6|8"]->.a;'
+        q = (f'[out:json][timeout:90][bbox:24.3,-87.7,31.1,-79.8];'
+             f'area["name"="{county}"]["admin_level"~"6|8"]->.a;'
              f'({parts});out center tags {limit};')
-        try:
-            async with httpx.AsyncClient(timeout=120, headers={"User-Agent": "NEXUS-LeadBot/1.0"}) as c:
-                els = (await c.post("https://overpass-api.de/api/interpreter",
-                                    data={"data": q})).json().get("elements", [])
-        except Exception as e:
-            logger.warning("overpass generate error: %s", e)
-            els = []
+        els = []
+        for attempt, endpoint in enumerate(OVERPASS_ENDPOINTS):
+            try:
+                async with httpx.AsyncClient(timeout=120, headers={"User-Agent": "NEXUS-LeadBot/1.0"}) as c:
+                    resp = await c.post(endpoint, data={"data": q})
+                if resp.status_code == 200 and resp.text.strip().startswith("{"):
+                    els = resp.json().get("elements", [])
+                    break
+                logger.warning("overpass %s for %s/%s -> HTTP %s; trying next mirror",
+                               endpoint.split('/')[2], sector, county, resp.status_code)
+            except Exception as e:
+                logger.warning("overpass %s error (%s/%s): %s", endpoint.split('/')[2], sector, county, e)
+            await asyncio.sleep(2 + attempt * 2)  # backoff before next mirror
         for e in els:
             t = e.get("tags", {})
             name = t.get("name") or t.get("operator")
@@ -2680,6 +2778,29 @@ async def _bg_ai_enrich(lead_ids: list, job_id: str = None):
         await db.generate_jobs.update_one({"job_id": job_id},
             {"$set": {"status": "complete", "done": done,
                       "finished_at": datetime.now(timezone.utc).isoformat()}})
+
+async def _bg_reosint_all():
+    """One-shot OSINT re-scoring of every un-sold lead to the current HQ standard.
+    Recomputes confidence (incl. company-domain MX) and the ready_to_sell HQ gate so the
+    storefront reflects the live quality bar without blocking startup."""
+    try:
+        rescored = hq = 0
+        async for l in db.leads.find({"purchase_status": {"$ne": "sold"}}):
+            v = await asyncio.to_thread(_osint_verify_sync, l.get("email", ""), l.get("phone", ""),
+                                        l.get("website", ""), l.get("company", ""),
+                                        l.get("city", ""), l.get("state", ""))
+            intent = int(l.get("ai_intent_score") or l.get("score") or 0)
+            conf = _data_confidence(v, intent)
+            fields = _osint_fields(v, conf, intent)
+            fields.pop("buyer_user_id", None)  # never overwrite ownership
+            await db.leads.update_one({"_id": l["_id"]}, {"$set": fields})
+            rescored += 1
+            if fields["ready_to_sell"]:
+                hq += 1
+        logger.info("OSINT re-score complete: %d leads, %d HQ (>=%.0f%%)",
+                    rescored, hq, STOREFRONT_MIN_CONFIDENCE)
+    except Exception as e:
+        logger.warning("OSINT re-score backfill error: %s", e)
 
 class GenerateReq(BaseModel):
     sector: str
@@ -2921,7 +3042,7 @@ async def startup():
         await db.leads.update_one({"_id": l["_id"]}, {"$set": {
             "purchase_status": "sold" if l.get("is_sold") else "available",
             "buyer_user_id": l.get("buyer_user_id"),
-            "ready_to_sell": sc >= 55 and len(nodes) >= 2,
+            "ready_to_sell": sc >= STOREFRONT_MIN_CONFIDENCE and len(nodes) >= 2,
             "data_confidence_score": sc, "quality_score": sc,
             "operational_value_tier": tier, "price_per_lead": TIER_CREDITS[tier],
             "cross_verification": nodes, "risk_matrix": [],
@@ -2944,6 +3065,7 @@ async def startup():
         if not scheduler.running:
             scheduler.start()
         logger.info("Scraper scheduled every %s min", cfg.get("interval_min"))
+        asyncio.create_task(_bg_reosint_all())
     elif not RUN_SCHEDULER:
         logger.info("RUN_SCHEDULER=false — scraping handled by standalone worker container")
     logger.info("NEXUS online — admin seeded, %d leads", await db.leads.count_documents({}))
