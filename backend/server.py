@@ -35,6 +35,14 @@ HQ_FLORIDA_PRICING = (
     {"quantity": 50, "price": 149},
 )
 STRIPE_CATALOG = {
+    "price_real_estate_leads_29": {
+        "name": "Tampa Bay Real Estate Lead Sprint",
+        "price": "$29",
+        "mode": "payment",
+        "category": "lead_workflow",
+        "quantity": 200,
+        "region": "Pinellas, Hillsborough, Pasco, Hernando",
+    },
     "price_starter_149": {
         "name": "Starter",
         "price": "$149/mo",

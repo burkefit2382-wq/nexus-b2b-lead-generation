@@ -133,6 +133,41 @@ h3 {
   line-height: 1.55;
 }
 
+.hero-offer {
+  width: min(560px, 100%);
+  margin-top: 26px;
+  padding: 18px 0 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.hero-offer span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--gold);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.hero-offer strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--white);
+  font-size: 1.45rem;
+  line-height: 1.1;
+}
+
+.hero-offer p {
+  max-width: 520px;
+  margin-bottom: 14px;
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.45;
+}
+
+.hero-checkout {
+  min-width: 220px;
+}
+
 .pilot-form {
   width: min(560px, 100%);
   margin-top: 34px;
