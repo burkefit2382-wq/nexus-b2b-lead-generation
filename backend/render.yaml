@@ -4,7 +4,7 @@ services:
     runtime: python
     plan: free
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "python server.py"
+    startCommand: "python main.py"
     healthCheckPath: "/healthz"
     envVars:
       - key: LAUNCH_HOST
@@ -15,4 +15,3 @@ services:
         sync: false
       - key: WAITLIST_NOTIFY_TO
         sync: false
-
