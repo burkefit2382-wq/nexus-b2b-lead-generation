@@ -146,6 +146,15 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             return
 
         parsed = urllib.parse.urlparse(self.path)
+        route = parsed.path.rstrip("/")
+        if route == "/api/revenue-status":
+            self.handle_revenue_status()
+            return
+
+        if route == "/api/fulfillment-status":
+            self.handle_fulfillment_status()
+            return
+
         query = urllib.parse.parse_qs(parsed.query)
         if parsed.path in {"", "/"} and query.get("page", [""])[0] == "dashboard":
             self.path = "/dashboard.html"
