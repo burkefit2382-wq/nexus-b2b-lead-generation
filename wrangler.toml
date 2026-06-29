@@ -1,0 +1,16 @@
+name = "raspy-hat-15da"
+compatibility_date = "2024-09-23"
+main = "worker.js"
+
+[build]
+command = "npm --prefix frontend install && npm --prefix frontend run build"
+
+[assets]
+directory = "frontend/dist"
+binding = "ASSETS"
+
+# Custom domain — replace YOUR_CUSTOM_DOMAIN with your actual domain (e.g. app.example.com).
+# Cloudflare will automatically create and manage the DNS record for you.
+# Remove or comment this section out if you only need the default *.workers.dev URL.
+[[custom_domains]]
+hostname = "YOUR_CUSTOM_DOMAIN"
