@@ -164,8 +164,26 @@ h3 {
   line-height: 1.45;
 }
 
+.hero-offer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .hero-checkout {
-  min-width: 220px;
+  min-width: 160px;
+}
+
+.hero-checkout.secondary {
+  color: var(--white);
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+}
+
+.hero-checkout.secondary:hover,
+.hero-checkout.secondary:focus-visible {
+  color: #101614;
+  background: #ffd27a;
 }
 
 .pilot-form {

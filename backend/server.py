@@ -35,12 +35,28 @@ HQ_FLORIDA_PRICING = (
     {"quantity": 50, "price": 149},
 )
 STRIPE_CATALOG = {
-    "price_real_estate_leads_29": {
-        "name": "Tampa Bay Real Estate Lead Sprint",
-        "price": "$29",
+    "price_tb_leads_10_350": {
+        "name": "Tampa Bay 10-Lead Sprint",
+        "price": "$350",
         "mode": "payment",
         "category": "lead_workflow",
-        "quantity": 200,
+        "quantity": 10,
+        "region": "Pinellas, Hillsborough, Pasco, Hernando",
+    },
+    "price_tb_leads_25_700": {
+        "name": "Tampa Bay 25-Lead Growth Sprint",
+        "price": "$700",
+        "mode": "payment",
+        "category": "lead_workflow",
+        "quantity": 25,
+        "region": "Pinellas, Hillsborough, Pasco, Hernando",
+    },
+    "price_tb_leads_50_1000": {
+        "name": "Tampa Bay 50-Lead Domination Sprint",
+        "price": "$1,000",
+        "mode": "payment",
+        "category": "lead_workflow",
+        "quantity": 50,
         "region": "Pinellas, Hillsborough, Pasco, Hernando",
     },
     "price_starter_149": {
