@@ -103,6 +103,22 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - P2: People-intel rate limiting; lead unlock receipts/exports; usage analytics dashboard.
 
 ## Changelog
+- 2026-06-29 — **Public launch site integrated** ("LeadGen Virtual Hub"): the user's static
+  marketing site (index.html/styles.css/app.js/assets, built in Google AI Studio) is now served
+  verbatim from `frontend/public/launch/` and rendered at **`/`** inside a full-viewport iframe
+  (perfect CSS/JS isolation — their `.topbar`/`.tool-card`/`.badge` no longer clash with the NEXUS
+  app styles). The functional React NEXUS console moved to **`/dashboard`** (also reachable via
+  `#app`/`#dashboard`/`#login`/`#console`). App.js now hash/path-routes between `<Landing/>` (public)
+  and `<AuthProvider><Gate/></AuthProvider>` (app); AuthContext/Login/Dashboard untouched (auth verified
+  unchanged: SameSite=Lax httpOnly cookie + /auth/me OK). Landing CTAs ("Console Login", "Open the live
+  console →") break out to `/dashboard` via target="_top". Added public (no-auth) FastAPI endpoints
+  backing the landing: `POST /api/waitlist` (pilot capture → db.waitlist, `GET /api/waitlist` admin-only),
+  `POST /api/enrich-score`, `POST /api/sale-listing`, `POST /api/chat` (safe-mode, no LLM cost) — ported
+  from the launch site's demo server.py. Verified: /launch/* served 200, waitlist persists to Mongo,
+  demos return scored payloads, both routes render. NOTE: the launch site's `dashboard.html` mockup is
+  intentionally NOT used — the real React dashboard is the console. PREVIEW only — REDEPLOY to push.
+
+
 - 2026-06-28 — **OSINT-wired live scraper → HQ-only FL B2B marketplace**: the 24/7 scrape cycle now
   runs every harvested entity through the OSINT verifier inline (free, no LLM) and only surfaces
   high-quality leads. (1) **Source pivot**: continuous scraper switched from Nominatim home-services to

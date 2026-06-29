@@ -2866,6 +2866,106 @@ async def generate_status(job_id: str, user: dict = Depends(require_admin)):
             "county": job.get("county"), "started_at": job.get("started_at"),
             "finished_at": job.get("finished_at")}
 
+# ====================== PUBLIC LAUNCH SITE (marketing landing — no auth) ======================
+# Backs the static launch site at /launch (pilot waitlist capture + lightweight demos).
+class WaitlistReq(BaseModel):
+    email: str
+    company: str = ""
+
+@api.post("/waitlist")
+async def waitlist_signup(body: WaitlistReq, request: Request):
+    email = (body.email or "").strip().lower()
+    if not EMAIL_RX.fullmatch(email):
+        raise HTTPException(status_code=400, detail="Enter a valid email address.")
+    rec = {"email": email, "company": (body.company or "").strip(), "source": "launch_site",
+           "captured_at": datetime.now(timezone.utc).isoformat(),
+           "remote": request.client.host if request.client else ""}
+    await db.waitlist.update_one({"email": email}, {"$setOnInsert": rec}, upsert=True)
+    return {"ok": True, "message": "Pilot request received."}
+
+@api.get("/waitlist")
+async def waitlist_list(user: dict = Depends(require_admin)):
+    out = []
+    async for r in db.waitlist.find().sort("captured_at", -1).limit(500):
+        r["id"] = str(r.pop("_id"))
+        out.append(r)
+    return {"requests": out, "total": len(out)}
+
+def _lgvh_enrich(lead: dict) -> dict:
+    company = str(lead.get("company") or "Unknown lead").strip()
+    signal = str(lead.get("signal") or "").strip()
+    market = str(lead.get("market") or "").strip()
+    source = str(lead.get("source") or "approved source").strip()
+    score, reasons = 52, []
+    if any(t in signal.lower() for t in ("hiring", "growth", "expansion", "contract", "funding", "grant", "procurement")):
+        score += 24; reasons.append("Strong buying or growth signal found after scrape.")
+    if any(t in market.lower() for t in ("gov", "field", "security", "operations", "saas")):
+        score += 14; reasons.append("Market aligns with Nexus target segments.")
+    if "approved" in source.lower() or "allowlist" in source.lower():
+        score += 6; reasons.append("Source is documented in the scraper allowlist.")
+    score = max(0, min(score, 98))
+    band = "High" if score >= 80 else "Medium" if score >= 60 else "Low"
+    confidence = "High" if len(reasons) >= 3 else "Medium" if reasons else "Low"
+    return {"company": company,
+            "summary": f"{company} appears to be a {market or 'target'} lead with scrape signal: {signal or 'no signal provided'}.",
+            "score": score, "scoreBand": band, "confidence": confidence,
+            "reasons": reasons or ["Insufficient signals; route to review before outreach."],
+            "nextAction": "Create storefront draft" if score >= 80 else "Review enrichment" if score >= 60 else "Hold for more data",
+            "storefrontSafeFields": {"title": company, "category": market or "Lead intelligence",
+                                     "summary": f"{company} matched {band.lower()} priority criteria after enrichment."}}
+
+class LeadDemoReq(BaseModel):
+    lead: Dict[str, Any] = {}
+
+@api.post("/enrich-score")
+async def lgvh_enrich_score(body: LeadDemoReq):
+    if not body.lead:
+        raise HTTPException(status_code=400, detail="Request requires a lead object.")
+    return {"ok": True, "result": _lgvh_enrich(body.lead)}
+
+@api.post("/sale-listing")
+async def lgvh_sale_listing(body: LeadDemoReq):
+    if not body.lead:
+        raise HTTPException(status_code=400, detail="Request requires a lead object.")
+    e = _lgvh_enrich(body.lead)
+    score = int(e["score"])
+    price = 49 if score < 70 else 129 if score < 85 else 249
+    listing = {"title": f"{e['company']} - AI-enriched {e['scoreBand']} priority lead",
+               "category": e["storefrontSafeFields"]["category"], "summary": e["storefrontSafeFields"]["summary"],
+               "score": score, "scoreBand": e["scoreBand"], "confidence": e["confidence"],
+               "price": price, "currency": "USD",
+               "included": ["AI enrichment summary", "Lead score and reasons", "Source type and provenance notes",
+                            "Suggested next action", "Storefront-safe company profile"],
+               "privateFieldsExcluded": ["Raw phone/email", "Internal notes", "Sensitive identifiers", "Unreviewed personal data"],
+               "cta": "Request this lead package", "status": "Ready for review"}
+    return {"ok": True, "listing": listing}
+
+class ChatDemoReq(BaseModel):
+    prompt: str = ""
+
+@api.post("/chat")
+async def lgvh_chat(body: ChatDemoReq):
+    prompt = (body.prompt or "").strip()
+    if not prompt:
+        raise HTTPException(status_code=400, detail="Enter a message for Nexus AI.")
+    low = prompt.lower()
+    if "scraper" in low or "scrape" in low:
+        ans = ("Scraper command view: check collector uptime, source allowlist, ingestion queue, dedupe rate, "
+               "error spikes, and emergency stop status. Keep sources documented and rate-limited.")
+    elif "lead" in low:
+        ans = ("Lead workflow: import, validate, dedupe, enrich, score, review, then create a sanitized storefront "
+               "draft. Do not publish private contact fields by default.")
+    elif "storefront" in low or "publish" in low:
+        ans = ("Storefront workflow: create listing drafts first, exclude private notes and raw contact data, then "
+               "publish only when score, privacy, and approval rules pass.")
+    elif "onsite" in low or "room" in low or "camera" in low:
+        ans = ("Onsite workflow: run the room privacy checklist, record authorized findings, label suspicious signals "
+               "for review, and escalate through security or law enforcement when appropriate.")
+    else:
+        ans = ("Nexus safe mode is online. I can help with lead workflows, 24/7 scraper operations, Pi Suite edge "
+               "nodes, onsite privacy checks, storefront drafts, and launch readiness.")
+    return {"ok": True, "assistant": "Nexus Llama 3", "mode": "safe_mode", "answer": ans}
+
 # ====================== GOVERNANCE (multi-tenant, RBAC, audit, monitoring) ======================
 @api.get("/governance/me")
 async def governance_me(user: dict = Depends(get_current_user)):
