@@ -416,10 +416,18 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
 
-        price_id = str(payload.get("priceId", "")).strip()
+        requested_price_id = str(payload.get("priceId", "")).strip()
+        price_id = requested_price_id or str(os.environ.get("PRICE_ID", "")).strip()
         catalog_item = STRIPE_CATALOG.get(price_id)
         if not catalog_item:
-            self.send_json({"error": "Unknown Stripe price ID."}, HTTPStatus.BAD_REQUEST)
+            self.send_json(
+                {
+                    "error": "Unknown Stripe price ID.",
+                    "setupNeeded": not requested_price_id,
+                    "missing": ["PRICE_ID"] if not requested_price_id else [],
+                },
+                HTTPStatus.BAD_REQUEST,
+            )
             return
 
         stripe_secret = os.environ.get("STRIPE_SECRET_KEY")
@@ -1018,7 +1026,12 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         }
 
     def stripe_status(self) -> dict[str, Any]:
-        missing = [] if self.valid_stripe_secret(os.environ.get("STRIPE_SECRET_KEY")) else ["STRIPE_SECRET_KEY"]
+        required = {
+            "STRIPE_SECRET_KEY": self.valid_stripe_secret(os.environ.get("STRIPE_SECRET_KEY")),
+            "STRIPE_WEBHOOK_SECRET": bool(os.environ.get("STRIPE_WEBHOOK_SECRET")),
+            "PRICE_ID": bool(os.environ.get("PRICE_ID")),
+        }
+        missing = [name for name, ready in required.items() if not ready]
         return {
             "configured": not missing,
             "missing": missing,
