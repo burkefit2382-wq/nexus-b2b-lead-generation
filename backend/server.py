@@ -59,6 +59,30 @@ STRIPE_CATALOG = {
         "quantity": 50,
         "region": "Pinellas, Hillsborough, Pasco, Hernando",
     },
+    "price_lead_drops_99": {
+        "name": "Lead Drops Subscription",
+        "price": "$99/mo",
+        "mode": "subscription",
+        "category": "recurring_revenue",
+    },
+    "price_territory_exclusive_499": {
+        "name": "Territory Exclusivity Subscription",
+        "price": "$499/mo",
+        "mode": "subscription",
+        "category": "recurring_revenue",
+    },
+    "price_osint_monitoring_49": {
+        "name": "OSINT Monitoring Subscription",
+        "price": "$49/mo",
+        "mode": "subscription",
+        "category": "recurring_revenue",
+    },
+    "price_business_intel_99": {
+        "name": "Business Intelligence Subscription",
+        "price": "$99/mo",
+        "mode": "subscription",
+        "category": "recurring_revenue",
+    },
     "price_starter_149": {
         "name": "Starter",
         "price": "$149/mo",
