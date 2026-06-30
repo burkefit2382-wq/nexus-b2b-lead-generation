@@ -167,10 +167,12 @@ price_pro_299
 price_elite_499
 price_dfy_997
 price_dfy_setup_1500
-price_leads_25
-price_leads_50
-price_leads_100
-price_leads_250
+price_tb_leads_10_350
+price_tb_leads_25_700
+price_tb_leads_50_1000
+price_lead_verify_plan_99
+price_lead_verify_plan_299
+price_lead_verify_plan_499
 price_osint_basic
 price_osint_deep
 price_osint_homeowner
