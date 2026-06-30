@@ -168,6 +168,24 @@ STRIPE_CATALOG = {
         "mode": "subscription",
         "category": "lead_verification_subscription",
     },
+    "price_ai_outreach_199": {
+        "name": "AI Outreach Intelligence Starter",
+        "price": "$199/mo",
+        "mode": "subscription",
+        "category": "ai_sales_intelligence",
+    },
+    "price_ai_profiles_499": {
+        "name": "AI Prospect Profiles Growth",
+        "price": "$499/mo",
+        "mode": "subscription",
+        "category": "ai_sales_intelligence",
+    },
+    "price_ai_business_intel_999": {
+        "name": "AI Business Intelligence Command",
+        "price": "$999/mo",
+        "mode": "subscription",
+        "category": "ai_sales_intelligence",
+    },
     "price_starter_149": {
         "name": "Starter",
         "price": "$149/mo",
