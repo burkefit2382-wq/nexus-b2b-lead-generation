@@ -12,6 +12,8 @@ const checkoutNote = document.querySelector("#checkoutNote");
 const fulfillmentStatus = document.querySelector("#fulfillmentStatus");
 const fulfillmentSummary = document.querySelector("#fulfillmentSummary");
 const fulfillmentList = document.querySelector("#fulfillmentList");
+const testFulfillmentSummary = document.querySelector("#testFulfillmentSummary");
+const testFulfillmentList = document.querySelector("#testFulfillmentList");
 
 window.addEventListener("hashchange", renderPage);
 window.addEventListener("load", () => {
@@ -140,6 +142,7 @@ async function loadFulfillmentStatus() {
           <p>Completed Stripe checkouts will appear here after the webhook receives them.</p>
         </article>
       `;
+      renderTestFulfillment(body);
       return;
     }
 
@@ -155,6 +158,7 @@ async function loadFulfillmentStatus() {
         <p>Session ending ${escapeHtml(record.sessionId || "unknown")}</p>
       </article>
     `).join("");
+    renderTestFulfillment(body);
   } catch (error) {
     fulfillmentStatus.textContent = error.message || "Fulfillment status unavailable.";
   }
@@ -162,6 +166,46 @@ async function loadFulfillmentStatus() {
 
 function fulfillmentMetric(value, label) {
   return `<article><strong>${escapeHtml(value)}</strong><span>${escapeHtml(label)}</span></article>`;
+}
+
+function renderTestFulfillment(body) {
+  if (!testFulfillmentSummary || !testFulfillmentList) {
+    return;
+  }
+
+  const testSummary = body.testSummary || { total: 0, pending: 0, manual: 0, revenue: "$0.00 USD" };
+  const testRecords = body.testRecords || [];
+  testFulfillmentSummary.innerHTML = [
+    fulfillmentMetric(testSummary.total, "Test records"),
+    fulfillmentMetric(testSummary.pending, "Pending tests"),
+    fulfillmentMetric(testSummary.manual, "Manual tests"),
+    fulfillmentMetric(testSummary.revenue, "Test value"),
+  ].join("");
+
+  if (!testRecords.length) {
+    testFulfillmentList.innerHTML = `
+      <article>
+        <span class="badge warning">Clear</span>
+        <h3>No test transactions loaded</h3>
+        <p>Smoke-test and blocked test records will stay separated from real customer orders.</p>
+      </article>
+    `;
+    return;
+  }
+
+  testFulfillmentList.innerHTML = testRecords.map((record) => `
+    <article>
+      <span class="badge warning">${escapeHtml(record.status)}</span>
+      <h3>${escapeHtml(record.catalogName)}</h3>
+      <p>${escapeHtml(record.amount)} - ${escapeHtml(record.buyerEmail || "buyer email unavailable")}</p>
+      <div class="listing-meta">
+        <strong>${escapeHtml(record.category)}</strong>
+        <strong>${escapeHtml(record.delivery)}</strong>
+      </div>
+      <p>${escapeHtml(record.deliveryResult || "No delivery detail recorded.")}</p>
+      <p>Session ending ${escapeHtml(record.sessionId || "unknown")}</p>
+    </article>
+  `).join("");
 }
 
 chatForm?.addEventListener("submit", (event) => {

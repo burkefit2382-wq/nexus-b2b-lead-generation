@@ -475,11 +475,9 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         )
 
     def handle_fulfillment_status(self) -> None:
-        records = [
-            record
-            for record in self.read_fulfillment_records()
-            if not self.is_smoke_fulfillment_record(record)
-        ]
+        all_records = self.read_fulfillment_records()
+        records = [record for record in all_records if not self.is_smoke_fulfillment_record(record)]
+        test_records = [record for record in all_records if self.is_smoke_fulfillment_record(record)]
         total = len(records)
         delivered = sum(1 for record in records if record.get("status") == "delivered")
         pending = sum(1 for record in records if str(record.get("status", "")).startswith("pending"))
@@ -489,22 +487,16 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             for record in records
             if record.get("paymentStatus") in {"paid", "no_payment_required"}
         )
+        test_pending = sum(1 for record in test_records if str(record.get("status", "")).startswith("pending"))
+        test_manual = sum(1 for record in test_records if "manual" in str(record.get("status", "")))
+        test_revenue_cents = sum(
+            int(record.get("amountTotal") or 0)
+            for record in test_records
+            if record.get("paymentStatus") in {"paid", "no_payment_required"}
+        )
 
-        recent = []
-        for record in records[-10:]:
-            recent.append(
-                {
-                    "sessionId": str(record.get("sessionId", ""))[-10:],
-                    "catalogName": record.get("catalogName", "Unknown purchase"),
-                    "category": record.get("category", "unknown"),
-                    "quantity": record.get("quantity"),
-                    "status": record.get("status", "unknown"),
-                    "delivery": record.get("delivery", "unknown"),
-                    "buyerEmail": self.mask_email(str(record.get("buyerEmail", ""))),
-                    "capturedAt": record.get("capturedAt"),
-                    "amount": self.format_amount(record.get("amountTotal"), record.get("currency")),
-                }
-            )
+        recent = [self.fulfillment_record_summary(record) for record in records[-10:]]
+        test_recent = [self.fulfillment_record_summary(record) for record in test_records[-10:]]
 
         self.send_json(
             {
@@ -519,6 +511,13 @@ class LaunchHandler(SimpleHTTPRequestHandler):
                     "revenue": self.format_amount(revenue_cents, "usd"),
                 },
                 "recent": list(reversed(recent)),
+                "testSummary": {
+                    "total": len(test_records),
+                    "pending": test_pending,
+                    "manual": test_manual,
+                    "revenue": self.format_amount(test_revenue_cents, "usd"),
+                },
+                "testRecords": list(reversed(test_recent)),
             },
             HTTPStatus.OK,
         )
@@ -792,6 +791,20 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         session_id = str(record.get("sessionId", "")).lower()
         buyer_email = str(record.get("buyerEmail", "")).lower()
         return "smoke" in session_id or buyer_email.endswith("@example.com")
+
+    def fulfillment_record_summary(self, record: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "sessionId": str(record.get("sessionId", ""))[-10:],
+            "catalogName": record.get("catalogName", "Unknown purchase"),
+            "category": record.get("category", "unknown"),
+            "quantity": record.get("quantity"),
+            "status": record.get("status", "unknown"),
+            "delivery": record.get("delivery", "unknown"),
+            "deliveryResult": record.get("deliveryResult", ""),
+            "buyerEmail": self.mask_email(str(record.get("buyerEmail", ""))),
+            "capturedAt": record.get("capturedAt"),
+            "amount": self.format_amount(record.get("amountTotal"), record.get("currency")),
+        }
 
     def append_fulfillment_record(self, record: dict[str, Any]) -> None:
         DATA_DIR.mkdir(exist_ok=True)
