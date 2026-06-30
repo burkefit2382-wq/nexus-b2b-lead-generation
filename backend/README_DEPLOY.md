@@ -162,9 +162,9 @@ python server.py
 The backend accepts these catalog lookup keys:
 
 ```text
-price_starter_149
-price_pro_299
-price_elite_499
+price_starter_350
+price_pro_700
+price_elite_1000
 price_dfy_997
 price_dfy_setup_1500
 price_tb_leads_10_350

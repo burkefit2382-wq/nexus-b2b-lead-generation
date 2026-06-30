@@ -208,23 +208,26 @@ STRIPE_CATALOG = {
         "mode": "subscription",
         "category": "ai_sales_intelligence",
     },
-    "price_starter_149": {
-        "name": "Starter",
-        "price": "$149/mo",
+    "price_starter_350": {
+        "name": "Starter Premium Lead Plan",
+        "price": "$350/mo",
         "mode": "subscription",
         "category": "pricing_plan",
+        "quantity": 10,
     },
-    "price_pro_299": {
-        "name": "Pro",
-        "price": "$299/mo",
+    "price_pro_700": {
+        "name": "Pro Premium Lead Plan",
+        "price": "$700/mo",
         "mode": "subscription",
         "category": "pricing_plan",
+        "quantity": 25,
     },
-    "price_elite_499": {
-        "name": "Elite",
-        "price": "$499/mo",
+    "price_elite_1000": {
+        "name": "Elite Premium Lead Plan",
+        "price": "$1,000/mo",
         "mode": "subscription",
         "category": "pricing_plan",
+        "quantity": 50,
     },
     "price_dfy_997": {
         "name": "DFY Lead Machine",
