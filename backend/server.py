@@ -1358,7 +1358,7 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             "availableCount": HQ_FLORIDA_LEAD_COUNT,
             "status": "For Sale",
             "pricing": [
-                {"quantity": tier["quantity"], "price": tier["price"], "currency": "USD"}
+                {"quantity": tier["quantity"], "price": tier["price"], "priceId": tier["priceId"], "currency": "USD"}
                 for tier in HQ_FLORIDA_PRICING
             ],
             "delivery": "Delivered after purchase approval through configured Resend email workflow.",
