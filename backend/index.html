@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>LeadGen Virtual Hub</title>
     <meta name="description" content="Lead intelligence workspace for import, OSINT enrichment, AI enrichment, scoring, storefront publishing, and prioritized outreach.">
-    <link rel="stylesheet" href="styles.css?v=20260629-paid-workflow">
+    <link rel="stylesheet" href="styles.css?v=20260630-osint-build">
   </head>
   <body>
     <header class="topbar">
@@ -266,6 +266,44 @@
             <article class="lead-listing"><span class="badge">OSINT</span><h3>Real Estate OSINT Report</h3><p>Identity, property history, financial signals, and risk scoring.</p><p class="listing-price">$75</p><button type="button" class="checkout-button" data-price-id="price_osint_basic">Buy now</button></article>
             <article class="lead-listing"><span class="badge">OSINT</span><h3>Deep OSINT Investigation</h3><p>Full background, social footprint, business ties, public records, and fraud indicators.</p><p class="listing-price">$150</p><button type="button" class="checkout-button" data-price-id="price_osint_deep">Buy now</button></article>
             <article class="lead-listing"><span class="badge">OSINT</span><h3>Homeowner Identity Report</h3><p>Verify sellers before you engage with ownership signals and risk scoring.</p><p class="listing-price">$99</p><button type="button" class="checkout-button" data-price-id="price_osint_homeowner">Buy now</button></article>
+          </div>
+        </div>
+        <div class="product-section osint-workbench" id="osint-workbench">
+          <h3>Authorized OSINT Report Workbench</h3>
+          <div class="pipeline-layout">
+            <form class="sample-lead osint-form" id="osintReportForm">
+              <strong>Queue report details</strong>
+              <label for="osintReportType">Report type</label>
+              <select id="osintReportType" name="reportType" required>
+                <option value="business">Business OSINT Report</option>
+                <option value="property">Property OSINT Report</option>
+                <option value="digital">Digital Footprint Report</option>
+                <option value="people">Authorized People OSINT Report</option>
+              </select>
+              <label for="osintSubject">Subject</label>
+              <input id="osintSubject" name="subject" type="text" placeholder="Business, property, domain, or authorized person" maxlength="160" required>
+              <label for="osintRequesterEmail">Requester email</label>
+              <input id="osintRequesterEmail" name="requesterEmail" type="email" placeholder="buyer@company.com" required>
+              <label for="osintUseCase">Authorized purpose</label>
+              <input id="osintUseCase" name="useCase" type="text" placeholder="Due diligence, verification, risk review..." required>
+              <label for="osintPublicUrls">Public URLs or source notes</label>
+              <textarea id="osintPublicUrls" name="publicUrls" rows="4" placeholder="One public URL or source note per line"></textarea>
+              <label for="osintScopeNotes">Scope notes</label>
+              <textarea id="osintScopeNotes" name="scopeNotes" rows="3" placeholder="What should the analyst verify?"></textarea>
+              <label class="check-row" for="osintAuthorized">
+                <input id="osintAuthorized" name="authorized" type="checkbox" required>
+                <span>I confirm this is authorized public-source research. No covert tracking, credential access, or number-only location lookup.</span>
+              </label>
+              <button type="submit">Generate safe preview</button>
+              <p class="chat-note" id="osintReportNote">Reports are queued for review before customer delivery.</p>
+            </form>
+            <div class="pipeline-results" id="osintReportResults" aria-live="polite">
+              <div class="result-card">
+                <span>Ready</span>
+                <strong>OSINT intake online</strong>
+                <p>Submit authorized report details to generate a safe preview and queue fulfillment review.</p>
+              </div>
+            </div>
           </div>
         </div>
         <div class="product-section">
@@ -591,6 +629,6 @@
       <span>Private pilot readiness draft</span>
     </footer>
 
-    <script src="app.js?v=20260629-paid-workflow"></script>
+    <script src="app.js?v=20260630-osint-build"></script>
   </body>
 </html>

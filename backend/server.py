@@ -27,6 +27,7 @@ DATA_DIR = ROOT.parent / "data"
 WAITLIST_PATH = DATA_DIR / "waitlist_requests.jsonl"
 LEAD_PACKAGE_REQUESTS_PATH = DATA_DIR / "lead_package_requests.jsonl"
 FULFILLMENT_EVENTS_PATH = DATA_DIR / "fulfillment_events.jsonl"
+OSINT_REPORTS_PATH = DATA_DIR / "osint_report_requests.jsonl"
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 HQ_FLORIDA_LEAD_COUNT = 137
 HQ_FLORIDA_PRICING = (
@@ -318,6 +319,10 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             self.handle_sale_listing()
             return
 
+        if route == "/api/osint-report":
+            self.handle_osint_report()
+            return
+
         if route == "/api/revenue-status":
             self.handle_revenue_status()
             return
@@ -434,6 +439,86 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         enriched = self.enrich_and_score_lead(lead)
         listing = self.create_sale_listing(enriched)
         self.send_json({"ok": True, "listing": listing}, HTTPStatus.OK)
+
+    def handle_osint_report(self) -> None:
+        try:
+            payload = self.read_json_body()
+        except ValueError as exc:
+            self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+
+        report_type = str(payload.get("reportType", "")).strip().lower()
+        subject = str(payload.get("subject", "")).strip()
+        requester_email = str(payload.get("requesterEmail", "")).strip().lower()
+        use_case = str(payload.get("useCase", "")).strip()
+        scope_notes = str(payload.get("scopeNotes", "")).strip()
+        public_urls = str(payload.get("publicUrls", "")).strip()
+        authorized = bool(payload.get("authorized"))
+
+        allowed_types = {
+            "people": "Authorized People OSINT Report",
+            "business": "Business OSINT Report",
+            "property": "Property OSINT Report",
+            "digital": "Digital Footprint Report",
+        }
+        if report_type not in allowed_types:
+            self.send_json({"error": "Choose a valid OSINT report type."}, HTTPStatus.BAD_REQUEST)
+            return
+
+        if not subject or len(subject) > 160:
+            self.send_json({"error": "Enter a report subject under 160 characters."}, HTTPStatus.BAD_REQUEST)
+            return
+
+        if not EMAIL_RE.match(requester_email):
+            self.send_json({"error": "Enter a valid requester email."}, HTTPStatus.BAD_REQUEST)
+            return
+
+        if not authorized:
+            self.send_json({"error": "Authorization confirmation is required before OSINT intake."}, HTTPStatus.BAD_REQUEST)
+            return
+
+        unsafe_text = " ".join([subject, use_case, scope_notes]).lower()
+        blocked_terms = ("live location", "track phone", "phone location", "gps", "stalk", "password", "bypass", "hack")
+        if any(term in unsafe_text for term in blocked_terms):
+            self.send_json(
+                {
+                    "error": "This OSINT workflow only supports authorized public-source reporting. It cannot perform covert tracking, credential access, or number-only location lookup."
+                },
+                HTTPStatus.BAD_REQUEST,
+            )
+            return
+
+        record = {
+            "reportId": f"osint_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}",
+            "reportType": report_type,
+            "reportName": allowed_types[report_type],
+            "subject": subject,
+            "requesterEmail": requester_email,
+            "useCase": use_case or "Authorized public-source due diligence",
+            "scopeNotes": scope_notes,
+            "publicUrls": [item.strip() for item in public_urls.splitlines() if item.strip()][:8],
+            "authorized": authorized,
+            "status": "generated_safe_preview",
+            "capturedAt": datetime.now(timezone.utc).isoformat(),
+            "remoteAddress": self.client_address[0],
+        }
+        report = self.build_osint_report(record)
+        record["report"] = report
+
+        DATA_DIR.mkdir(exist_ok=True)
+        with OSINT_REPORTS_PATH.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, sort_keys=True) + "\n")
+
+        notification = self.try_send_osint_report_notification(record)
+        self.send_json(
+            {
+                "ok": True,
+                "message": "Authorized OSINT report preview generated and queued for review.",
+                "notification": notification,
+                "report": report,
+            },
+            HTTPStatus.OK,
+        )
 
     def handle_revenue_status(self) -> None:
         self.send_json(
@@ -1150,6 +1235,99 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             "cta": "Request this lead package",
             "status": "For Sale",
         }
+
+    def build_osint_report(self, record: dict[str, Any]) -> dict[str, Any]:
+        report_type = str(record["reportType"])
+        subject = str(record["subject"])
+        source_count = len(record.get("publicUrls") or [])
+        base_score = {
+            "people": 62,
+            "business": 74,
+            "property": 70,
+            "digital": 68,
+        }.get(report_type, 60)
+        score = min(96, base_score + (source_count * 3))
+
+        source_plan = [
+            "Confirm subject identity from buyer-provided public context.",
+            "Review public web, business, property, and reputation sources where applicable.",
+            "Record source notes, timestamps, and confidence level for every finding.",
+            "Exclude private credentials, private accounts, sensitive identifiers, and unverified personal data.",
+        ]
+        if report_type == "people":
+            focus = ["authorized identity context", "public affiliation signals", "risk notes", "source confidence"]
+        elif report_type == "business":
+            focus = ["business identity", "web footprint", "reputation signals", "opportunity context"]
+        elif report_type == "property":
+            focus = ["property context", "public ownership/entity trail", "local signals", "review flags"]
+        else:
+            focus = ["public web footprint", "brand consistency", "reputation signals", "risk summary"]
+
+        return {
+            "reportId": record["reportId"],
+            "title": f"{record['reportName']}: {subject}",
+            "subject": subject,
+            "status": "Safe preview generated",
+            "confidence": "High" if source_count >= 3 else "Medium" if source_count else "Review required",
+            "opportunityScore": score,
+            "summary": (
+                f"Nexus generated an authorized public-source OSINT preview for {subject}. "
+                "The report is queued for analyst review before any customer delivery."
+            ),
+            "focusAreas": focus,
+            "sourcePlan": source_plan,
+            "providedSources": record.get("publicUrls") or [],
+            "buyerSafeRules": [
+                "Use only lawful public-source material and buyer-provided context.",
+                "Do not perform covert tracking, account access, credential collection, or number-only location lookup.",
+                "Mask sensitive personal data and route uncertain findings to manual review.",
+                "Deliver a reviewed summary, source notes, confidence level, and recommended next action.",
+            ],
+            "nextAction": "Review sources and prepare customer-ready PDF/report delivery.",
+        }
+
+    def try_send_osint_report_notification(self, record: dict[str, Any]) -> str:
+        if not self.resend_status()["configured"]:
+            return "skipped: Resend delivery not configured"
+
+        try:
+            from html import escape
+
+            import resend
+
+            sender = os.environ["RESEND_FROM"]
+            notify_to = os.environ.get("WAITLIST_NOTIFY_TO") or os.environ["RESEND_TO"]
+            resend.api_key = os.environ["RESEND_API_KEY"]
+
+            report = record["report"]
+            html = (
+                "<h1>Nexus OSINT report queued</h1>"
+                f"<p><strong>Report:</strong> {escape(str(report['title']))}</p>"
+                f"<p><strong>Requester:</strong> {escape(str(record['requesterEmail']))}</p>"
+                f"<p><strong>Use case:</strong> {escape(str(record['useCase']))}</p>"
+                f"<p><strong>Status:</strong> {escape(str(report['status']))}</p>"
+                f"<p><strong>Next action:</strong> {escape(str(report['nextAction']))}</p>"
+            )
+            text = (
+                "Nexus OSINT report queued\n"
+                f"Report: {report['title']}\n"
+                f"Requester: {record['requesterEmail']}\n"
+                f"Use case: {record['useCase']}\n"
+                f"Status: {report['status']}\n"
+                f"Next action: {report['nextAction']}"
+            )
+            resend.Emails.send(
+                {
+                    "from": sender,
+                    "to": [notify_to],
+                    "subject": f"Nexus OSINT queued: {record['reportName']}",
+                    "html": html,
+                    "text": text,
+                }
+            )
+            return "sent"
+        except Exception as exc:  # noqa: BLE001 - report queue should still persist if email fails.
+            return f"failed: {exc}"
 
     def hq_florida_market(self) -> dict[str, Any]:
         return {

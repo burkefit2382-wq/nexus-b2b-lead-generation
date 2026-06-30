@@ -522,6 +522,49 @@ button:focus-visible {
   color: var(--muted);
 }
 
+.osint-form {
+  display: grid;
+  gap: 10px;
+}
+
+.osint-form label {
+  color: var(--ink);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.osint-form input,
+.osint-form select,
+.osint-form textarea {
+  width: 100%;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 11px 12px;
+  background: var(--paper);
+  font: inherit;
+}
+
+.osint-form textarea {
+  resize: vertical;
+}
+
+.osint-form .check-row {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 10px;
+  align-items: start;
+  margin: 4px 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.osint-form .check-row input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+}
+
 .chat-note {
   min-height: 22px;
   margin: 10px 0 0;

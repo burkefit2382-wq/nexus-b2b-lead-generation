@@ -14,6 +14,9 @@ const fulfillmentSummary = document.querySelector("#fulfillmentSummary");
 const fulfillmentList = document.querySelector("#fulfillmentList");
 const testFulfillmentSummary = document.querySelector("#testFulfillmentSummary");
 const testFulfillmentList = document.querySelector("#testFulfillmentList");
+const osintReportForm = document.querySelector("#osintReportForm");
+const osintReportNote = document.querySelector("#osintReportNote");
+const osintReportResults = document.querySelector("#osintReportResults");
 
 window.addEventListener("hashchange", renderPage);
 window.addEventListener("load", () => {
@@ -219,6 +222,44 @@ chatForm?.addEventListener("submit", (event) => {
   submitChatPrompt(prompt);
 });
 
+osintReportForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const data = new FormData(osintReportForm);
+  const payload = {
+    reportType: String(data.get("reportType") || ""),
+    subject: String(data.get("subject") || "").trim(),
+    requesterEmail: String(data.get("requesterEmail") || "").trim(),
+    useCase: String(data.get("useCase") || "").trim(),
+    publicUrls: String(data.get("publicUrls") || "").trim(),
+    scopeNotes: String(data.get("scopeNotes") || "").trim(),
+    authorized: data.get("authorized") === "on",
+  };
+  const button = osintReportForm.querySelector("button");
+  button.disabled = true;
+  osintReportNote.textContent = "Generating authorized OSINT preview...";
+  osintReportResults.innerHTML = resultCard("Running", "OSINT preview in progress", "Validating authorization, scope, source notes, and buyer-safe reporting rules.");
+
+  try {
+    const response = await fetch("/api/osint-report", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = await response.json();
+    if (!response.ok) {
+      throw new Error(body.error || "OSINT report intake failed.");
+    }
+    renderOsintReport(body.report);
+    osintReportNote.textContent = `${body.message} Notification: ${body.notification}.`;
+  } catch (error) {
+    osintReportResults.innerHTML = resultCard("Blocked", "OSINT request not queued", error.message || "Check the authorization and report scope.");
+    osintReportNote.textContent = error.message || "Unable to queue OSINT report.";
+  } finally {
+    button.disabled = false;
+  }
+});
+
 async function submitChatPrompt(prompt) {
   const button = chatForm.querySelector("button");
   appendChatMessage("user", "You", prompt);
@@ -310,6 +351,22 @@ function resultCard(label, title, body) {
       <p>${escapeHtml(body)}</p>
     </div>
   `;
+}
+
+function renderOsintReport(report) {
+  const focus = Array.isArray(report.focusAreas) ? report.focusAreas.join(", ") : "Review required";
+  const sources = Array.isArray(report.providedSources) && report.providedSources.length
+    ? report.providedSources.join(", ")
+    : "No public sources supplied yet";
+  const rules = Array.isArray(report.buyerSafeRules) ? report.buyerSafeRules.join(" ") : "";
+
+  osintReportResults.innerHTML = [
+    resultCard("Queued", report.title, report.summary),
+    resultCard("Score", `${report.confidence} confidence: ${report.opportunityScore}`, `Focus: ${focus}.`),
+    resultCard("Sources", "Public-source plan", sources),
+    resultCard("Safety", "Buyer-safe rules", rules),
+    resultCard("Next action", report.status, report.nextAction),
+  ].join("");
 }
 
 function escapeHtml(value) {
