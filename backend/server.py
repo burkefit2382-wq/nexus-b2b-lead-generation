@@ -95,6 +95,12 @@ STRIPE_CATALOG = {
         "mode": "subscription",
         "category": "api_access",
     },
+    "price_white_label_agency_1000": {
+        "name": "White-Label LeadGen Agency Subscription",
+        "price": "$1,000/mo",
+        "mode": "subscription",
+        "category": "agency_whitelabel",
+    },
     "price_starter_149": {
         "name": "Starter",
         "price": "$149/mo",
