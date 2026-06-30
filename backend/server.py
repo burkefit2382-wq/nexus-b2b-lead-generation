@@ -475,7 +475,11 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         )
 
     def handle_fulfillment_status(self) -> None:
-        records = self.read_fulfillment_records()
+        records = [
+            record
+            for record in self.read_fulfillment_records()
+            if not self.is_smoke_fulfillment_record(record)
+        ]
         total = len(records)
         delivered = sum(1 for record in records if record.get("status") == "delivered")
         pending = sum(1 for record in records if str(record.get("status", "")).startswith("pending"))
@@ -783,6 +787,11 @@ class LaunchHandler(SimpleHTTPRequestHandler):
                 if isinstance(record, dict):
                     records.append(record)
         return records
+
+    def is_smoke_fulfillment_record(self, record: dict[str, Any]) -> bool:
+        session_id = str(record.get("sessionId", "")).lower()
+        buyer_email = str(record.get("buyerEmail", "")).lower()
+        return "smoke" in session_id or buyer_email.endswith("@example.com")
 
     def append_fulfillment_record(self, record: dict[str, Any]) -> None:
         DATA_DIR.mkdir(exist_ok=True)
