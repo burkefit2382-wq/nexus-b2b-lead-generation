@@ -83,6 +83,18 @@ STRIPE_CATALOG = {
         "mode": "subscription",
         "category": "recurring_revenue",
     },
+    "price_api_license_2000": {
+        "name": "Nexus API Access License",
+        "price": "$2,000",
+        "mode": "payment",
+        "category": "api_access",
+    },
+    "price_api_access_500": {
+        "name": "Nexus API Ongoing Access",
+        "price": "$500/mo",
+        "mode": "subscription",
+        "category": "api_access",
+    },
     "price_starter_149": {
         "name": "Starter",
         "price": "$149/mo",
