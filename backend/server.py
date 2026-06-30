@@ -31,9 +31,9 @@ OSINT_REPORTS_PATH = DATA_DIR / "osint_report_requests.jsonl"
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 HQ_FLORIDA_LEAD_COUNT = 137
 HQ_FLORIDA_PRICING = (
-    {"quantity": 10, "price": 49},
-    {"quantity": 25, "price": 99},
-    {"quantity": 50, "price": 149},
+    {"quantity": 10, "price": 350, "priceId": "price_tb_leads_10_350"},
+    {"quantity": 25, "price": 700, "priceId": "price_tb_leads_25_700"},
+    {"quantity": 50, "price": 1000, "priceId": "price_tb_leads_50_1000"},
 )
 STRIPE_CATALOG = {
     "price_tb_leads_10_350": {

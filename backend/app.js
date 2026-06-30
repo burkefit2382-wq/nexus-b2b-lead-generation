@@ -492,7 +492,7 @@ function setCheckoutNote(message) {
 
 function renderSaleListing(listing) {
   const tiers = Array.isArray(listing.pricing) ? listing.pricing : [
-    { quantity: 10, price: listing.price, currency: listing.currency || "USD" },
+    { quantity: 10, price: listing.price, currency: listing.currency || "USD", priceId: listing.priceId },
   ];
   const available = listing.inventory?.availableCount || "Available";
   const inventoryName = listing.inventory?.name || "HQ Florida leads";
@@ -510,7 +510,7 @@ function renderSaleListing(listing) {
         <p class="listing-price">$${escapeHtml(tier.price)} ${escapeHtml(tier.currency || listing.currency)}</p>
         <p><strong>Included:</strong> ${escapeHtml(listing.included.join(", "))}</p>
         <p><strong>Excluded:</strong> ${escapeHtml(listing.privateFieldsExcluded.join(", "))}</p>
-        <button type="button" class="buy-lead-package" data-quantity="${escapeHtml(tier.quantity)}" data-price="${escapeHtml(tier.price)}">Buy ${escapeHtml(tier.quantity)} leads</button>
+        <button type="button" class="checkout-button" data-price-id="${escapeHtml(tier.priceId || "")}">Buy ${escapeHtml(tier.quantity)} leads - $${escapeHtml(tier.price)}</button>
       </article>
     `).join("")}
   `;
