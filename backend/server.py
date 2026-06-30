@@ -132,6 +132,27 @@ STRIPE_CATALOG = {
         "mode": "subscription",
         "category": "osint_report_subscription",
     },
+    "price_scan_single_19": {
+        "name": "OSINT + AI Enrichment Scan",
+        "price": "$19",
+        "mode": "payment",
+        "category": "scan_credit",
+        "quantity": 1,
+    },
+    "price_scan_pack_10_149": {
+        "name": "10 OSINT + AI Enrichment Scans",
+        "price": "$149",
+        "mode": "payment",
+        "category": "scan_credit",
+        "quantity": 10,
+    },
+    "price_scan_pack_50_499": {
+        "name": "50 OSINT + AI Enrichment Scans",
+        "price": "$499",
+        "mode": "payment",
+        "category": "scan_credit",
+        "quantity": 50,
+    },
     "price_lead_intel_report_99": {
         "name": "Lead Intelligence Report",
         "price": "$99",
