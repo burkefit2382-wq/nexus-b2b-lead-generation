@@ -103,10 +103,10 @@ async function submitChatPrompt(prompt) {
       throw new Error(result.error || "Unable to reach Nexus AI.");
     }
 
-    appendChatMessage("assistant", "Nexus Llama 3", result.answer);
-    chatNote.textContent = result.mode === "llama_endpoint"
-      ? "Connected to configured Llama endpoint."
-      : "Safe mode response. Configure LLAMA_CHAT_ENDPOINT for live Llama 3.";
+    appendChatMessage("assistant", result.assistant || "Nexus AI", result.answer);
+    chatNote.textContent = result.mode === "live"
+      ? "Connected to live Nexus AI."
+      : "Safe mode response — live AI is temporarily unavailable.";
   } catch (error) {
     appendChatMessage("assistant", "Nexus Llama 3", "Chat is offline locally. Restart the launch server and try again.");
     chatNote.textContent = "Unable to reach /api/chat.";

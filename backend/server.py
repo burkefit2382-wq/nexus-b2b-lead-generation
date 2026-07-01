@@ -2943,28 +2943,41 @@ async def lgvh_sale_listing(body: LeadDemoReq):
 class ChatDemoReq(BaseModel):
     prompt: str = ""
 
-@api.post("/chat")
-async def lgvh_chat(body: ChatDemoReq):
-    prompt = (body.prompt or "").strip()
-    if not prompt:
-        raise HTTPException(status_code=400, detail="Enter a message for Nexus AI.")
+def _lgvh_safe_answer(prompt: str) -> str:
     low = prompt.lower()
     if "scraper" in low or "scrape" in low:
-        ans = ("Scraper command view: check collector uptime, source allowlist, ingestion queue, dedupe rate, "
-               "error spikes, and emergency stop status. Keep sources documented and rate-limited.")
-    elif "lead" in low:
-        ans = ("Lead workflow: import, validate, dedupe, enrich, score, review, then create a sanitized storefront "
-               "draft. Do not publish private contact fields by default.")
-    elif "storefront" in low or "publish" in low:
-        ans = ("Storefront workflow: create listing drafts first, exclude private notes and raw contact data, then "
-               "publish only when score, privacy, and approval rules pass.")
-    elif "onsite" in low or "room" in low or "camera" in low:
-        ans = ("Onsite workflow: run the room privacy checklist, record authorized findings, label suspicious signals "
-               "for review, and escalate through security or law enforcement when appropriate.")
-    else:
-        ans = ("Nexus safe mode is online. I can help with lead workflows, 24/7 scraper operations, Pi Suite edge "
-               "nodes, onsite privacy checks, storefront drafts, and launch readiness.")
-    return {"ok": True, "assistant": "Nexus Llama 3", "mode": "safe_mode", "answer": ans}
+        return ("Scraper command view: check collector uptime, source allowlist, ingestion queue, dedupe rate, "
+                "error spikes, and emergency stop status. Keep sources documented and rate-limited.")
+    if "lead" in low:
+        return ("Lead workflow: import, validate, dedupe, enrich, score, review, then create a sanitized storefront "
+                "draft. Do not publish private contact fields by default.")
+    if "storefront" in low or "publish" in low:
+        return ("Storefront workflow: create listing drafts first, exclude private notes and raw contact data, then "
+                "publish only when score, privacy, and approval rules pass.")
+    if "onsite" in low or "room" in low or "camera" in low:
+        return ("Onsite workflow: run the room privacy checklist, record authorized findings, label suspicious signals "
+                "for review, and escalate through security or law enforcement when appropriate.")
+    return ("Nexus safe mode is online. I can help with lead workflows, 24/7 scraper operations, Pi Suite edge "
+            "nodes, onsite privacy checks, storefront drafts, and launch readiness.")
+
+@api.post("/chat")
+async def lgvh_chat(body: ChatDemoReq,
+                    _rl: bool = Depends(gov.rate_limit(int(os.environ.get("RL_CHAT_PER_MIN", "8")), 60))):
+    prompt = (body.prompt or "").strip()[:1000]
+    if not prompt:
+        raise HTTPException(status_code=400, detail="Enter a message for Nexus AI.")
+    sys_p = ("You are Nexus AI, the assistant on the LeadGen Virtual Hub launch site — a lead-intelligence "
+             "platform that runs 24/7 OSINT-filtered scrapers, AI enrichment/scoring, a compliant lead "
+             "storefront, Pi Suite edge nodes, and onsite privacy checks. Answer as a knowledgeable product "
+             "guide: concise (2-4 sentences), practical, privacy- and compliance-aware. Never fabricate private "
+             "contact data. If asked something off-topic, steer back to lead-gen, scraping, or launch readiness.")
+    r = await deepseek_chat([{"role": "system", "content": sys_p},
+                             {"role": "user", "content": prompt}], max_tokens=320, temperature=0.6)
+    if isinstance(r, dict) and "error" not in r and r.get("content"):
+        return {"ok": True, "assistant": "Nexus AI", "mode": "live",
+                "model": r.get("model"), "answer": r["content"].strip()}
+    logger.warning("lgvh_chat falling back to safe mode: %s", (r or {}).get("error"))
+    return {"ok": True, "assistant": "Nexus AI", "mode": "safe_mode", "answer": _lgvh_safe_answer(prompt)}
 
 # ====================== GOVERNANCE (multi-tenant, RBAC, audit, monitoring) ======================
 @api.get("/governance/me")

@@ -7,7 +7,7 @@ import {
   Copy, ShieldAlert, Crosshair, Globe, Network, Smartphone, AtSign,
   MapPin, ScanLine, Server, FileSearch, Search, Users,
   CreditCard, UserSearch, ShieldCheck, AlertTriangle, Boxes,
-  Building2, Activity, Database, ScrollText
+  Building2, Activity, Database, ScrollText, Inbox, Download
 } from "lucide-react";
 
 /* ============================ OVERVIEW ============================ */
@@ -860,6 +860,57 @@ function AuditPanel() {
   );
 }
 
+function PilotLeadsPanel() {
+  const [rows, setRows] = useState([]);
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(true);
+  const load = () => {
+    setLoading(true);
+    api.get("/waitlist").then((r) => setRows(r.data.requests || [])).catch((e) => setErr(e.response?.data?.detail || e.message)).finally(() => setLoading(false));
+  };
+  useEffect(() => { load(); }, []);
+  const exportCsv = () => {
+    const header = ["email", "company", "source", "captured_at"];
+    const lines = [header.join(",")].concat(
+      rows.map((r) => header.map((h) => `"${String(r[h] ?? "").replace(/"/g, '""')}"`).join(","))
+    );
+    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `pilot-leads-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  };
+  if (err) return <div className="empty"><ShieldAlert size={28} /><div>{err}</div></div>;
+  return (
+    <div className="panel" data-testid="gov-pilot-leads">
+      <div className="panel-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h3><Inbox size={15} style={{ verticalAlign: -2, marginRight: 8 }} />Pilot Leads ({rows.length})</h3>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="status-pill" style={{ cursor: "pointer" }} onClick={load} data-testid="pilot-refresh"><RefreshCw size={13} style={{ marginRight: 6, verticalAlign: -2 }} />Refresh</button>
+          <button className="status-pill" style={{ cursor: "pointer" }} onClick={exportCsv} disabled={!rows.length} data-testid="pilot-export-csv"><Download size={13} style={{ marginRight: 6, verticalAlign: -2 }} />Export CSV</button>
+        </div>
+      </div>
+      <div className="panel-body" style={{ padding: 0, maxHeight: 560, overflow: "auto" }}>
+        <table className="tbl">
+          <thead><tr><th>Email</th><th>Company</th><th>Source</th><th>Captured</th></tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id} data-testid={`pilot-lead-${r.id}`}>
+                <td className="name">{r.email}</td>
+                <td className="muted">{r.company || "—"}</td>
+                <td><span className="badge">{r.source || "launch_site"}</span></td>
+                <td className="muted" style={{ fontSize: 11, whiteSpace: "nowrap" }}>{r.captured_at ? new Date(r.captured_at).toLocaleString() : "—"}</td>
+              </tr>
+            ))}
+            {!loading && rows.length === 0 && <tr><td colSpan={4} className="muted" style={{ padding: 20, textAlign: "center" }}>No pilot requests yet. Signups from the launch site appear here.</td></tr>}
+            {loading && <tr><td colSpan={4} className="muted" style={{ padding: 20, textAlign: "center" }}><RefreshCw size={16} className="spin" /> Loading…</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export function Admin() {
   const [section, setSection] = useState("operators");
   const [users, setUsers] = useState([]);
@@ -873,6 +924,7 @@ export function Admin() {
     { id: "tenants", label: "Tenants", icon: Building2 },
     { id: "audit", label: "Audit Trail", icon: ScrollText },
     { id: "monitoring", label: "Monitoring", icon: Activity },
+    { id: "pilot", label: "Pilot Leads", icon: Inbox },
   ];
 
   return (
@@ -920,6 +972,7 @@ export function Admin() {
       {section === "tenants" && <TenantsPanel />}
       {section === "audit" && <AuditPanel />}
       {section === "monitoring" && <MonitorPanel />}
+      {section === "pilot" && <PilotLeadsPanel />}
     </div>
   );
 }

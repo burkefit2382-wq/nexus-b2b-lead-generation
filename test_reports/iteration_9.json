@@ -1,0 +1,31 @@
+{
+  "summary": "Frontend-only verification of two new NEXUS features: (1) live Gemini-powered AI Chat on the public launch site, and (2) Pilot Leads sub-tab in the admin Governance Console. All 6 requested flows PASSED end-to-end via Playwright with cookie-based auth.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Landing.jsx uses an iframe to isolate marketing CSS/JS — good. Iframe communicates with API on same origin, so cookies/CORS are fine.",
+    "PilotLeadsPanel exposes proper data-testids (gov-tab-pilot, gov-pilot-leads, pilot-refresh, pilot-export-csv) — meets testability requirements.",
+    "Consider adding a data-testid to the launch pilot form / chat input for future stable selection (currently only #id selectors)."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "not tested (skipped per request)", "frontend": "100% (6/6 flows)" },
+  "test_credentials": "admin@nexus.io / nexus123 (JWT via httpOnly cookie from POST /api/auth/login)",
+  "seed_data_creation": "Submitted pilot form with qa-pilot@nexus.io — persisted to backend and visible in the Pilot Leads admin table after refresh.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Landing page ('/') renders <iframe data-testid='launch-landing-frame' src='/launch/index.html'>. To interact with pilot form/chat, use `await iframe_el.content_frame()`. Console Login and 'Open the live console' links use target=_top -> /dashboard. Login form exposes plain input[type=email]/password + button[type=submit]. Live chat mode confirmed: chatNote shows 'Connected to live Nexus AI.' and Gemini returns substantive multi-sentence answers (~1-3s). Rate limit is 8/min per IP so keep chat POSTs low. Pilot Leads panel showed 3 rows after adding qa-pilot@nexus.io (2 seeded + 1 new). Storefront still renders Florida (FL) leads (regression OK).",
+  "verified_flows": [
+    "PASS: '/' renders LeadGen Virtual Hub iframe with src /launch/index.html; Console Login + 'Open the live console' both href='/dashboard' target=_top.",
+    "PASS: Landing AI Chat -> POST /api/chat returns mode 'live'; chatNote='Connected to live Nexus AI.'; assistant reply is substantive Gemini output (~350+ chars, not canned).",
+    "PASS: /dashboard login with admin@nexus.io/nexus123 succeeds; Governance nav item (data-testid=nav-admin) present.",
+    "PASS: Governance > Pilot Leads (gov-tab-pilot) renders panel (gov-pilot-leads) with Refresh + Export CSV buttons and shows seeded rows cto@fintechco.com / FintechCo and ops@legalfirm.com / Legal Firm LLC (source=launch_site).",
+    "PASS: Waitlist round-trip — submitted qa-pilot@nexus.io on public pilot form (#pilotForm); formNote confirmed 'Pilot request received.'; after admin Refresh, row appears in Pilot Leads table (3 rows total).",
+    "PASS: Regression — Overview loads (nav-overview) and Intel Marketplace/Storefront still shows Florida (FL) HQ leads."
+  ]
+}
