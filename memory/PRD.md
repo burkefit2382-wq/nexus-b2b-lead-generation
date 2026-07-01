@@ -103,6 +103,21 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - P2: People-intel rate limiting; lead unlock receipts/exports; usage analytics dashboard.
 
 ## Changelog
+- 2026-06-29 (3) — **HQ outreach campaign engine + first real-estate pilot send.** Added admin-only
+  endpoints: `POST /api/outreach/preview` (list HQ recipients by score range / category / FL, minus
+  already-sent), `POST /api/outreach/send` (test_to single-send mode + confirm-gated bulk; personalizes
+  `{{company}}/{{city}}/{{category}}/{{first_name}}` and `[First Name]`; per-lead status → db.outreach_sends;
+  skips already-sent; audit-logged), `GET /api/outreach/history`. **Resend domain finding**: mail.nexus.sh /
+  nexus.sh / nexuscloud.sh are NOT verified in Resend, but **`mail.nexuscloud.sh` IS verified** — set
+  `SENDER_EMAIL="robert@mail.nexuscloud.sh"` in backend/.env (was onboarding@resend.dev test mode).
+  **Sent the user's real-estate pilot template** (uploaded "Hi [First Name].txt", signed Robert) to all 4 HQ
+  real_estate leads that have emails (South Tampa Agent, Sea Glass Florida Properties, Eagle Premier Realty,
+  Ruben Buys Houses) — campaign 6df82ec0, 4 sent / 0 failed. NOTE: only 4 of 22 HQ real-estate leads have
+  email addresses (rest are OSM records with none). PRODUCTION: ensure deployed env also sets
+  SENDER_EMAIL=robert@mail.nexuscloud.sh. Not yet automated (manual trigger); auto-send-on-discovery is a
+  proposed follow-up.
+
+
 - 2026-06-29 (2) — **Live AI chat + Pilot Leads admin tab.** (1) The public launch site's AI Chat
   demo (`POST /api/chat`) now calls the REAL NEXUS AI (Gemini 3 Flash via Emergent key / `deepseek_chat`)
   with a launch-site system prompt, returns `mode:"live"`, and falls back to keyword safe-mode on any LLM

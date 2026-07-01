@@ -2248,15 +2248,33 @@ def _is_fl_lead(l: dict) -> bool:
     city = (l.get("city") or "").strip().lower()
     return bool(city) and any(city == c or c in city for c in TAMPA_CITIES)
 
-def _personalize(text: str, l: dict) -> str:
-    return (text.replace("{{company}}", l.get("company") or "your team")
-                .replace("{{city}}", l.get("city") or "Tampa Bay")
-                .replace("{{category}}", (l.get("category") or "").replace("_", " ").title() or "business")
-                .replace("{{state}}", l.get("state") or "FL"))
+def _outreach_first_name(l: dict) -> str:
+    import re as _re
+    local = (l.get("email") or "").split("@")[0]
+    generic = {"info", "admin", "hello", "contact", "office", "press", "sales", "support", "team",
+               "help", "mail", "enquiries", "inquiries", "booking", "service", "reception", "account",
+               "accounts", "billing", "realestate", "realty", "homes", "listings"}
+    tok = _re.split(r"[._\-+0-9]", local)[0].strip() if local else ""
+    if tok and tok.lower() not in generic and tok.isalpha() and len(tok) >= 2:
+        return tok.capitalize()
+    return "there"
 
-async def _outreach_recipients(min_score: float, max_score: float, fl_only: bool) -> list:
+def _personalize(text: str, l: dict) -> str:
+    fn = _outreach_first_name(l)
+    out = (text.replace("{{company}}", l.get("company") or "your team")
+               .replace("{{city}}", l.get("city") or "Tampa Bay")
+               .replace("{{category}}", (l.get("category") or "").replace("_", " ").title() or "business")
+               .replace("{{state}}", l.get("state") or "FL")
+               .replace("{{first_name}}", fn))
+    for token in ("[First Name]", "[first name]", "[FIRST NAME]", "[Name]", "[name]"):
+        out = out.replace(token, fn)
+    return out
+
+async def _outreach_recipients(min_score: float, max_score: float, fl_only: bool, category: str = "") -> list:
     q = {"ready_to_sell": True, "email": {"$nin": ["", None]},
          "data_confidence_score": {"$gte": min_score, "$lte": max_score}}
+    if category:
+        q["category"] = category
     out = []
     async for l in db.leads.find(q):
         if fl_only and not _is_fl_lead(l):
@@ -2268,16 +2286,17 @@ class OutreachSendReq(BaseModel):
     subject: str = ""
     body: str = ""
     from_name: str = "Robert Burke"
-    min_score: float = 92
+    min_score: float = 0
     max_score: float = 100
-    fl_only: bool = True
+    fl_only: bool = False
+    category: str = ""     # e.g. "real_estate" to target only that HQ segment
     test_to: str = ""      # if set: send ONE test email here only (no DB writes, no bulk)
     confirm: bool = False  # must be true to run the live bulk send
     limit: int = 0         # 0 = no cap
 
 @api.post("/outreach/preview")
 async def outreach_preview(body: OutreachSendReq, user: dict = Depends(require_admin)):
-    recs = await _outreach_recipients(body.min_score, body.max_score, body.fl_only)
+    recs = await _outreach_recipients(body.min_score, body.max_score, body.fl_only, body.category)
     already = set()
     async for s in db.outreach_sends.find({"status": "sent"}, {"lead_id": 1}):
         already.add(str(s.get("lead_id")))
@@ -2294,16 +2313,16 @@ async def outreach_send(body: OutreachSendReq, request: Request, user: dict = De
         raise HTTPException(status_code=400, detail="Subject and body are required.")
     # Test mode: single email to a chosen address, personalized from the first matching lead. No DB writes.
     if body.test_to.strip():
-        recs = await _outreach_recipients(body.min_score, body.max_score, body.fl_only)
-        s = recs[0] if recs else {"company": "Acme Financial", "city": "Tampa", "category": "financial_services", "state": "FL"}
+        recs = await _outreach_recipients(body.min_score, body.max_score, body.fl_only, body.category)
+        s = recs[0] if recs else {"company": "Bay Area Realty", "city": "Tampa", "category": "real_estate", "state": "FL", "email": body.test_to}
         try:
             await send_email(body.test_to.strip(), _personalize(body.subject, s), _personalize(body.body, s), body.from_name)
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Test send failed: {str(e)[:200]}")
+            raise HTTPException(status_code=400, detail=f"Test send failed: {str(e)[:220]}")
         return {"test": True, "to": body.test_to.strip(), "sample_company": s.get("company")}
     if not body.confirm:
         raise HTTPException(status_code=400, detail="Set confirm=true to run the live campaign.")
-    recs = await _outreach_recipients(body.min_score, body.max_score, body.fl_only)
+    recs = await _outreach_recipients(body.min_score, body.max_score, body.fl_only, body.category)
     already = set()
     async for s in db.outreach_sends.find({"status": "sent"}, {"lead_id": 1}):
         already.add(str(s.get("lead_id")))
@@ -2313,6 +2332,7 @@ async def outreach_send(body: OutreachSendReq, request: Request, user: dict = De
     import uuid as _uuid
     campaign_id = str(_uuid.uuid4())[:8]
     sent = failed = 0
+    first_error = ""
     for l in recs:
         subj = _personalize(body.subject, l)
         html = _personalize(body.body, l)
@@ -2325,12 +2345,14 @@ async def outreach_send(body: OutreachSendReq, request: Request, user: dict = De
             rec["status"] = "sent"; sent += 1
         except Exception as e:
             rec["status"] = "failed"; rec["error"] = str(e)[:200]; failed += 1
+            first_error = first_error or str(e)[:200]
         await db.outreach_sends.insert_one(rec)
         await asyncio.sleep(0.6)  # gentle pacing for the mail provider
     await gov.audit_log("outreach.campaign", user=user, request=request, target=campaign_id,
-                        meta={"sent": sent, "failed": failed, "attempted": len(recs)},
+                        meta={"sent": sent, "failed": failed, "attempted": len(recs), "category": body.category},
                         status="success" if failed == 0 else "partial")
-    return {"campaign_id": campaign_id, "sent": sent, "failed": failed, "attempted": len(recs)}
+    return {"campaign_id": campaign_id, "sent": sent, "failed": failed, "attempted": len(recs),
+            "first_error": first_error}
 
 @api.get("/outreach/history")
 async def outreach_history(user: dict = Depends(require_admin)):
