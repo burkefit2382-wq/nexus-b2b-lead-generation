@@ -103,6 +103,17 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - P2: People-intel rate limiting; lead unlock receipts/exports; usage analytics dashboard.
 
 ## Changelog
+- 2026-06-29 (2) — **Live AI chat + Pilot Leads admin tab.** (1) The public launch site's AI Chat
+  demo (`POST /api/chat`) now calls the REAL NEXUS AI (Gemini 3 Flash via Emergent key / `deepseek_chat`)
+  with a launch-site system prompt, returns `mode:"live"`, and falls back to keyword safe-mode on any LLM
+  error; the endpoint is public and rate-limited (`RL_CHAT_PER_MIN=8`/min per IP). Launch `app.js` updated
+  to show "Connected to live Nexus AI." and label replies "Nexus AI". (2) New **Pilot Leads** sub-tab in the
+  admin Governance Console (`tabs.jsx` PilotLeadsPanel, testids gov-tab-pilot/gov-pilot-leads/pilot-refresh/
+  pilot-export-csv) reading `GET /api/waitlist` (admin-only) — shows email/company/source/captured with
+  Refresh + CSV export. testing_agent iteration_9: all 6 frontend flows PASS (live chat, login, Pilot Leads,
+  waitlist round-trip, no regressions). PREVIEW only — REDEPLOY to push.
+
+
 - 2026-06-29 — **Public launch site integrated** ("LeadGen Virtual Hub"): the user's static
   marketing site (index.html/styles.css/app.js/assets, built in Google AI Studio) is now served
   verbatim from `frontend/public/launch/` and rendered at **`/`** inside a full-viewport iframe
