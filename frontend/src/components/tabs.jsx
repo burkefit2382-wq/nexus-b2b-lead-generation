@@ -7,7 +7,7 @@ import {
   Copy, ShieldAlert, Crosshair, Globe, Network, Smartphone, AtSign,
   MapPin, ScanLine, Server, FileSearch, Search, Users,
   CreditCard, UserSearch, ShieldCheck, AlertTriangle, Boxes,
-  Building2, Activity, Database, ScrollText, Inbox, Download
+  Building2, Activity, Database, ScrollText, Inbox, Download, Mail, Zap, Wand2
 } from "lucide-react";
 
 /* ============================ OVERVIEW ============================ */
@@ -860,6 +860,76 @@ function AuditPanel() {
   );
 }
 
+function OutreachPanel() {
+  const [cfg, setCfg] = useState({ enabled: false, category: "real_estate", subject: "", body: "", from_name: "Robert Burke", min_score: 0 });
+  const [history, setHistory] = useState([]);
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+  const loadHistory = () => api.get("/outreach/history").then((r) => setHistory(r.data.sends || [])).catch(() => {});
+  useEffect(() => {
+    api.get("/outreach/auto").then((r) => { if (r.data && r.data.subject !== undefined) setCfg((c) => ({ ...c, ...r.data })); }).catch(() => {});
+    loadHistory();
+  }, []);
+  const save = async () => { setBusy(true); setMsg(""); try { await api.put("/outreach/auto", cfg); setMsg("Auto-send settings saved."); } catch (e) { setMsg(e.response?.data?.detail || e.message); } setBusy(false); };
+  const runNow = async () => { setBusy(true); setMsg(""); try { const r = await api.post("/outreach/auto/run"); setMsg(`Auto sweep: ${r.data.sent || 0} sent, ${r.data.failed || 0} failed.`); loadHistory(); } catch (e) { setMsg(e.response?.data?.detail || e.message); } setBusy(false); };
+  const enrich = async () => {
+    setBusy(true); setMsg("Enriching emails from lead websites…");
+    try {
+      const r = await api.post("/outreach/enrich-emails", { category: cfg.category, only_hq: true, limit: 150 });
+      const job = r.data.job_id;
+      const poll = setInterval(async () => {
+        try {
+          const st = (await api.get(`/outreach/enrich-status/${job}`)).data;
+          setMsg(`Enriching ${st.done}/${st.total} · found ${st.found} emails…`);
+          if (st.status === "complete") { clearInterval(poll); setMsg(`Enrichment done — found ${st.found} new emails. Run auto-send to reach them.`); setBusy(false); }
+        } catch { clearInterval(poll); setBusy(false); }
+      }, 4000);
+    } catch (e) { setMsg(e.response?.data?.detail || e.message); setBusy(false); }
+  };
+  const sent = history.filter((h) => h.status === "sent").length;
+  return (
+    <div className="panel" data-testid="gov-outreach">
+      <div className="panel-head"><h3><Mail size={15} style={{ verticalAlign: -2, marginRight: 8 }} />Outreach Engine</h3></div>
+      <div className="panel-body" style={{ display: "grid", gap: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }} data-testid="outreach-auto-toggle">
+            <input type="checkbox" checked={!!cfg.enabled} onChange={(e) => setCfg({ ...cfg, enabled: e.target.checked })} />
+            <span><Zap size={13} style={{ verticalAlign: -2, marginRight: 4 }} />Auto-send to new HQ leads {cfg.enabled ? "(ON)" : "(off)"}</span>
+          </label>
+          <input className="input" style={{ width: 150 }} value={cfg.category} onChange={(e) => setCfg({ ...cfg, category: e.target.value })} placeholder="category" data-testid="outreach-category" />
+          <input className="input" style={{ width: 160 }} value={cfg.from_name} onChange={(e) => setCfg({ ...cfg, from_name: e.target.value })} placeholder="From name" data-testid="outreach-fromname" />
+        </div>
+        <input className="input" value={cfg.subject} onChange={(e) => setCfg({ ...cfg, subject: e.target.value })} placeholder="Email subject (supports [First Name], {{company}}, {{city}})" data-testid="outreach-subject" />
+        <textarea className="input" style={{ minHeight: 150, fontFamily: "inherit" }} value={cfg.body} onChange={(e) => setCfg({ ...cfg, body: e.target.value })} placeholder="Email body — tokens: [First Name], {{company}}, {{city}}, {{category}}" data-testid="outreach-body" />
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button className="status-pill" style={{ cursor: "pointer" }} onClick={save} disabled={busy} data-testid="outreach-save"><ShieldCheck size={13} style={{ marginRight: 6, verticalAlign: -2 }} />Save settings</button>
+          <button className="status-pill" style={{ cursor: "pointer" }} onClick={enrich} disabled={busy} data-testid="outreach-enrich"><Wand2 size={13} style={{ marginRight: 6, verticalAlign: -2 }} />Enrich emails</button>
+          <button className="status-pill" style={{ cursor: "pointer" }} onClick={runNow} disabled={busy} data-testid="outreach-run"><Send size={13} style={{ marginRight: 6, verticalAlign: -2 }} />Send now</button>
+          <button className="status-pill" style={{ cursor: "pointer" }} onClick={loadHistory} data-testid="outreach-refresh"><RefreshCw size={13} style={{ marginRight: 6, verticalAlign: -2 }} />Refresh</button>
+        </div>
+        {msg && <div className="muted" style={{ fontSize: 12 }} data-testid="outreach-msg">{msg}</div>}
+        <div style={{ fontSize: 12 }} className="muted">Total emails sent: <strong>{sent}</strong></div>
+        <div style={{ maxHeight: 320, overflow: "auto", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8 }}>
+          <table className="tbl">
+            <thead><tr><th>Status</th><th>Type</th><th>Company</th><th>Email</th></tr></thead>
+            <tbody>
+              {history.slice(0, 200).map((h) => (
+                <tr key={h.id} data-testid={`outreach-send-${h.id}`}>
+                  <td><span className="badge">{h.status}</span></td>
+                  <td className="muted">{h.auto ? "auto" : "manual"}</td>
+                  <td className="name">{h.company || "—"}</td>
+                  <td className="muted">{h.email}</td>
+                </tr>
+              ))}
+              {history.length === 0 && <tr><td colSpan={4} className="muted" style={{ padding: 18, textAlign: "center" }}>No emails sent yet.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PilotLeadsPanel() {
   const [rows, setRows] = useState([]);
   const [err, setErr] = useState("");
@@ -925,6 +995,7 @@ export function Admin() {
     { id: "audit", label: "Audit Trail", icon: ScrollText },
     { id: "monitoring", label: "Monitoring", icon: Activity },
     { id: "pilot", label: "Pilot Leads", icon: Inbox },
+    { id: "outreach", label: "Outreach", icon: Mail },
   ];
 
   return (
@@ -973,6 +1044,7 @@ export function Admin() {
       {section === "audit" && <AuditPanel />}
       {section === "monitoring" && <MonitorPanel />}
       {section === "pilot" && <PilotLeadsPanel />}
+      {section === "outreach" && <OutreachPanel />}
     </div>
   );
 }

@@ -103,6 +103,22 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - P2: People-intel rate limiting; lead unlock receipts/exports; usage analytics dashboard.
 
 ## Changelog
+- 2026-06-29 (4) — **Email enrichment + auto-send engine + Outreach admin tab.**
+  (1) **Email enrichment** (`POST /api/outreach/enrich-emails` + `/enrich-status/{job}`): background job that
+  fetches each lead's website (home + /contact + /about), extracts a domain-matched email (junk-filtered),
+  saves it (`email_source:"web_enriched"`) and re-runs OSINT/HQ scoring. Ran on the 18 HQ real-estate leads
+  without emails → **found 8** (Diendei, Klein & Heuchan, Ragsdale Residential, Bayside Waters, etc.).
+  (2) **Auto-send engine**: `db.outreach_auto` config (`GET/PUT /api/outreach/auto`), `_auto_outreach_sweep`
+  emails every HQ lead matching category that hasn't been sent (deduped via db.outreach_sends), wired to run
+  after every scrape cycle (`_auto_outreach_sweep("post-scrape")`) + manual `POST /api/outreach/auto/run`.
+  Enabled for real_estate with the pilot template → auto-sent to the 8 newly-enriched leads (0 failed).
+  **Total real-estate HQ leads emailed: 12** (4 manual + 8 auto). (3) **Outreach admin tab** (Governance →
+  Outreach, tabs.jsx OutreachPanel, testid gov-outreach): toggle auto-send, edit subject/body template,
+  Enrich emails, Send now, Refresh, and send history. Sender: robert@mail.nexuscloud.sh (verified). AUTO-SEND
+  IS CURRENTLY ON for real_estate — toggle off in the Outreach tab if undesired. PRODUCTION: redeploy + ensure
+  SENDER_EMAIL=robert@mail.nexuscloud.sh in the deployed env.
+
+
 - 2026-06-29 (3) — **HQ outreach campaign engine + first real-estate pilot send.** Added admin-only
   endpoints: `POST /api/outreach/preview` (list HQ recipients by score range / category / FL, minus
   already-sent), `POST /api/outreach/send` (test_to single-send mode + confirm-gated bulk; personalizes

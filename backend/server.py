@@ -1285,6 +1285,7 @@ async def run_scrape_cycle(reason: str = "scheduled"):
         logger.info("Scrape cycle (%s): found=%d qualified=%d hq=%d", reason, found, qualified, len(hq_ids))
     if hq_ids:
         asyncio.create_task(_bg_ai_enrich(hq_ids))
+    asyncio.create_task(_auto_outreach_sweep("post-scrape"))
 
 # ---- Paid Apify Reddit cycle (hourly, hard daily $ budget guard) ----
 APIFY_COST_PER_RESULT = float(os.environ.get("APIFY_COST_PER_RESULT", "0.0034"))
@@ -2361,6 +2362,170 @@ async def outreach_history(user: dict = Depends(require_admin)):
         r["id"] = str(r.pop("_id")); r["lead_id"] = str(r.get("lead_id"))
         out.append(r)
     return {"sends": out, "total": len(out)}
+
+# ---------------- Email enrichment (find emails from lead websites) ----------------
+_EMAIL_JUNK = ("example.com", "sentry", "wixpress", "wix.com", "godaddy", "squarespace",
+               "schema.org", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", "yourdomain",
+               "domain.com", "email.com", "sentry.io", "cloudflare", "googleapis", "gstatic",
+               "w3.org", "your-email", "name@", "user@", "test@", "no-reply@", "noreply@")
+
+def _extract_emails(html: str, site_domain: str = "") -> list:
+    found = []
+    for m in re.findall(r'mailto:([^"\'?>\s]+)', html or "", re.I):
+        found.append(m.strip())
+    found += EMAIL_RX.findall(html or "")
+    clean = []
+    for e in found:
+        el = e.lower().strip().rstrip(".")
+        if len(el) > 100 or any(j in el for j in _EMAIL_JUNK):
+            continue
+        if el not in clean:
+            clean.append(el)
+    if site_domain:
+        sd = site_domain.lower().replace("www.", "")
+        dom_match = [e for e in clean if e.split("@")[-1].endswith(sd) or sd.split(".")[0] in e.split("@")[-1]]
+        if dom_match:
+            return dom_match
+    return clean
+
+async def _enrich_lead_email(lead: dict):
+    from urllib.parse import urlparse, urljoin
+    site = (lead.get("website") or "").strip()
+    if not site:
+        return None
+    if not site.startswith("http"):
+        site = "https://" + site
+    dom = urlparse(site).netloc
+    pages = [site, urljoin(site, "/contact"), urljoin(site, "/contact-us"), urljoin(site, "/about")]
+    emails = []
+    try:
+        async with httpx.AsyncClient(timeout=8, follow_redirects=True,
+                                     headers={"User-Agent": "Mozilla/5.0 (compatible; NEXUS-LeadBot/1.0)"}) as c:
+            for u in pages:
+                try:
+                    r = await c.get(u)
+                    if r.status_code == 200:
+                        emails = _extract_emails(r.text, dom)
+                        if emails:
+                            break
+                except Exception:
+                    continue
+    except Exception:
+        return None
+    if not emails:
+        return None
+    email = emails[0]
+    intent = int(lead.get("ai_intent_score") or lead.get("score") or 0)
+    v = await asyncio.to_thread(_osint_verify_sync, email, lead.get("phone", ""), site,
+                                lead.get("company", ""), lead.get("city", ""), lead.get("state", ""))
+    conf = _data_confidence(v, intent)
+    fields = _osint_fields(v, conf, intent); fields.pop("buyer_user_id", None)
+    await db.leads.update_one({"_id": lead["_id"]}, {"$set": {"email": email, "email_source": "web_enriched", **fields}})
+    return email
+
+class EnrichReq(BaseModel):
+    category: str = ""
+    only_hq: bool = True
+    fl_only: bool = False
+    limit: int = 150
+
+async def _run_email_enrichment(job_id: str, leads: list):
+    found = done = 0
+    for l in leads:
+        try:
+            if await _enrich_lead_email(l):
+                found += 1
+        except Exception:
+            pass
+        done += 1
+        await db.enrich_jobs.update_one({"job_id": job_id}, {"$set": {"done": done, "found": found}})
+        await asyncio.sleep(0.3)
+    await db.enrich_jobs.update_one({"job_id": job_id},
+        {"$set": {"status": "complete", "finished_at": datetime.now(timezone.utc).isoformat()}})
+
+@api.post("/outreach/enrich-emails")
+async def enrich_emails(body: EnrichReq, user: dict = Depends(require_admin)):
+    q = {"website": {"$nin": ["", None]},
+         "$or": [{"email": ""}, {"email": None}, {"email": {"$exists": False}}]}
+    if body.only_hq:
+        q["ready_to_sell"] = True
+    if body.category:
+        q["category"] = body.category
+    leads = [l async for l in db.leads.find(q).limit(body.limit)]
+    if body.fl_only:
+        leads = [l for l in leads if _is_fl_lead(l)]
+    import uuid as _uuid
+    job_id = str(_uuid.uuid4())[:8]
+    await db.enrich_jobs.insert_one({"job_id": job_id, "status": "running", "total": len(leads),
+                                     "done": 0, "found": 0, "started_at": datetime.now(timezone.utc).isoformat()})
+    asyncio.create_task(_run_email_enrichment(job_id, leads))
+    return {"job_id": job_id, "candidates": len(leads)}
+
+@api.get("/outreach/enrich-status/{job_id}")
+async def enrich_status(job_id: str, user: dict = Depends(require_admin)):
+    j = await db.enrich_jobs.find_one({"job_id": job_id})
+    if not j:
+        raise HTTPException(status_code=404, detail="Job not found")
+    j.pop("_id", None)
+    return j
+
+# ---------------- Auto-send engine (email new HQ leads automatically) ----------------
+class AutoOutreachCfg(BaseModel):
+    enabled: bool = False
+    category: str = "real_estate"
+    subject: str = ""
+    body: str = ""
+    from_name: str = "Robert Burke"
+    min_score: float = 0
+
+@api.get("/outreach/auto")
+async def get_auto_outreach(user: dict = Depends(require_admin)):
+    c = await db.outreach_auto.find_one({"_id": "config"}) or {}
+    c.pop("_id", None)
+    return c
+
+@api.put("/outreach/auto")
+async def set_auto_outreach(body: AutoOutreachCfg, user: dict = Depends(require_admin)):
+    await db.outreach_auto.update_one({"_id": "config"},
+        {"$set": {**body.model_dump(), "updated_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+    return {"updated": True, **body.model_dump()}
+
+async def _auto_outreach_sweep(reason: str = "manual"):
+    cfg = await db.outreach_auto.find_one({"_id": "config"})
+    if not cfg or not cfg.get("enabled"):
+        return {"skipped": "disabled"}
+    if not (cfg.get("subject") and cfg.get("body")):
+        return {"skipped": "no template"}
+    recs = await _outreach_recipients(cfg.get("min_score", 0), 100, False, cfg.get("category", ""))
+    already = set()
+    async for s in db.outreach_sends.find({"status": "sent"}, {"lead_id": 1}):
+        already.add(str(s.get("lead_id")))
+    recs = [r for r in recs if str(r["_id"]) not in already]
+    if not recs:
+        return {"sent": 0, "failed": 0}
+    import uuid as _uuid
+    campaign_id = "auto-" + str(_uuid.uuid4())[:6]
+    sent = failed = 0
+    for l in recs:
+        subj = _personalize(cfg["subject"], l); html = _personalize(cfg["body"], l)
+        rec = {"campaign_id": campaign_id, "lead_id": l["_id"], "email": l.get("email"),
+               "company": l.get("company"), "subject": subj, "from_name": cfg.get("from_name", "Robert Burke"),
+               "score": l.get("data_confidence_score"), "by": "auto-engine", "auto": True,
+               "sent_at": datetime.now(timezone.utc).isoformat()}
+        try:
+            await send_email(l["email"], subj, html, cfg.get("from_name", "Robert Burke"))
+            rec["status"] = "sent"; sent += 1
+        except Exception as e:
+            rec["status"] = "failed"; rec["error"] = str(e)[:200]; failed += 1
+        await db.outreach_sends.insert_one(rec)
+        await asyncio.sleep(0.6)
+    if sent or failed:
+        logger.info("Auto-outreach (%s): campaign=%s sent=%d failed=%d", reason, campaign_id, sent, failed)
+    return {"campaign_id": campaign_id, "sent": sent, "failed": failed}
+
+@api.post("/outreach/auto/run")
+async def run_auto_outreach(user: dict = Depends(require_admin)):
+    return await _auto_outreach_sweep("manual-trigger")
 
 # ============================================================================
 # GOVERNMENT-GRADE INTELLIGENCE ENRICHMENT + PER-LEAD STOREFRONT
