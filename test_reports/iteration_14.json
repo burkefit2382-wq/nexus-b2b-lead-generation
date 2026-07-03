@@ -1,0 +1,16 @@
+{
+  "summary": "Regression pass after Storefront.jsx decomposition (VerificationNodes, RiskMatrix, StorefrontFilters, IntelGrid, CartBar) and AdminPanels.jsx OutreachPanel history extraction (OutreachHistoryTable). All Intel Marketplace and Governance/Outreach flows work with zero console errors/warnings.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "skipped", "frontend": "100%"},
+  "test_credentials": "admin@nexus.io / nexus123 (login via POST /api/auth/login, then goto /dashboard)",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Verified at /dashboard: (1) Storefront tab renders 60 intel cards each with tier badge (STRATEGIC), industry, confidence 100%, THREAT pill (NOMINAL), Verification Nodes chips (Email Valid, MX Match, Phone Valid, Registry Verified, Footprint Consistent, Geo Located), and Acquire Intel button. Filters storefront-industry-filter/storefront-state-filter/storefront-tier-filter/storefront-confidence-filter and storefront-refresh all present. Selecting industry re-queried grid (60 -> 2 cards). (2) Selecting 2 checkboxes revealed storefront-cart-bar '2 selected · 10 credits' with storefront-bulk-acquire 'ATOMIC PURCHASE · 2 PACKAGES'. (3) rfp-open-btn opens rfp-modal; rfp-close closes it (verified DOM removal). (4) Governance nav -> gov-tab-outreach: outreach-template dropdown has 5 options; selecting 're_pilot_10' filled subject (10 AI-scored Tampa Bay leads...) and body (932 chars). OutreachHistoryTable rendered 12 outreach-send-* rows. Zero console errors, zero React warnings.",
+  "rca of the issue": "N/A — pure refactor regression check, no behavior change observed."
+}

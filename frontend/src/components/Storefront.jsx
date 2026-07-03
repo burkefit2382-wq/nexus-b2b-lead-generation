@@ -27,6 +27,37 @@ const threatLevel = (risk) => {
   return { label: "Low", lvl: "low" };
 };
 
+function VerificationNodes({ lead }) {
+  return (
+    <div>
+      <div className="sf-section-label"><BadgeCheck size={11} style={{ verticalAlign: -2 }} /> Verification Nodes</div>
+      <div className="node-row">
+        {(lead.cross_verification || []).length
+          ? lead.cross_verification.map((n) => (
+            <span key={n} className="node-chip"><ShieldCheck size={11} />{nodeLabel(n)}</span>
+          ))
+          : <span className="muted" style={{ fontSize: 11 }}>No nodes verified</span>}
+      </div>
+    </div>
+  );
+}
+
+function RiskMatrix({ lead }) {
+  if (!(lead.risk_matrix || []).length) return null;
+  return (
+    <div>
+      <div className="sf-section-label"><AlertTriangle size={11} style={{ verticalAlign: -2 }} /> Risk Matrix</div>
+      <div className="risk-row">
+        {lead.risk_matrix.map((r, i) => (
+          <span key={r.flag || i} className={`risk-chip risk-${r.severity || "low"}`}>
+            <AlertTriangle size={10} />{fmtFlag(r.flag)}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function IntelCard({ lead, picked, onToggle, onAcquire }) {
   const conf = Math.round(lead.data_confidence_score || 0);
   const tier = lead.operational_value_tier || "Operational";
@@ -80,29 +111,9 @@ function IntelCard({ lead, picked, onToggle, onAcquire }) {
         <div className="muted" style={{ fontSize: 12.5, lineHeight: 1.5 }}>{lead.ai_summary}</div>
       )}
 
-      <div>
-        <div className="sf-section-label"><BadgeCheck size={11} style={{ verticalAlign: -2 }} /> Verification Nodes</div>
-        <div className="node-row">
-          {(lead.cross_verification || []).length
-            ? lead.cross_verification.map((n) => (
-              <span key={n} className="node-chip"><ShieldCheck size={11} />{nodeLabel(n)}</span>
-            ))
-            : <span className="muted" style={{ fontSize: 11 }}>No nodes verified</span>}
-        </div>
-      </div>
+      <VerificationNodes lead={lead} />
 
-      {(lead.risk_matrix || []).length > 0 && (
-        <div>
-          <div className="sf-section-label"><AlertTriangle size={11} style={{ verticalAlign: -2 }} /> Risk Matrix</div>
-          <div className="risk-row">
-            {lead.risk_matrix.map((r, i) => (
-              <span key={r.flag || i} className={`risk-chip risk-${r.severity || "low"}`}>
-                <AlertTriangle size={10} />{fmtFlag(r.flag)}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
+      <RiskMatrix lead={lead} />
 
       <div className="intel-foot">
         <span className="intel-price"><CreditCard size={13} style={{ verticalAlign: -2, marginRight: 4 }} />
@@ -376,6 +387,60 @@ function ResultModal({ result, onClose }) {
   );
 }
 
+function StorefrontFilters({ f, setF, filt, onRefresh }) {
+  return (
+    <div className="sf-filters">
+      <select className="select" value={f.industry} onChange={(e) => setF({ ...f, industry: e.target.value })} data-testid="storefront-industry-filter">
+        <option value="">All sectors</option>
+        {filt.industries.map((i) => <option key={i} value={i}>{catLabel(i)}</option>)}
+      </select>
+      <select className="select" value={f.state} onChange={(e) => setF({ ...f, state: e.target.value })} data-testid="storefront-state-filter">
+        <option value="">All states</option>
+        {filt.states.map((s) => <option key={s} value={s}>{s}</option>)}
+      </select>
+      <select className="select" value={f.tier} onChange={(e) => setF({ ...f, tier: e.target.value })} data-testid="storefront-tier-filter">
+        <option value="">All tiers</option>
+        {(filt.tiers || []).map((t) => <option key={t} value={t}>{t}</option>)}
+      </select>
+      <div className="sf-conf">
+        <span>MIN CONFIDENCE</span>
+        <input type="range" min="0" max="100" step="5" value={f.min_confidence}
+          onChange={(e) => setF({ ...f, min_confidence: Number(e.target.value) })}
+          data-testid="storefront-confidence-filter" style={{ accentColor: "var(--accent)" }} />
+        <b style={{ color: "var(--accent)" }}>{f.min_confidence}</b>
+      </div>
+      <button className="btn btn-ghost btn-sm" onClick={onRefresh} data-testid="storefront-refresh"><RefreshCw size={13} /></button>
+    </div>
+  );
+}
+
+function IntelGrid({ loading, leads, picked, onToggle, onAcquire }) {
+  if (loading) return <div style={{ padding: 50, textAlign: "center" }}><span className="spinner lime" /></div>;
+  if (!leads.length) return <div className="panel"><div className="empty" style={{ padding: 40 }}>No verified intel packages match your filters.</div></div>;
+  return (
+    <div className="intel-grid">
+      {leads.map((l) => (
+        <IntelCard key={l.id} lead={l} picked={picked.has(l.id)} onToggle={onToggle} onAcquire={onAcquire} />
+      ))}
+    </div>
+  );
+}
+
+function CartBar({ pickedList, pickedCost, purchasing, onBuy }) {
+  if (!pickedList.length) return null;
+  return (
+    <div className="sf-cart-bar" data-testid="storefront-cart-bar">
+      <span className="mono" style={{ fontSize: 13 }}>
+        <Layers size={14} style={{ verticalAlign: -3, marginRight: 8, color: "var(--accent)" }} />
+        {pickedList.length} selected · <b style={{ color: "var(--accent)" }}>{pickedCost} credits</b>
+      </span>
+      <button className="btn" onClick={onBuy} disabled={purchasing} data-testid="storefront-bulk-acquire">
+        {purchasing ? <span className="spinner" /> : `Atomic Purchase · ${pickedList.length} Package${pickedList.length === 1 ? "" : "s"}`}
+      </button>
+    </div>
+  );
+}
+
 export function Storefront() {
   const { user, refreshUser } = useAuth();
   const [data, setData] = useState({ leads: [], total: 0, bundles: [], filters: { industries: [], states: [], tiers: [] } });
@@ -446,50 +511,11 @@ export function Storefront() {
 
       <BundleStrip bundles={data.bundles} active={f.industry} onPick={(ind) => setF({ ...f, industry: ind })} />
 
-      <div className="sf-filters">
-        <select className="select" value={f.industry} onChange={(e) => setF({ ...f, industry: e.target.value })} data-testid="storefront-industry-filter">
-          <option value="">All sectors</option>
-          {filt.industries.map((i) => <option key={i} value={i}>{catLabel(i)}</option>)}
-        </select>
-        <select className="select" value={f.state} onChange={(e) => setF({ ...f, state: e.target.value })} data-testid="storefront-state-filter">
-          <option value="">All states</option>
-          {filt.states.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <select className="select" value={f.tier} onChange={(e) => setF({ ...f, tier: e.target.value })} data-testid="storefront-tier-filter">
-          <option value="">All tiers</option>
-          {(filt.tiers || []).map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <div className="sf-conf">
-          <span>MIN CONFIDENCE</span>
-          <input type="range" min="0" max="100" step="5" value={f.min_confidence}
-            onChange={(e) => setF({ ...f, min_confidence: Number(e.target.value) })}
-            data-testid="storefront-confidence-filter" style={{ accentColor: "var(--accent)" }} />
-          <b style={{ color: "var(--accent)" }}>{f.min_confidence}</b>
-        </div>
-        <button className="btn btn-ghost btn-sm" onClick={load} data-testid="storefront-refresh"><RefreshCw size={13} /></button>
-      </div>
+      <StorefrontFilters f={f} setF={setF} filt={filt} onRefresh={load} />
 
-      {loading
-        ? <div style={{ padding: 50, textAlign: "center" }}><span className="spinner lime" /></div>
-        : data.leads.length
-          ? <div className="intel-grid">
-            {data.leads.map((l) => (
-              <IntelCard key={l.id} lead={l} picked={picked.has(l.id)} onToggle={toggle} onAcquire={(id) => buy([id])} />
-            ))}
-          </div>
-          : <div className="panel"><div className="empty" style={{ padding: 40 }}>No verified intel packages match your filters.</div></div>}
+      <IntelGrid loading={loading} leads={data.leads} picked={picked} onToggle={toggle} onAcquire={(id) => buy([id])} />
 
-      {pickedList.length > 0 && (
-        <div className="sf-cart-bar" data-testid="storefront-cart-bar">
-          <span className="mono" style={{ fontSize: 13 }}>
-            <Layers size={14} style={{ verticalAlign: -3, marginRight: 8, color: "var(--accent)" }} />
-            {pickedList.length} selected · <b style={{ color: "var(--accent)" }}>{pickedCost} credits</b>
-          </span>
-          <button className="btn" onClick={() => buy(pickedList)} disabled={purchasing} data-testid="storefront-bulk-acquire">
-            {purchasing ? <span className="spinner" /> : `Atomic Purchase · ${pickedList.length} Package${pickedList.length === 1 ? "" : "s"}`}
-          </button>
-        </div>
-      )}
+      <CartBar pickedList={pickedList} pickedCost={pickedCost} purchasing={purchasing} onBuy={() => buy(pickedList)} />
 
       {rfpOpen && <RFPModal onClose={() => setRfpOpen(false)} />}
       {genOpen && <GenerateModal onClose={() => { setGenOpen(false); load(); }} onDone={load} />}

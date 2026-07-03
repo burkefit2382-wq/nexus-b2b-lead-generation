@@ -1007,6 +1007,25 @@ async def fetch_reddit(src: dict) -> list:
         SCRAPER_STATE["last_error"] = "reddit: " + str(e)[:160]
     return out
 
+def _osm_record_to_lead(r: dict, src: dict) -> Optional[dict]:
+    et = r.get("extratags") or {}
+    ad = r.get("address") or {}
+    name = r.get("name") or et.get("operator") or ""
+    if not name:
+        return None
+    city = ad.get("city") or ad.get("town") or ad.get("village") or ad.get("municipality") or ""
+    website = et.get("website") or et.get("contact:website") or ""
+    phone = et.get("phone") or et.get("contact:phone") or ""
+    email = et.get("email") or et.get("contact:email") or ""
+    osm_url = f"https://www.openstreetmap.org/{r.get('osm_type','node')}/{r.get('osm_id','')}"
+    cat_label = src["category"].replace("_", " ")
+    text = f"{name} — independent {cat_label} business in {city or 'Tampa Bay'}, FL. {website} {phone}".strip()
+    return {"kind": "business", "full_name": "", "company": name,
+            "raw_text": text[:2000], "source_site": "OpenStreetMap",
+            "category": src["category"], "source_url": website or osm_url,
+            "website": website, "city": city, "state": "FL",
+            "phone": phone, "email": email, "title": name}
+
 async def fetch_osm(src: dict) -> list:
     """Local independent-service businesses in Tampa Bay via OpenStreetMap Nominatim (free, no key)."""
     from urllib.parse import quote
@@ -1023,25 +1042,53 @@ async def fetch_osm(src: dict) -> list:
                 SCRAPER_STATE["last_error"] = "osm: " + str(e)[:160]
                 data = []
             for r in (data or []):
-                et = r.get("extratags") or {}
-                ad = r.get("address") or {}
-                name = r.get("name") or et.get("operator") or ""
-                if not name:
-                    continue
-                city = ad.get("city") or ad.get("town") or ad.get("village") or ad.get("municipality") or ""
-                website = et.get("website") or et.get("contact:website") or ""
-                phone = et.get("phone") or et.get("contact:phone") or ""
-                email = et.get("email") or et.get("contact:email") or ""
-                osm_url = f"https://www.openstreetmap.org/{r.get('osm_type','node')}/{r.get('osm_id','')}"
-                cat_label = src["category"].replace("_", " ")
-                text = f"{name} — independent {cat_label} business in {city or 'Tampa Bay'}, FL. {website} {phone}".strip()
-                out.append({"kind": "business", "full_name": "", "company": name,
-                            "raw_text": text[:2000], "source_site": "OpenStreetMap",
-                            "category": src["category"], "source_url": website or osm_url,
-                            "website": website, "city": city, "state": "FL",
-                            "phone": phone, "email": email, "title": name})
+                lead = _osm_record_to_lead(r, src)
+                if lead:
+                    out.append(lead)
             await asyncio.sleep(1.1)  # Nominatim usage policy: max ~1 request/second
     return out
+
+def _apify_reddit_payload(src: dict) -> dict:
+    subs = src.get("subreddits") or ["tampa", "StPetersburgFL", "Clearwater"]
+    start_urls = [{"url": f"https://www.reddit.com/r/{s}/new/"} for s in subs]
+    max_items = int(src.get("max_items", 30))
+    return {"startUrls": start_urls, "searches": src.get("queries") or [],
+            "searchPosts": True, "searchComments": False, "searchCommunities": False,
+            "searchUsers": False, "skipComments": True, "sort": "new", "time": "month",
+            "maxItems": max_items, "maxPostCount": max_items,
+            "proxy": {"useApifyProxy": True}}
+
+async def _apify_run_reddit(c, token: str, payload: dict):
+    """Start an Apify run, poll to completion, return dataset items (or None on failure)."""
+    base = "https://api.apify.com/v2"
+    run = (await c.post(f"{base}/acts/trudax~reddit-scraper-lite/runs?token={token}", json=payload)).json()
+    data = run.get("data") or {}
+    run_id = data.get("id"); dataset_id = data.get("defaultDatasetId")
+    if not run_id or not dataset_id:
+        SCRAPER_STATE["last_error"] = "apify: " + str(run)[:160]
+        return None
+    status = data.get("status")
+    for _ in range(54):  # up to ~9 min
+        if status in ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT", "TIMING-OUT"):
+            break
+        await asyncio.sleep(10)
+        st = (await c.get(f"{base}/actor-runs/{run_id}?token={token}")).json()
+        status = (st.get("data") or {}).get("status")
+    return (await c.get(f"{base}/datasets/{dataset_id}/items?token={token}&clean=true")).json()
+
+def _apify_reddit_item_to_lead(it: dict, src: dict) -> Optional[dict]:
+    if it.get("dataType") and it.get("dataType") != "post":
+        return None
+    title = it.get("title") or ""
+    body = it.get("body") or it.get("text") or ""
+    text = (title + " — " + body).strip()
+    if not text or text == "—":
+        return None
+    author = it.get("username") or it.get("author") or "anon"
+    return {"full_name": "u/" + author, "raw_text": text[:2000],
+            "source_site": "Reddit", "category": src.get("category", "services"),
+            "source_url": it.get("url") or it.get("link") or "",
+            "city": "", "state": "", "company": "", "title": title}
 
 async def fetch_apify_reddit(src: dict) -> list:
     """Reddit posts via Apify (trudax/reddit-scraper-lite). Async run pattern (start→poll→fetch);
@@ -1050,51 +1097,23 @@ async def fetch_apify_reddit(src: dict) -> list:
     if not token:
         SCRAPER_STATE["last_error"] = "apify: set APIFY_TOKEN to enable Reddit"
         return []
-    subs = src.get("subreddits") or ["tampa", "StPetersburgFL", "Clearwater"]
-    start_urls = [{"url": f"https://www.reddit.com/r/{s}/new/"} for s in subs]
-    max_items = int(src.get("max_items", 30))
-    payload = {"startUrls": start_urls, "searches": src.get("queries") or [],
-               "searchPosts": True, "searchComments": False, "searchCommunities": False,
-               "searchUsers": False, "skipComments": True, "sort": "new", "time": "month",
-               "maxItems": max_items, "maxPostCount": max_items,
-               "proxy": {"useApifyProxy": True}}
-    base = "https://api.apify.com/v2"
-    out = []
+    payload = _apify_reddit_payload(src)
     try:
         async with httpx.AsyncClient(timeout=60) as c:
-            run = (await c.post(f"{base}/acts/trudax~reddit-scraper-lite/runs?token={token}", json=payload)).json()
-            data = run.get("data") or {}
-            run_id = data.get("id"); dataset_id = data.get("defaultDatasetId")
-            if not run_id or not dataset_id:
-                SCRAPER_STATE["last_error"] = "apify: " + str(run)[:160]
-                return []
-            status = data.get("status")
-            for _ in range(54):  # up to ~9 min
-                if status in ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT", "TIMING-OUT"):
-                    break
-                await asyncio.sleep(10)
-                st = (await c.get(f"{base}/actor-runs/{run_id}?token={token}")).json()
-                status = (st.get("data") or {}).get("status")
-            items = (await c.get(f"{base}/datasets/{dataset_id}/items?token={token}&clean=true")).json()
+            items = await _apify_run_reddit(c, token, payload)
     except Exception as e:
         SCRAPER_STATE["last_error"] = "apify: " + (str(e) or type(e).__name__)[:160]
+        return []
+    if items is None:
         return []
     if not isinstance(items, list):
         SCRAPER_STATE["last_error"] = "apify: " + str(items)[:160]
         return []
+    out = []
     for it in items:
-        if it.get("dataType") and it.get("dataType") != "post":
-            continue
-        title = it.get("title") or ""
-        body = it.get("body") or it.get("text") or ""
-        text = (title + " — " + body).strip()
-        if not text or text == "—":
-            continue
-        author = it.get("username") or it.get("author") or "anon"
-        out.append({"full_name": "u/" + author, "raw_text": text[:2000],
-                    "source_site": "Reddit", "category": src.get("category", "services"),
-                    "source_url": it.get("url") or it.get("link") or "",
-                    "city": "", "state": "", "company": "", "title": title})
+        lead = _apify_reddit_item_to_lead(it, src)
+        if lead:
+            out.append(lead)
     return out
 
 async def fetch_overpass_county(src: dict) -> list:

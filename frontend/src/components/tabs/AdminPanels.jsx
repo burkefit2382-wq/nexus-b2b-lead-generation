@@ -111,6 +111,27 @@ export function AuditPanel() {
   );
 }
 
+function OutreachHistoryTable({ history }) {
+  return (
+    <div style={{ maxHeight: 320, overflow: "auto", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8 }}>
+      <table className="tbl">
+        <thead><tr><th>Status</th><th>Type</th><th>Company</th><th>Email</th></tr></thead>
+        <tbody>
+          {history.slice(0, 200).map((h) => (
+            <tr key={h.id} data-testid={`outreach-send-${h.id}`}>
+              <td><span className="badge">{h.status}</span></td>
+              <td className="muted">{h.auto ? "auto" : "manual"}</td>
+              <td className="name">{h.company || "—"}</td>
+              <td className="muted">{h.email}</td>
+            </tr>
+          ))}
+          {history.length === 0 && <tr><td colSpan={4} className="muted" style={{ padding: 18, textAlign: "center" }}>No emails sent yet.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function OutreachPanel() {
   const [cfg, setCfg] = useState({ enabled: false, category: "real_estate", subject: "", body: "", from_name: "Robert Burke", min_score: 0 });
   const [history, setHistory] = useState([]);
@@ -188,22 +209,7 @@ export function OutreachPanel() {
         </div>
         {msg && <div className="muted" style={{ fontSize: 12 }} data-testid="outreach-msg">{msg}</div>}
         <div style={{ fontSize: 12 }} className="muted">Total emails sent: <strong>{sent}</strong></div>
-        <div style={{ maxHeight: 320, overflow: "auto", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8 }}>
-          <table className="tbl">
-            <thead><tr><th>Status</th><th>Type</th><th>Company</th><th>Email</th></tr></thead>
-            <tbody>
-              {history.slice(0, 200).map((h) => (
-                <tr key={h.id} data-testid={`outreach-send-${h.id}`}>
-                  <td><span className="badge">{h.status}</span></td>
-                  <td className="muted">{h.auto ? "auto" : "manual"}</td>
-                  <td className="name">{h.company || "—"}</td>
-                  <td className="muted">{h.email}</td>
-                </tr>
-              ))}
-              {history.length === 0 && <tr><td colSpan={4} className="muted" style={{ padding: 18, textAlign: "center" }}>No emails sent yet.</td></tr>}
-            </tbody>
-          </table>
-        </div>
+        <OutreachHistoryTable history={history} />
       </div>
     </div>
   );
