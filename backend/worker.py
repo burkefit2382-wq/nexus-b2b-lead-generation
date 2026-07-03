@@ -10,7 +10,6 @@ Reuses the scrape logic from server.py (db, run_scrape_cycle, get_scraper_config
 import asyncio
 import datetime
 import logging
-import os
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 

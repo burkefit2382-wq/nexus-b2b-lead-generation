@@ -1,0 +1,28 @@
+{
+  "summary": "Regression verification after key-prop cleanup (chat msg keys → stable UUID; storefront risk-matrix chips → key by r.flag). Login, NEXUS AI chat (2 msgs), Intel Marketplace/Storefront, Overview, and Governance all functional with ZERO React unique-key warnings in console.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100%"},
+  "test_credentials": "admin@nexus.io / nexus123 (works via POST /api/auth/login, httpOnly cookie)",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Login via page.request.post to /api/auth/login sets cookie for playwright context, then goto /dashboard works reliably. Chat: 2 messages returned chat-msg-0 (user 'Hello') and chat-msg-1 (NEXUS reply). Storefront rendered 139 card-like elems, 60 risk chips, Florida leads visible. Overview + Governance tabs load OK. Console showed 0 React key warnings; 2 unrelated 401s occurred before login cookie was set (harmless).",
+  "verification_details": {
+    "login": "200 OK, admin role, cookie set",
+    "chat_msgs_detected": ["chat-msg-0: Hello", "chat-msg-1: NEXUS reply"],
+    "storefront_florida_leads": true,
+    "storefront_risk_chips_count": 60,
+    "overview_tab": "loads",
+    "governance_tab": "loads",
+    "react_key_warnings": 0
+  }
+}

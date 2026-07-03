@@ -10,10 +10,10 @@ BASE_URL = os.environ.get(
     "https://cloud-saas-hub.preview.emergentagent.com",
 ).rstrip("/")
 
-ADMIN_EMAIL = "admin@nexus.io"
-ADMIN_PASSWORD = "nexus123"
-USER_EMAIL = "buyer@test.io"
-USER_PASSWORD = "buyer123"
+ADMIN_EMAIL = os.getenv("NEXUS_ADMIN_EMAIL", "admin@nexus.io")
+ADMIN_PASSWORD = os.getenv("NEXUS_ADMIN_PASSWORD", "nexus123")
+USER_EMAIL = os.getenv("NEXUS_TEST_USER_EMAIL", "buyer@test.io")
+USER_PASSWORD = os.getenv("NEXUS_TEST_USER_PASSWORD", "buyer123")
 
 
 # ----------------------------------------------------------------- helpers/fixtures

@@ -96,7 +96,7 @@ function IntelCard({ lead, picked, onToggle, onAcquire }) {
           <div className="sf-section-label"><AlertTriangle size={11} style={{ verticalAlign: -2 }} /> Risk Matrix</div>
           <div className="risk-row">
             {lead.risk_matrix.map((r, i) => (
-              <span key={i} className={`risk-chip risk-${r.severity || "low"}`}>
+              <span key={r.flag || i} className={`risk-chip risk-${r.severity || "low"}`}>
                 <AlertTriangle size={10} />{fmtFlag(r.flag)}
               </span>
             ))}

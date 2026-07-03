@@ -32,10 +32,10 @@ def _load_base_url():
 BASE_URL = _load_base_url()
 assert BASE_URL, "REACT_APP_BACKEND_URL not set"
 
-ADMIN_EMAIL = "admin@nexus.io"
-ADMIN_PASSWORD = "nexus123"
-BUYER_EMAIL = "buyer@test.io"
-BUYER_PASSWORD = "buyer123"
+ADMIN_EMAIL = os.getenv("NEXUS_ADMIN_EMAIL", "admin@nexus.io")
+ADMIN_PASSWORD = os.getenv("NEXUS_ADMIN_PASSWORD", "nexus123")
+BUYER_EMAIL = os.getenv("NEXUS_TEST_USER_EMAIL", "buyer@test.io")
+BUYER_PASSWORD = os.getenv("NEXUS_TEST_USER_PASSWORD", "buyer123")
 
 REQUIRED_SECTORS = {
     "financial_services", "legal", "insurance",

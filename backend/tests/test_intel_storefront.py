@@ -7,8 +7,8 @@ import requests
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://cloud-saas-hub.preview.emergentagent.com").rstrip("/")
 
-ADMIN_EMAIL = "admin@nexus.io"
-ADMIN_PASSWORD = "nexus123"
+ADMIN_EMAIL = os.getenv("NEXUS_ADMIN_EMAIL", "admin@nexus.io")
+ADMIN_PASSWORD = os.getenv("NEXUS_ADMIN_PASSWORD", "nexus123")
 
 
 # ---------------------------- fixtures ----------------------------

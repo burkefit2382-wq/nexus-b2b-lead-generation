@@ -610,12 +610,12 @@ export function AIChat() {
   const send = async () => {
     const m = input.trim();
     if (!m || busy) return;
-    setMsgs((x) => [...x, { role: "user", text: m }]); setInput(""); setBusy(true);
+    setMsgs((x) => [...x, { id: crypto.randomUUID(), role: "user", text: m }]); setInput(""); setBusy(true);
     try {
       const r = await api.post("/enrichment/chat", { message: m, model });
-      setMsgs((x) => [...x, { role: "ai", text: r.data.response || ("⚠ " + (r.data.error || "no response")) }]);
+      setMsgs((x) => [...x, { id: crypto.randomUUID(), role: "ai", text: r.data.response || ("⚠ " + (r.data.error || "no response")) }]);
     } catch (e) {
-      setMsgs((x) => [...x, { role: "ai", text: "⚠ " + (e.response?.data?.detail || e.message) }]);
+      setMsgs((x) => [...x, { id: crypto.randomUUID(), role: "ai", text: "⚠ " + (e.response?.data?.detail || e.message) }]);
     } finally { setBusy(false); }
   };
 
@@ -641,7 +641,7 @@ export function AIChat() {
               </div>
             )}
             {msgs.map((m, i) => (
-              <div key={i} className={`msg ${m.role}`} data-testid={`chat-msg-${i}`}>
+              <div key={m.id} className={`msg ${m.role}`} data-testid={`chat-msg-${i}`}>
                 {m.role === "ai" && <span className="who">NEXUS</span>}{m.text}
               </div>
             ))}
