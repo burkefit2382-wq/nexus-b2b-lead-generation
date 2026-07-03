@@ -103,6 +103,18 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - P2: People-intel rate limiting; lead unlock receipts/exports; usage analytics dashboard.
 
 ## Changelog
+- 2026-06-30 (3) — **2nd code-review pass: hook-dep warnings fixed; false-positives triaged.**
+  Legit fix: added `// eslint-disable-next-line react-hooks/exhaustive-deps` to 5 intentional mount/refresh
+  effects (AdminPanels MonitorPanel/AuditPanel/OutreachPanel/PilotLeadsPanel + ThreatIntel loadReports) —
+  build now compiles clean, 0 warnings (blindly adding the unmemoized `load` fns to deps would cause infinite
+  loops, so suppression is the correct + review-endorsed fix). testing_agent iteration_13: 100% pass, no regressions.
+  FALSE POSITIVES (no change — would be wrong to "fix"): (a) "3 undefined variables" — pyflakes clean across all
+  files (3rd confirmation); (b) server.py:1794/1820 `ai is not None` — `is`/`is not` with None is PEP8-correct;
+  (c) test `is True/False/None` comparisons — idiomatic; converting to `==` would introduce E712 lint errors.
+  ALREADY DONE previously: AuthContext console statements wrapped in NODE_ENV; array-index keys fixed.
+  STILL DEFERRED (P2): remaining complexity refactors (Storefront C24, OutreachPanel C25, fetch_osm, fetch_apify_reddit),
+  Storefront:368 useMemo (trivial 2-elem op — over-engineering), and type-hint coverage.
+
 - 2026-06-30 (2) — **Code-review complexity refactor (verified).**
   Addressed the two "most critical" complexity findings without regressions:
   (1) **Frontend module split** — the monolithic `components/tabs.jsx` (1078 lines) was split into a
