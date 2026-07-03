@@ -103,6 +103,14 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - P2: People-intel rate limiting; lead unlock receipts/exports; usage analytics dashboard.
 
 ## Changelog
+- 2026-06-30 (4) — **Complexity slice #2 (verified).** Decomposed the remaining high-complexity units:
+  Frontend `Storefront()` (C24) → `StorefrontFilters` + `IntelGrid` + `CartBar`; `IntelCard()` (C17) →
+  `VerificationNodes` + `RiskMatrix`; `OutreachPanel()` (C25) → extracted `OutreachHistoryTable`.
+  Backend `fetch_osm()` (C23) → `_osm_record_to_lead`; `fetch_apify_reddit()` (C26) → `_apify_reddit_payload` +
+  `_apify_run_reddit` + `_apify_reddit_item_to_lead`. All presentational/extract-method (behavior-preserving);
+  backend helpers unit-verified via python; testing_agent iteration_14: 100% pass (Marketplace filters/cards/
+  cart/RFP + Outreach history), 0 console/key warnings. All code-review complexity findings now addressed.
+
 - 2026-06-30 (3) — **2nd code-review pass: hook-dep warnings fixed; false-positives triaged.**
   Legit fix: added `// eslint-disable-next-line react-hooks/exhaustive-deps` to 5 intentional mount/refresh
   effects (AdminPanels MonitorPanel/AuditPanel/OutreachPanel/PilotLeadsPanel + ThreatIntel loadReports) —
