@@ -103,6 +103,24 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - P2: People-intel rate limiting; lead unlock receipts/exports; usage analytics dashboard.
 
 ## Changelog
+- 2026-06-30 (2) — **Code-review complexity refactor (verified).**
+  Addressed the two "most critical" complexity findings without regressions:
+  (1) **Frontend module split** — the monolithic `components/tabs.jsx` (1078 lines) was split into a
+  `components/tabs/` folder (one file per panel: Overview, PeopleIntel, Billing, ThreatIntel, Enrichment,
+  Osint, AIChat, ApiKeys, Reports, Admin, AdminPanels); `tabs.jsx` is now a thin barrel re-export so
+  `Dashboard.jsx` imports are unchanged. (2) **ThreatIntel (was C50)** decomposed into subcomponents
+  (ThreatProfileEditor, ThreatReportCard, ThreatDnsPanel, ThreatEmailDraft, ThreatTargetsTable).
+  (3) **Backend `_gather_threat_signals` (was C45, 116 lines)** decomposed into extracted collectors
+  (`_resolve_ip_sync`, `_dns_records_sync`, `_dnssec_enabled_sync`, `_sensitive_subs_sync`, `_open_ports_sync`,
+  `_dns_email_findings`, `_http_header_breach_findings`, `_ssl_findings`, `_shodan_findings`) — behavior
+  preserved (curl: example.com → risk 5.7, 6 findings, full DNS/SSL, AI summary). testing_agent iteration_12:
+  all 13 dashboard tabs + 6 Governance sub-tabs render, 0 console/key errors. Also earlier this session:
+  fixed array-index React keys (chat msgs → uuid; storefront risk chips → r.flag), removed unused `os` import
+  in worker.py, moved hardcoded test creds → os.getenv() in the 3 test files.
+  STILL DEFERRED (P2, high-risk on working monolith): server.py FILE-level route split into /routes (the module
+  uses a startup-populated global `db` + worker.py mutates `server.db`); Storefront (C24) / Leads (C17) component
+  extraction; fetch_osm / fetch_apify_reddit complexity; type-hint coverage.
+
 - 2026-06-30 — **Outreach Template Library + Sandbox Testing + competitor doc — VERIFIED.**
   Verified the previous (untested) feature batch via testing_agent (iteration_10, frontend, 6/6 PASS):
   (1) Outreach tab (Governance > gov-tab-outreach) renders OutreachPanel without breaking the React tree.
