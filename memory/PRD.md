@@ -103,6 +103,16 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - P2: People-intel rate limiting; lead unlock receipts/exports; usage analytics dashboard.
 
 ## Changelog
+- 2026-06-30 — **Outreach Template Library + Sandbox Testing + competitor doc — VERIFIED.**
+  Verified the previous (untested) feature batch via testing_agent (iteration_10, frontend, 6/6 PASS):
+  (1) Outreach tab (Governance > gov-tab-outreach) renders OutreachPanel without breaking the React tree.
+  (2) Template dropdown (`outreach-template`, GET /api/outreach/templates) loads 4 pilot options — RE 5/10-lead
+  ($200/$350) + B2B 5/10-lead ($200/$350), all "92+" — and selecting one populates subject/body.
+  (3) Sandbox Text Testing (`outreach-sandbox-email`/`-send` → POST /api/outreach/send test_to) sent live to
+  admin@nexus.io (sample: Diendei, LLC) — Resend delivery worked in preview.
+  (4) "Model & comparison doc" link (`outreach-compare-link` → /launch/compare.html) served 200 with graph markup.
+  (5) Pilot Leads regression intact. No bugs. NOTE: tabs.jsx ~1078 lines — split candidate (P2 tech debt).
+
 - 2026-06-29 (4) — **Email enrichment + auto-send engine + Outreach admin tab.**
   (1) **Email enrichment** (`POST /api/outreach/enrich-emails` + `/enrich-status/{job}`): background job that
   fetches each lead's website (home + /contact + /about), extracts a domain-matched email (junk-filtered),
