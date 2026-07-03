@@ -127,6 +127,7 @@ export function ThreatIntel() {
   const [sending, setSending] = useState(false);
 
   const loadReports = () => api.get("/threat/reports?limit=30").then((r) => setReports(r.data)).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only initial load
   useEffect(() => {
     loadReports();
     api.get("/threat/outreach-profile").then((r) => setProfile({ sender_name: "", sender_email: "", brand: "", services: "", cta: "", ...r.data })).catch(() => {});

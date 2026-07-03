@@ -9,6 +9,7 @@ export function MonitorPanel() {
   const [m, setM] = useState(null);
   const [err, setErr] = useState("");
   const load = () => api.get("/admin/monitoring").then((r) => setM(r.data)).catch((e) => setErr(e.response?.data?.detail || e.message));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only poll; `load` is stable in intent
   useEffect(() => { load(); const t = setInterval(load, 15000); return () => clearInterval(t); }, []);
   if (err) return <div className="empty"><ShieldAlert size={28} /><div>{err}</div></div>;
   if (!m) return <div className="empty"><RefreshCw size={28} className="spin" /><div>Loading telemetry…</div></div>;
@@ -76,6 +77,7 @@ export function AuditPanel() {
   const [filter, setFilter] = useState("");
   const [err, setErr] = useState("");
   const load = (action) => api.get(`/admin/audit?limit=200${action ? `&action=${action}` : ""}`).then((r) => setData(r.data)).catch((e) => setErr(e.response?.data?.detail || e.message));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when `filter` changes
   useEffect(() => { load(filter); }, [filter]);
   if (err) return <div className="empty"><ShieldAlert size={28} /><div>{err}</div></div>;
   return (
@@ -117,6 +119,7 @@ export function OutreachPanel() {
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const loadHistory = () => api.get("/outreach/history").then((r) => setHistory(r.data.sends || [])).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only initial load
   useEffect(() => {
     api.get("/outreach/auto").then((r) => { if (r.data && r.data.subject !== undefined) setCfg((c) => ({ ...c, ...r.data })); }).catch(() => {});
     api.get("/outreach/templates").then((r) => setTemplates(r.data.templates || [])).catch(() => {});
@@ -214,6 +217,7 @@ export function PilotLeadsPanel() {
     setLoading(true);
     api.get("/waitlist").then((r) => setRows(r.data.requests || [])).catch((e) => setErr(e.response?.data?.detail || e.message)).finally(() => setLoading(false));
   };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only initial load
   useEffect(() => { load(); }, []);
   const exportCsv = () => {
     const header = ["email", "company", "source", "captured_at"];
