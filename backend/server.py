@@ -1956,74 +1956,69 @@ async def _shodan_host(ip: Optional[str]) -> Optional[dict]:
     except Exception:
         return None
 
-async def _gather_threat_signals(domain: str) -> dict:
-    domain = normalize_domain(domain) or domain
-    findings = []
+# --- threat signal collectors (extracted from _gather_threat_signals to cut complexity) ---
+def _resolve_ip_sync(domain: str):
+    try:
+        return socket.gethostbyname(domain)
+    except Exception:
+        return None
 
-    def _resolve():
+
+def _dns_records_sync(domain: str) -> dict:
+    import dns.resolver
+    rec = {}
+    for rt in ["A", "AAAA", "MX", "NS", "TXT", "SOA"]:
         try:
-            return socket.gethostbyname(domain)
+            rec[rt] = [str(x) for x in dns.resolver.resolve(domain, rt, lifetime=5)]
         except Exception:
-            return None
-    ip = await asyncio.to_thread(_resolve)
+            rec[rt] = []
+    return rec
 
-    def _dns():
-        import dns.resolver
-        rec = {}
-        for rt in ["A", "AAAA", "MX", "NS", "TXT", "SOA"]:
-            try:
-                rec[rt] = [str(x) for x in dns.resolver.resolve(domain, rt, lifetime=5)]
-            except Exception:
-                rec[rt] = []
-        return rec
-    dns_rec = await asyncio.to_thread(_dns)
+
+def _dnssec_enabled_sync(domain: str) -> bool:
+    import dns.resolver
+    try:
+        return bool(dns.resolver.resolve(domain, "DNSKEY", lifetime=5))
+    except Exception:
+        return False
+
+
+def _sensitive_subs_sync(domain: str) -> list:
+    found = []
+    for s in SENSITIVE_SUBS:
+        try:
+            host = f"{s}.{domain}"
+            found.append({"sub": host, "ip": socket.gethostbyname(host)})
+        except Exception:
+            pass
+    return found
+
+
+def _open_ports_sync(ip: str) -> list:
+    res = []
+    for p in RISKY_PORTS:
+        try:
+            sk = socket.socket(); sk.settimeout(1)
+            if sk.connect_ex((ip, p)) == 0:
+                res.append(p)
+            sk.close()
+        except Exception:
+            pass
+    return res
+
+
+def _dns_email_findings(dns_rec: dict) -> list:
+    findings = []
     txt_join = " ".join(dns_rec.get("TXT", [])).lower()
     if "v=spf1" not in txt_join:
         findings.append({"category": "Email Spoofing", "detail": "No SPF record found", "severity": "medium", "weight": 1.5})
     if "dmarc" not in txt_join:
         findings.append({"category": "Email Spoofing", "detail": "No DMARC policy detected", "severity": "medium", "weight": 1.5})
+    return findings
 
-    def _dnssec():
-        import dns.resolver
-        try:
-            return bool(dns.resolver.resolve(domain, "DNSKEY", lifetime=5))
-        except Exception:
-            return False
-    dnssec_enabled = await asyncio.to_thread(_dnssec)
-    if not dnssec_enabled:
-        findings.append({"category": "DNS Hardening", "detail": "DNSSEC not enabled (DNS responses unsigned)", "severity": "low", "weight": 0.8})
 
-    def _subs():
-        found = []
-        for s in SENSITIVE_SUBS:
-            try:
-                host = f"{s}.{domain}"
-                found.append({"sub": host, "ip": socket.gethostbyname(host)})
-            except Exception:
-                pass
-        return found
-    subs = await asyncio.to_thread(_subs)
-    for s in subs:
-        findings.append({"category": "Exposed Surface", "detail": f"Sensitive subdomain reachable: {s['sub']}", "severity": "high", "weight": 2.0})
-
-    open_ports = []
-    if ip:
-        def _ports():
-            res = []
-            for p in RISKY_PORTS:
-                try:
-                    sk = socket.socket(); sk.settimeout(1)
-                    if sk.connect_ex((ip, p)) == 0:
-                        res.append(p)
-                    sk.close()
-                except Exception:
-                    pass
-            return res
-        open_ports = await asyncio.to_thread(_ports)
-        for p in open_ports:
-            findings.append({"category": "Open Port", "detail": f"Risky service exposed: {RISKY_PORTS[p]} (port {p})", "severity": "high", "weight": 2.5})
-
-    missing_headers = []
+async def _http_header_breach_findings(domain: str) -> tuple:
+    findings, missing_headers = [], []
     async with httpx.AsyncClient(timeout=12, follow_redirects=True,
                                  headers={"User-Agent": "Mozilla/5.0"}) as c:
         try:
@@ -2041,8 +2036,11 @@ async def _gather_threat_signals(domain: str) -> dict:
                 findings.append({"category": "Data Breach", "detail": "Domain appears in known breach datasets", "severity": "high", "weight": 2.5})
         except Exception:
             pass
+    return missing_headers, findings
 
-    ssl_info = await asyncio.to_thread(_ssl_cert_sync, domain)
+
+def _ssl_findings(ssl_info: dict) -> list:
+    findings = []
     if ssl_info.get("available") and not ssl_info.get("valid"):
         findings.append({"category": "SSL/TLS", "detail": f"Invalid/untrusted certificate: {ssl_info.get('error', '')}", "severity": "high", "weight": 2.0})
     elif ssl_info.get("valid"):
@@ -2055,17 +2053,57 @@ async def _gather_threat_signals(domain: str) -> dict:
             findings.append({"category": "SSL/TLS", "detail": f"Weak TLS protocol in use: {ssl_info['protocol']}", "severity": "medium", "weight": 1.5})
     elif not ssl_info.get("available"):
         findings.append({"category": "SSL/TLS", "detail": "No HTTPS/TLS reachable on port 443", "severity": "medium", "weight": 1.5})
+    return findings
 
-    shodan = await _shodan_host(ip)
+
+def _shodan_findings(shodan: dict, open_ports: list) -> tuple:
+    """Returns (extra_ports, findings) from a Shodan host record. Does not mutate open_ports."""
+    extra_ports, findings = [], []
     if shodan:
         for p in shodan.get("ports", []):
-            if p in RISKY_PORTS and p not in open_ports:
-                open_ports.append(p)
+            if p in RISKY_PORTS and p not in open_ports and p not in extra_ports:
+                extra_ports.append(p)
                 findings.append({"category": "Open Port", "detail": f"Shodan: risky service {RISKY_PORTS[p]} (port {p})", "severity": "high", "weight": 2.5})
         for v in (shodan.get("vulns") or [])[:8]:
             findings.append({"category": "Known CVE", "detail": f"Shodan-reported vulnerability: {v}", "severity": "high", "weight": 3.0})
         for t in (shodan.get("tags") or [])[:5]:
             findings.append({"category": "Shodan Flag", "detail": f"Exposure tag: {t}", "severity": "medium", "weight": 1.0})
+    return extra_ports, findings
+
+
+async def _gather_threat_signals(domain: str) -> dict:
+    domain = normalize_domain(domain) or domain
+    findings = []
+
+    ip = await asyncio.to_thread(_resolve_ip_sync, domain)
+
+    dns_rec = await asyncio.to_thread(_dns_records_sync, domain)
+    findings += _dns_email_findings(dns_rec)
+
+    dnssec_enabled = await asyncio.to_thread(_dnssec_enabled_sync, domain)
+    if not dnssec_enabled:
+        findings.append({"category": "DNS Hardening", "detail": "DNSSEC not enabled (DNS responses unsigned)", "severity": "low", "weight": 0.8})
+
+    subs = await asyncio.to_thread(_sensitive_subs_sync, domain)
+    for s in subs:
+        findings.append({"category": "Exposed Surface", "detail": f"Sensitive subdomain reachable: {s['sub']}", "severity": "high", "weight": 2.0})
+
+    open_ports = []
+    if ip:
+        open_ports = await asyncio.to_thread(_open_ports_sync, ip)
+        for p in open_ports:
+            findings.append({"category": "Open Port", "detail": f"Risky service exposed: {RISKY_PORTS[p]} (port {p})", "severity": "high", "weight": 2.5})
+
+    missing_headers, header_findings = await _http_header_breach_findings(domain)
+    findings += header_findings
+
+    ssl_info = await asyncio.to_thread(_ssl_cert_sync, domain)
+    findings += _ssl_findings(ssl_info)
+
+    shodan = await _shodan_host(ip)
+    extra_ports, shodan_findings = _shodan_findings(shodan, open_ports)
+    open_ports += extra_ports
+    findings += shodan_findings
 
     raw = min(sum(f["weight"] for f in findings), 10.0)
     return {"domain": domain, "ip": ip, "open_ports": open_ports,

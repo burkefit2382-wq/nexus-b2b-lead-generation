@@ -1,0 +1,22 @@
+{
+  "summary": "Post-refactor regression test of NEXUS dashboard after tabs.jsx module split into components/tabs/*.jsx. All 13 dashboard nav tabs render without errors. Admin login via POST /api/auth/login (httpOnly cookie) succeeds and dashboard shell renders. Every required data-testid (stat-total-leads, intel-sources-panel, tool-dns, chat-input/chat-send, enrich-type-business, enrich-run, pi-scan, pkg-*, threat-domain, threat-scan, threat-profile-toggle) is present. Threat Intel profile-editor toggle opens editor; High-Ticket targets table renders. All 6 Governance sub-tabs (operators, tenants, audit, monitoring, pilot, outreach) switch panels correctly, and outreach-template + outreach-sandbox-email are present. No console errors, no React 'unique key' warnings, no 'is not defined' / module import errors observed on any tab.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_12.json"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor naming inconsistency: Governance pilot leads button is data-testid=\"gov-tab-pilot\" while its panel is data-testid=\"gov-pilot-leads\". Not a bug (both exist and switching works) but naming could be aligned for clarity.",
+    "Barrel /app/frontend/src/components/tabs.jsx is clean; consider using default exports or index.js convention for consistency across future splits."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "skipped", "frontend": "100%"},
+  "test_credentials": "admin@nexus.io / nexus123 (login via POST /api/auth/login then navigate to /dashboard - httpOnly cookie approach required, direct browser form login also works)",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Refactor of tabs.jsx into components/tabs/*.jsx is fully verified. Sidebar nav uses data-testid=\"nav-<key>\" (nav-overview, nav-leads, nav-osint, nav-ai, nav-enrich, nav-people, nav-billing, nav-reports, nav-keys, nav-threat, nav-admin, nav-scrapers, nav-storefront). Governance sub-tabs use gov-tab-<name>, panels use gov-<name>. Skipped actually sending a chat message to preserve 8/min rate-limit; chat-input/chat-send exist and prior iterations validated the reply flow."
+}
