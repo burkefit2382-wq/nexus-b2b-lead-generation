@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NEXUS — Model &amp; Comparison</title>
+<style>
+  :root{--bg:#07110b;--panel:#0d1a12;--line:rgba(159,232,112,.18);--txt:#e8f5ea;--mut:#8fb79a;--lime:#9fe870;--warn:#f6c04a;--bad:#ff6b6b}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.55}
+  .wrap{max-width:1040px;margin:0 auto;padding:48px 22px 80px}
+  .eyebrow{color:var(--lime);letter-spacing:.18em;text-transform:uppercase;font-size:12px;font-weight:700}
+  h1{font-size:34px;margin:8px 0 6px}
+  h2{font-size:20px;margin:44px 0 14px;border-left:3px solid var(--lime);padding-left:12px}
+  p.lead{color:var(--mut);max-width:720px}
+  .grid{display:grid;gap:16px}
+  .cards{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px}
+  .price{font-size:30px;font-weight:800;color:var(--lime)}
+  .price small{font-size:13px;color:var(--mut);font-weight:500}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  th,td{padding:12px 14px;text-align:left;border-bottom:1px solid rgba(255,255,255,.05);font-size:14px}
+  th{background:rgba(159,232,112,.08);color:var(--lime);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+  td.us{background:rgba(159,232,112,.06);font-weight:600}
+  .yes{color:var(--lime);font-weight:700}.no{color:var(--bad)}.mid{color:var(--warn)}
+  .bar-row{display:flex;align-items:center;gap:14px;margin:10px 0}
+  .bar-label{width:220px;font-size:13px;color:var(--mut);flex:none}
+  .bar-track{flex:1;background:rgba(255,255,255,.05);border-radius:8px;height:26px;position:relative;overflow:hidden}
+  .bar-fill{height:100%;border-radius:8px;display:flex;align-items:center;justify-content:flex-end;padding-right:10px;font-size:12px;font-weight:700;color:#06210a}
+  .callout{background:linear-gradient(135deg,rgba(159,232,112,.14),rgba(159,232,112,.04));border:1px solid var(--line);border-radius:14px;padding:22px;margin-top:26px}
+  .callout b{color:var(--lime)}
+  .sw{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+  .sw div{font-size:13px}
+  .note{color:var(--mut);font-size:12px;margin-top:30px;border-top:1px solid rgba(255,255,255,.06);padding-top:14px}
+  a.back{color:var(--lime);text-decoration:none;font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/launch/index.html">&larr; Back to site</a>
+  <div class="eyebrow">NEXUS Lead Intelligence</div>
+  <h1>The model, the comparison, and why it costs you less</h1>
+  <p class="lead">NEXUS delivers <b>OSINT-verified, AI-scored, exclusive</b> local leads (every pilot lead scored 92+) as a clean, ready-to-work pack — for a fraction of what portals, agencies, or generic AI lead vendors charge, without the junk of bulk scraped lists.</p>
+
+  <h2>Pilot pricing</h2>
+  <div class="grid cards">
+    <div class="card"><div class="eyebrow">Starter pilot</div><div class="price">$200 <small>/ 5 leads</small></div><p class="lead">5 AI-scored (92+) leads · $40/lead · sample the quality risk-free.</p></div>
+    <div class="card"><div class="eyebrow">Standard pilot</div><div class="price">$350 <small>/ 10 leads</small></div><p class="lead">10 AI-scored (92+) leads · $35/lead · best value for a real test run.</p></div>
+    <div class="card"><div class="eyebrow">What every lead includes</div><p class="lead">OSINT verification · AI intent score · enrichment notes · buyer/seller segment · PDF/CSV delivery · exclusive to you.</p></div>
+  </div>
+
+  <h2>Cost per lead — NEXUS vs the alternatives</h2>
+  <div class="card">
+    <div class="bar-row"><div class="bar-label">NEXUS (verified, exclusive)</div><div class="bar-track"><div class="bar-fill" style="width:18%;background:var(--lime)">$35</div></div></div>
+    <div class="bar-row"><div class="bar-label">Other AI vendors (A-Leads, Astro)</div><div class="bar-track"><div class="bar-fill" style="width:32%;background:#5fd08a">$60</div></div></div>
+    <div class="bar-row"><div class="bar-label">Portal pay-per-lead (Zillow-style)</div><div class="bar-track"><div class="bar-fill" style="width:63%;background:var(--warn)">$120</div></div></div>
+    <div class="bar-row"><div class="bar-label">Agency retainer (effective)</div><div class="bar-track"><div class="bar-fill" style="width:80%;background:#f39c5a">$150+</div></div></div>
+    <div class="bar-row"><div class="bar-label">Bulk / DIY scraped lists</div><div class="bar-track"><div class="bar-fill" style="width:8%;background:var(--bad)">$8*</div></div></div>
+    <p class="lead" style="margin-top:12px;font-size:12px">*Bulk lists look cheap but are unverified, non-exclusive, and mostly dead — real cost per <em>usable</em> lead is far higher once you factor wasted follow-up.</p>
+  </div>
+
+  <h2>Feature comparison</h2>
+  <table>
+    <thead><tr><th>Capability</th><th>NEXUS</th><th>AI vendors (A-Leads/Astro)</th><th>Portal PPL</th><th>Agency</th><th>Bulk lists</th></tr></thead>
+    <tbody>
+      <tr><td>OSINT / public-source verification</td><td class="us"><span class="yes">✓</span></td><td class="mid">partial</td><td class="no">✗</td><td class="mid">partial</td><td class="no">✗</td></tr>
+      <tr><td>AI intent scoring (92+ only)</td><td class="us"><span class="yes">✓</span></td><td class="mid">basic</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td></tr>
+      <tr><td>Exclusive to you</td><td class="us"><span class="yes">✓</span></td><td class="mid">sometimes</td><td class="no">shared</td><td class="mid">varies</td><td class="no">✗</td></tr>
+      <tr><td>Hyper-local (county/city/niche)</td><td class="us"><span class="yes">✓</span></td><td class="mid">limited</td><td class="mid">✓</td><td class="mid">✓</td><td class="no">✗</td></tr>
+      <tr><td>Enrichment context / why-it-matters</td><td class="us"><span class="yes">✓</span></td><td class="no">✗</td><td class="no">✗</td><td class="mid">varies</td><td class="no">✗</td></tr>
+      <tr><td>No long contract / retainer</td><td class="us"><span class="yes">✓</span></td><td class="mid">varies</td><td class="mid">✓</td><td class="no">✗</td><td class="yes">✓</td></tr>
+      <tr><td>Typical cost / lead</td><td class="us"><span class="yes">$35</span></td><td>$60</td><td>$120</td><td>$150+</td><td>$8*</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Strengths &amp; weaknesses of each model</h2>
+  <div class="grid cards">
+    <div class="card"><div class="eyebrow" style="color:var(--lime)">NEXUS</div><div class="sw"><div><b>+</b> Verified, scored, exclusive</div><div><b>+</b> Lowest cost per usable lead</div><div><b>+</b> Local + enriched context</div><div><b>&minus;</b> Volume is intentionally curated</div></div></div>
+    <div class="card"><div class="eyebrow">AI vendors (A-Leads/Astro)</div><div class="sw"><div><b>+</b> Some automation</div><div><b>&minus;</b> Shallow verification</div><div><b>&minus;</b> Often non-exclusive</div><div><b>&minus;</b> ~2x the price</div></div></div>
+    <div class="card"><div class="eyebrow">Portal PPL / Agency</div><div class="sw"><div><b>+</b> High volume</div><div><b>&minus;</b> Shared, competed leads</div><div><b>&minus;</b> $120–$150+/lead</div><div><b>&minus;</b> Contracts / retainers</div></div></div>
+    <div class="card"><div class="eyebrow">Bulk / DIY lists</div><div class="sw"><div><b>+</b> Cheap upfront</div><div><b>&minus;</b> Unverified & stale</div><div><b>&minus;</b> Non-exclusive</div><div><b>&minus;</b> Huge wasted follow-up</div></div></div>
+  </div>
+
+  <div class="callout">
+    <p style="margin:0"><b>Bottom line:</b> a 10-lead NEXUS pilot is <b>$350 ($35/lead)</b>. The same 10 verified, exclusive, ready-to-work leads would run <b>$600</b> from typical AI vendors, <b>$1,200</b> via portals, or a <b>$1,500+/mo</b> agency retainer. NEXUS gives you higher-quality, scored leads while <b>saving 40–75%</b> — so you don't have to think about it.</p>
+  </div>
+
+  <p class="note">Figures are illustrative market benchmarks for comparison and can be edited to your exact numbers. Prepared for NEXUS Lead Intelligence · nexuscloud.sh</p>
+</div>
+</body>
+</html>

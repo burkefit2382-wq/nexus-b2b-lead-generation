@@ -863,13 +863,29 @@ function AuditPanel() {
 function OutreachPanel() {
   const [cfg, setCfg] = useState({ enabled: false, category: "real_estate", subject: "", body: "", from_name: "Robert Burke", min_score: 0 });
   const [history, setHistory] = useState([]);
+  const [templates, setTemplates] = useState([]);
+  const [sandboxTo, setSandboxTo] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const loadHistory = () => api.get("/outreach/history").then((r) => setHistory(r.data.sends || [])).catch(() => {});
   useEffect(() => {
     api.get("/outreach/auto").then((r) => { if (r.data && r.data.subject !== undefined) setCfg((c) => ({ ...c, ...r.data })); }).catch(() => {});
+    api.get("/outreach/templates").then((r) => setTemplates(r.data.templates || [])).catch(() => {});
     loadHistory();
   }, []);
+  const applyTemplate = (id) => {
+    const t = templates.find((x) => x.id === id);
+    if (t) { setCfg((c) => ({ ...c, subject: t.subject, body: t.body })); setMsg(`Loaded template: ${t.label}`); }
+  };
+  const sandbox = async () => {
+    if (!sandboxTo.trim()) { setMsg("Enter a sandbox email to receive the test."); return; }
+    setBusy(true); setMsg("Sending sandbox test…");
+    try {
+      const r = await api.post("/outreach/send", { subject: cfg.subject, body: cfg.body, from_name: cfg.from_name, category: cfg.category, test_to: sandboxTo.trim() });
+      setMsg(`Sandbox test sent to ${r.data.to} (sample: ${r.data.sample_company}).`);
+    } catch (e) { setMsg(e.response?.data?.detail || e.message); }
+    setBusy(false);
+  };
   const save = async () => { setBusy(true); setMsg(""); try { await api.put("/outreach/auto", cfg); setMsg("Auto-send settings saved."); } catch (e) { setMsg(e.response?.data?.detail || e.message); } setBusy(false); };
   const runNow = async () => { setBusy(true); setMsg(""); try { const r = await api.post("/outreach/auto/run"); setMsg(`Auto sweep: ${r.data.sent || 0} sent, ${r.data.failed || 0} failed.`); loadHistory(); } catch (e) { setMsg(e.response?.data?.detail || e.message); } setBusy(false); };
   const enrich = async () => {
@@ -891,6 +907,13 @@ function OutreachPanel() {
     <div className="panel" data-testid="gov-outreach">
       <div className="panel-head"><h3><Mail size={15} style={{ verticalAlign: -2, marginRight: 8 }} />Outreach Engine</h3></div>
       <div className="panel-body" style={{ display: "grid", gap: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <select className="select" onChange={(e) => e.target.value && applyTemplate(e.target.value)} defaultValue="" data-testid="outreach-template">
+            <option value="">Load pilot template…</option>
+            {templates.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+          </select>
+          <a className="status-pill" href="/launch/compare.html" target="_blank" rel="noreferrer" style={{ textDecoration: "none" }} data-testid="outreach-compare-link"><Wand2 size={13} style={{ marginRight: 6, verticalAlign: -2 }} />Model &amp; comparison doc</a>
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }} data-testid="outreach-auto-toggle">
             <input type="checkbox" checked={!!cfg.enabled} onChange={(e) => setCfg({ ...cfg, enabled: e.target.checked })} />
@@ -906,6 +929,10 @@ function OutreachPanel() {
           <button className="status-pill" style={{ cursor: "pointer" }} onClick={enrich} disabled={busy} data-testid="outreach-enrich"><Wand2 size={13} style={{ marginRight: 6, verticalAlign: -2 }} />Enrich emails</button>
           <button className="status-pill" style={{ cursor: "pointer" }} onClick={runNow} disabled={busy} data-testid="outreach-run"><Send size={13} style={{ marginRight: 6, verticalAlign: -2 }} />Send now</button>
           <button className="status-pill" style={{ cursor: "pointer" }} onClick={loadHistory} data-testid="outreach-refresh"><RefreshCw size={13} style={{ marginRight: 6, verticalAlign: -2 }} />Refresh</button>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <input className="input" style={{ width: 240 }} value={sandboxTo} onChange={(e) => setSandboxTo(e.target.value)} placeholder="Sandbox test → your email" data-testid="outreach-sandbox-email" />
+          <button className="status-pill" style={{ cursor: "pointer" }} onClick={sandbox} disabled={busy} data-testid="outreach-sandbox-send"><Mail size={13} style={{ marginRight: 6, verticalAlign: -2 }} />Send sandbox test</button>
         </div>
         {msg && <div className="muted" style={{ fontSize: 12 }} data-testid="outreach-msg">{msg}</div>}
         <div style={{ fontSize: 12 }} className="muted">Total emails sent: <strong>{sent}</strong></div>

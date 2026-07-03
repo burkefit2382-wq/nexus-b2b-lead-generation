@@ -2527,6 +2527,45 @@ async def _auto_outreach_sweep(reason: str = "manual"):
 async def run_auto_outreach(user: dict = Depends(require_admin)):
     return await _auto_outreach_sweep("manual-trigger")
 
+# ---------------- Pilot template library (5-lead / 10-lead offers) ----------------
+_SIG = "\n\nBest,\nRobert\nNEXUS Lead Intelligence\nhttps://nexuscloud.sh"
+
+def _re_body(n, price):
+    return (f"Hi [First Name],\n\n"
+            f"I built NEXUS to fix what most {{{{category}}}} operators in {{{{city}}}} already know too well: "
+            f"recycled leads, low-intent contacts, and wasted follow-up.\n\n"
+            f"NEXUS is a local lead-intelligence system that finds, filters, scores, and packages Tampa Bay "
+            f"opportunities into clean, outreach-ready lead reports.\n\n"
+            f"What makes it different:\n"
+            f"- Local targeting by county, city, and niche\n"
+            f"- Public-source (OSINT) verification instead of random scraped lists\n"
+            f"- AI scoring so the strongest opportunities rise to the top\n"
+            f"- Enrichment notes explaining why each lead matters\n"
+            f"- Clean PDF/CSV delivery your team can act on immediately\n\n"
+            f"Pilot offer:\n{n} premium, AI-scored {{{{category}}}} leads (all scored 92+) - ${price}\n\n"
+            f"That's ${round(price/n)}/lead for verified, exclusive, ready-to-work opportunities — "
+            f"a fraction of portal or agency pricing.\n\n"
+            f"Want me to send over a sample pilot pack for {{{{city}}}}?" + _SIG)
+
+OUTREACH_TEMPLATES = {
+    "re_pilot_10": {"label": "Real Estate — 10-lead pilot ($350)", "leads": 10, "price": 350,
+                    "subject": "10 AI-scored Tampa Bay leads for {{company}} (pilot)",
+                    "body": _re_body(10, 350)},
+    "re_pilot_5": {"label": "Real Estate — 5-lead pilot ($200)", "leads": 5, "price": 200,
+                   "subject": "A 5-lead Tampa Bay pilot for {{company}}",
+                   "body": _re_body(5, 200)},
+    "biz_pilot_10": {"label": "B2B (any sector) — 10-lead pilot ($350)", "leads": 10, "price": 350,
+                     "subject": "10 verified {{category}} leads for {{company}} (pilot)",
+                     "body": _re_body(10, 350)},
+    "biz_pilot_5": {"label": "B2B (any sector) — 5-lead pilot ($200)", "leads": 5, "price": 200,
+                    "subject": "A 5-lead {{category}} pilot for {{company}}",
+                    "body": _re_body(5, 200)},
+}
+
+@api.get("/outreach/templates")
+async def outreach_templates(user: dict = Depends(require_admin)):
+    return {"templates": [{"id": k, **v} for k, v in OUTREACH_TEMPLATES.items()]}
+
 # ============================================================================
 # GOVERNMENT-GRADE INTELLIGENCE ENRICHMENT + PER-LEAD STOREFRONT
 # ============================================================================
