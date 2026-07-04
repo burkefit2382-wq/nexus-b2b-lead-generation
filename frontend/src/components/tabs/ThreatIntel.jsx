@@ -2,7 +2,16 @@ import React, { useEffect, useState } from "react";
 import api from "../../lib/api";
 import { ShieldAlert, Copy, Send } from "lucide-react";
 
-const riskColor = (s) => (s > 7 ? "var(--danger)" : s > 5 ? "var(--amber)" : "var(--accent)");
+const riskColor = (s) => {
+  if (s > 7) return "var(--danger)";
+  if (s > 5) return "var(--amber)";
+  return "var(--accent)";
+};
+const severityClass = (sev) => {
+  if (sev === "high") return "hot";
+  if (sev === "medium") return "warm";
+  return "cold";
+};
 
 function ThreatProfileEditor({ profile, setProfile, onSave }) {
   return (
@@ -59,7 +68,7 @@ function ThreatReportCard({ report }) {
         <div className="mono" style={{ fontSize: 11, color: "var(--muted)", marginBottom: 8 }}>FINDINGS ({report.findings.length})</div>
         {report.findings.map((f) => (
           <div key={f.category + f.detail} style={{ fontSize: 13, padding: "6px 0", borderBottom: "1px solid var(--line)" }}>
-            <span className={`badge ${f.severity === "high" ? "hot" : f.severity === "medium" ? "warm" : "cold"}`}>{f.severity}</span>{" "}
+            <span className={`badge ${severityClass(f.severity)}`}>{f.severity}</span>{" "}
             <span className="muted">{f.detail}</span>
           </div>
         ))}

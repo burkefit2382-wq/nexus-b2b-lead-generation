@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import api from "../../lib/api";
 import { Users, Building2, ScrollText, Activity, Inbox, Mail, ShieldAlert } from "lucide-react";
 import { MonitorPanel, TenantsPanel, AuditPanel, OutreachPanel, PilotLeadsPanel } from "./AdminPanels";
-
 const GOV_ROLES = ["user", "analyst", "tenant_admin", "admin", "owner"];
 
 export function Admin() {

@@ -17,7 +17,11 @@ const NODE_LABEL = {
 };
 const nodeLabel = (n) => NODE_LABEL[n] || (n || "").replace(/_/g, " ");
 const fmtFlag = (n) => (n || "").replace(/_/g, " ");
-const confColor = (s) => (s >= 80 ? "#ffcf4d" : s >= 60 ? "var(--accent)" : "#5fb6ff");
+const confColor = (s) => {
+  if (s >= 80) return "#ffcf4d";
+  if (s >= 60) return "var(--accent)";
+  return "#5fb6ff";
+};
 const catLabel = (c) => (c || "—").replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
 
 const threatLevel = (risk) => {

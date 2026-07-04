@@ -5,6 +5,13 @@ import {
   Boxes, CreditCard, ScrollText, Inbox, Download, Mail, Zap, Wand2, Send,
 } from "lucide-react";
 
+const okColor = (ok) => {
+  if (ok === false) return "var(--danger,#ef4444)";
+  if (ok === true) return "var(--accent)";
+  return "inherit";
+};
+
+
 export function MonitorPanel() {
   const [m, setM] = useState(null);
   const [err, setErr] = useState("");
@@ -32,7 +39,7 @@ export function MonitorPanel() {
           return (
             <div key={c.k} className="panel" style={{ padding: 16 }} data-testid={`monitor-${c.k.replace(/\s+/g, "-").toLowerCase()}`}>
               <div className="muted" style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}><Ico size={14} /> {c.k}</div>
-              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: c.ok === false ? "var(--danger,#ef4444)" : c.ok === true ? "var(--accent)" : "inherit" }}>{c.v}</div>
+              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6, color: okColor(c.ok) }}>{c.v}</div>
             </div>
           );
         })}
