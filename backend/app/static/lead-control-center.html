@@ -219,6 +219,35 @@
         background: #fbfdfc;
       }
 
+      .metric-list {
+        display: grid;
+        gap: 9px;
+        margin-top: 16px;
+      }
+
+      .metric-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fbfdfc;
+      }
+
+      .metric-label {
+        color: var(--muted);
+        font-size: 0.84rem;
+      }
+
+      .metric-value {
+        color: var(--ink);
+        font-size: 0.88rem;
+        font-weight: 800;
+        text-align: right;
+      }
+
       .actions {
         display: flex;
         flex-wrap: wrap;
@@ -376,10 +405,93 @@
               <span>Enrichment</span>
               <span>Scoring</span>
             </div>
+            <div class="metric-list" aria-label="Backend health metrics">
+              <div class="metric-row">
+                <span class="metric-label">Backend Health</span>
+                <span class="metric-value" id="backend-health">Healthy (200 /healthz)</span>
+              </div>
+              <div class="metric-row">
+                <span class="metric-label">Last Check</span>
+                <span class="metric-value" id="backend-last-check">Just now</span>
+              </div>
+            </div>
           </div>
           <div class="actions">
             <a class="button primary" href="https://dashboard.render.com/web/srv-d91akdb7uimc73a2b8g0/logs?t=app&r=live" target="_blank" rel="noopener">Live Logs</a>
             <a class="button" href="https://dashboard.render.com/web/srv-d91akdb7uimc73a2b8g0/logs?t=app&r=1h" target="_blank" rel="noopener">Last Hour</a>
+            <a class="button" href="https://dashboard.render.com/web/srv-d91akdb7uimc73a2b8g0/deploys" target="_blank" rel="noopener">Deploys</a>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-body">
+            <div class="panel-kicker">
+              Scraper queue
+              <span class="state">Idle</span>
+            </div>
+            <h2>Pipeline monitor</h2>
+            <p>
+              Tracks OSINT and lead scraping jobs across import, enrichment, scoring,
+              and publishing stages. These demo values are ready to be replaced by
+              live FastAPI queue endpoints.
+            </p>
+            <div class="metric-list" aria-label="Scraper queue metrics">
+              <div class="metric-row">
+                <span class="metric-label">Queued Jobs</span>
+                <span class="metric-value" id="scraper-queued">0</span>
+              </div>
+              <div class="metric-row">
+                <span class="metric-label">Running Jobs</span>
+                <span class="metric-value" id="scraper-running">0</span>
+              </div>
+              <div class="metric-row">
+                <span class="metric-label">Failed Last 24h</span>
+                <span class="metric-value" id="scraper-failed">0</span>
+              </div>
+            </div>
+            <div class="meta">
+              <span>Import</span>
+              <span>Enrich</span>
+              <span>Score</span>
+              <span>Publish</span>
+            </div>
+          </div>
+          <div class="actions">
+            <a class="button primary" href="/dashboard">Open Dashboard</a>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-body">
+            <div class="panel-kicker">
+              Ingestion
+              <span class="state">Tracking</span>
+            </div>
+            <h2>Lead volume</h2>
+            <p>
+              Counts how many leads have entered the system from scrapers,
+              imports, OSINT workflows, and DFY pipelines.
+            </p>
+            <div class="metric-list" aria-label="Lead ingestion metrics">
+              <div class="metric-row">
+                <span class="metric-label">Leads Today</span>
+                <span class="metric-value" id="leads-today">0</span>
+              </div>
+              <div class="metric-row">
+                <span class="metric-label">Leads This Week</span>
+                <span class="metric-value" id="leads-week">0</span>
+              </div>
+              <div class="metric-row">
+                <span class="metric-label">Total Leads</span>
+                <span class="metric-value" id="leads-total">0</span>
+              </div>
+            </div>
+            <div class="meta">
+              <span>Scrapers</span>
+              <span>Imports</span>
+              <span>OSINT</span>
+              <span>DFY</span>
+            </div>
           </div>
         </article>
 
@@ -470,5 +582,24 @@
     <footer>
       Lead Control Center | NEXUS | Render | Resend | HubSpot | mail.nexuscloud.sh
     </footer>
+    <script>
+      const demoMetrics = {
+        "backend-health": "Healthy (200 /healthz)",
+        "backend-last-check": "Just now",
+        "scraper-queued": "3",
+        "scraper-running": "1",
+        "scraper-failed": "0",
+        "leads-today": "12",
+        "leads-week": "87",
+        "leads-total": "1342",
+      };
+
+      Object.entries(demoMetrics).forEach(([id, value]) => {
+        const target = document.getElementById(id);
+        if (target) {
+          target.textContent = value;
+        }
+      });
+    </script>
   </body>
 </html>
