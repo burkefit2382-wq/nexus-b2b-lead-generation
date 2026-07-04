@@ -103,6 +103,15 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - P2: People-intel rate limiting; lead unlock receipts/exports; usage analytics dashboard.
 
 ## Changelog
+- 2026-07-04 (2) — **Auto-attach Sample Pilot Pack PDF to outreach emails (verified).**
+  `send_email()` now supports `attachments` (Resend `content` as List[int] + `content_type`; Gmail fallback via
+  MIMEApplication). `_sample_pack_attachment()` builds the 5-lead PDF. Wired into all 3 send paths: sandbox test,
+  live campaign (`OutreachSendReq.attach_sample_pack`), and auto-sweep (`AutoOutreachCfg.attach_sample_pack`).
+  Frontend: "Attach this pack (PDF)…" checkbox in the Sample Pilot Pack card (attach-sample-checkbox), passed on
+  sandbox send + persisted via Save. LIVE-VERIFIED: sandbox send w/ attachment → HTTP 200 (Resend accepted PDF)
+  to burkefit2382@gmail.com. testing_agent iteration_16: 100% (toggle, checked send, config round-trip, regression).
+  Also confirmed earlier: `mail.nexuscloud.sh` domain verified + inboxing (live test to user's Gmail landed).
+
 - 2026-07-04 — **Sample Pilot Pack + A-Leads/Astro marketability chart (verified).**
   (1) One-click **Sample Pilot Pack** in the admin Outreach tab: 5 HQ (92+) cleaning-demand leads —
   3 residential home-cleaning + 2 commercial — across Pinellas/Hillsborough/Pasco (Palm Harbor, Wesley Chapel,
