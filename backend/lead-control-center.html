@@ -583,7 +583,7 @@
       Lead Control Center | NEXUS | Render | Resend | HubSpot | mail.nexuscloud.sh
     </footer>
     <script>
-      const demoMetrics = {
+      const fallbackMetrics = {
         "backend-health": "Healthy (200 /healthz)",
         "backend-last-check": "Just now",
         "scraper-queued": "3",
@@ -594,10 +594,35 @@
         "leads-total": "1342",
       };
 
-      Object.entries(demoMetrics).forEach(([id, value]) => {
+      const setText = (id, value) => {
         const target = document.getElementById(id);
-        if (target) {
-          target.textContent = value;
+        if (target && value !== undefined && value !== null && value !== "") {
+          target.textContent = String(value);
+        }
+      };
+
+      Object.entries(fallbackMetrics).forEach(([id, value]) => setText(id, value));
+
+      Promise.allSettled([
+        fetch("/api/health").then((response) => response.json()),
+        fetch("/api/scraper-queue").then((response) => response.json()),
+        fetch("/api/lead-stats").then((response) => response.json()),
+      ]).then(([health, queue, stats]) => {
+        if (health.status === "fulfilled" && health.value?.ok) {
+          setText("backend-health", `${health.value.status || "healthy"} (200 /healthz)`);
+          setText("backend-last-check", "Just now");
+        }
+
+        if (queue.status === "fulfilled" && queue.value?.ok) {
+          setText("scraper-queued", queue.value.queued);
+          setText("scraper-running", queue.value.running);
+          setText("scraper-failed", queue.value.failedLast24h);
+        }
+
+        if (stats.status === "fulfilled" && stats.value?.ok) {
+          setText("leads-today", stats.value.today);
+          setText("leads-week", stats.value.week);
+          setText("leads-total", stats.value.total);
         }
       });
     </script>

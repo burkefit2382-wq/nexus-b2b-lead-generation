@@ -47,6 +47,9 @@ WAITLIST_PATH = DATA_DIR / "waitlist_requests.jsonl"
 LEAD_PACKAGE_REQUESTS_PATH = DATA_DIR / "lead_package_requests.jsonl"
 FULFILLMENT_EVENTS_PATH = DATA_DIR / "fulfillment_events.jsonl"
 OSINT_REPORTS_PATH = DATA_DIR / "osint_report_requests.jsonl"
+SCRAPER_DIR = DATA_DIR / "scrapers"
+SCRAPER_SUMMARY_PATH = SCRAPER_DIR / "latest_summary.json"
+SCRAPER_JSONL_PATH = SCRAPER_DIR / "tampa_bay_real_estate_leads.jsonl"
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 HQ_FLORIDA_LEAD_COUNT = 137
 HQ_FLORIDA_PRICING = (
@@ -323,6 +326,18 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             self.handle_fulfillment_status()
             return
 
+        if route == "/api/health":
+            self.handle_api_health()
+            return
+
+        if route == "/api/scraper-queue":
+            self.handle_scraper_queue()
+            return
+
+        if route == "/api/lead-stats":
+            self.handle_lead_stats()
+            return
+
         query = urllib.parse.parse_qs(parsed.query)
         if parsed.path in {"", "/"} and query.get("page", [""])[0] == "dashboard":
             self.path = "/dashboard.html"
@@ -574,6 +589,57 @@ class LaunchHandler(SimpleHTTPRequestHandler):
                 "resend": self.resend_status(),
                 "stripe": self.stripe_status(),
                 "leadMarket": self.hq_florida_market(),
+            },
+            HTTPStatus.OK,
+        )
+
+    def handle_api_health(self) -> None:
+        self.send_json(
+            {
+                "ok": True,
+                "status": "healthy",
+                "service": "leadgen-launch-site",
+                "healthz": "/healthz",
+                "checkedAt": datetime.now(timezone.utc).isoformat(),
+            },
+            HTTPStatus.OK,
+        )
+
+    def handle_scraper_queue(self) -> None:
+        summary = self.load_json_file(SCRAPER_SUMMARY_PATH)
+        errors = summary.get("errors", [])
+        if not isinstance(errors, list):
+            errors = []
+
+        self.send_json(
+            {
+                "ok": True,
+                "status": "Queue Idle",
+                "queued": 0,
+                "running": 0,
+                "failedLast24h": len(errors),
+                "lastRunAt": summary.get("last_run_at"),
+                "source": summary.get("source", "No scraper summary available"),
+            },
+            HTTPStatus.OK,
+        )
+
+    def handle_lead_stats(self) -> None:
+        summary = self.load_json_file(SCRAPER_SUMMARY_PATH)
+        total = int(summary.get("total_records") or self.count_lines(SCRAPER_JSONL_PATH) or 0)
+        last_run_at = str(summary.get("last_run_at") or "")
+        new_records = int(summary.get("new_records") or 0)
+        today = new_records if self.is_today(last_run_at) else 0
+        week = total if self.is_within_days(last_run_at, 7) else 0
+
+        self.send_json(
+            {
+                "ok": True,
+                "today": today,
+                "week": week,
+                "total": total,
+                "lastRunAt": last_run_at or None,
+                "source": "scraper summary" if summary else "default",
             },
             HTTPStatus.OK,
         )
@@ -1466,6 +1532,45 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         if any(token in lowered for token in ("your_new", "paste", "rotated", "key_here", "xxxxxxxx")):
             return False
         return value.startswith(("sk_live_", "sk_test_")) and len(value) > 80
+
+    def load_json_file(self, path: Path) -> dict[str, Any]:
+        if not path.exists():
+            return {}
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def count_lines(self, path: Path) -> int:
+        if not path.exists():
+            return 0
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                return sum(1 for _ in handle)
+        except OSError:
+            return 0
+
+    def parse_datetime(self, value: str) -> datetime | None:
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+    def is_today(self, value: str) -> bool:
+        parsed = self.parse_datetime(value)
+        if parsed is None:
+            return False
+        return parsed.astimezone(timezone.utc).date() == datetime.now(timezone.utc).date()
+
+    def is_within_days(self, value: str, days: int) -> bool:
+        parsed = self.parse_datetime(value)
+        if parsed is None:
+            return False
+        age = datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)
+        return 0 <= age.total_seconds() <= days * 24 * 60 * 60
 
 
 def main() -> int:
