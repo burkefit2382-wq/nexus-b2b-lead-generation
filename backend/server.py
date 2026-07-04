@@ -834,6 +834,7 @@ RUN_SCHEDULER = os.environ.get("RUN_SCHEDULER", "true").lower() != "false"
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
 SCRAPER_STATE = {"status": "idle", "last_run": None, "last_error": None,
                  "found": 0, "qualified": 0, "cycles": 0, "next_run": None}
 
@@ -2161,7 +2162,7 @@ async def _sales_email_draft(domain: str, signals: dict, ai: dict, model_key: st
                            f"{services}. Open to a free 15-minute review call?\n\nBest,\n{sender_name}\n{brand}"}
     return ai_mail
 
-def _send_gmail_sync(to_addr: str, subject: str, body: str, from_name: str = ""):
+def _send_gmail_sync(to_addr: str, subject: str, body: str, from_name: str = "", attachments=None):
     user = os.environ.get("GMAIL_USER"); pw = os.environ.get("GMAIL_APP_PASSWORD")
     if not (user and pw):
         raise RuntimeError("Gmail not configured — set GMAIL_USER and GMAIL_APP_PASSWORD (16-char App Password).")
@@ -2170,11 +2171,17 @@ def _send_gmail_sync(to_addr: str, subject: str, body: str, from_name: str = "")
     msg["To"] = to_addr
     msg["Subject"] = subject
     msg.attach(MIMEText(body, "plain"))
+    for a in (attachments or []):
+        content = a.get("content")
+        raw = bytes(content) if isinstance(content, list) else content
+        part = MIMEApplication(raw, _subtype="pdf")
+        part.add_header("Content-Disposition", "attachment", filename=a.get("filename", "attachment.pdf"))
+        msg.attach(part)
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=25) as s:
         s.login(user, pw.replace(" ", ""))
         s.sendmail(user, [to_addr], msg.as_string())
 
-async def send_email(to_addr: str, subject: str, body: str, from_name: str = ""):
+async def send_email(to_addr: str, subject: str, body: str, from_name: str = "", attachments=None):
     api_key = os.environ.get("RESEND_API_KEY")
     if api_key:
         import resend
@@ -2183,11 +2190,13 @@ async def send_email(to_addr: str, subject: str, body: str, from_name: str = "")
         params = {"from": f"{from_name} <{sender}>" if from_name else sender,
                   "to": [to_addr], "subject": subject,
                   "html": body.replace("\n", "<br>"), "text": body}
+        if attachments:
+            params["attachments"] = attachments
         res = await asyncio.to_thread(resend.Emails.send, params)
         if isinstance(res, dict) and res.get("error"):
             raise RuntimeError(str(res["error"]))
         return
-    await asyncio.to_thread(_send_gmail_sync, to_addr, subject, body, from_name)
+    await asyncio.to_thread(_send_gmail_sync, to_addr, subject, body, from_name, attachments)
 
 async def _run_threat_scan(domain: str, model_key: str = "deepseek", by: str = "system", source: str = "manual") -> dict:
     signals = await _gather_threat_signals(domain)
@@ -2351,6 +2360,7 @@ class OutreachSendReq(BaseModel):
     test_to: str = ""      # if set: send ONE test email here only (no DB writes, no bulk)
     confirm: bool = False  # must be true to run the live bulk send
     limit: int = 0         # 0 = no cap
+    attach_sample_pack: bool = False  # attach the 5-lead sample pilot pack PDF
 
 @api.post("/outreach/preview")
 async def outreach_preview(body: OutreachSendReq, user: dict = Depends(require_admin)):
@@ -2374,7 +2384,8 @@ async def outreach_send(body: OutreachSendReq, request: Request, user: dict = De
         recs = await _outreach_recipients(body.min_score, body.max_score, body.fl_only, body.category)
         s = recs[0] if recs else {"company": "Bay Area Realty", "city": "Tampa", "category": "real_estate", "state": "FL", "email": body.test_to}
         try:
-            await send_email(body.test_to.strip(), _personalize(body.subject, s), _personalize(body.body, s), body.from_name)
+            att = _sample_pack_attachment() if body.attach_sample_pack else None
+            await send_email(body.test_to.strip(), _personalize(body.subject, s), _personalize(body.body, s), body.from_name, attachments=att)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Test send failed: {str(e)[:220]}")
         return {"test": True, "to": body.test_to.strip(), "sample_company": s.get("company")}
@@ -2391,6 +2402,7 @@ async def outreach_send(body: OutreachSendReq, request: Request, user: dict = De
     campaign_id = str(_uuid.uuid4())[:8]
     sent = failed = 0
     first_error = ""
+    att = _sample_pack_attachment() if body.attach_sample_pack else None
     for l in recs:
         subj = _personalize(body.subject, l)
         html = _personalize(body.body, l)
@@ -2399,7 +2411,7 @@ async def outreach_send(body: OutreachSendReq, request: Request, user: dict = De
                "score": l.get("data_confidence_score"), "by": user.get("email"),
                "sent_at": datetime.now(timezone.utc).isoformat()}
         try:
-            await send_email(l["email"], subj, html, body.from_name)
+            await send_email(l["email"], subj, html, body.from_name, attachments=att)
             rec["status"] = "sent"; sent += 1
         except Exception as e:
             rec["status"] = "failed"; rec["error"] = str(e)[:200]; failed += 1
@@ -2534,6 +2546,7 @@ class AutoOutreachCfg(BaseModel):
     body: str = ""
     from_name: str = "Robert Burke"
     min_score: float = 0
+    attach_sample_pack: bool = False  # auto-attach the 5-lead sample pilot pack PDF
 
 @api.get("/outreach/auto")
 async def get_auto_outreach(user: dict = Depends(require_admin)):
@@ -2563,6 +2576,7 @@ async def _auto_outreach_sweep(reason: str = "manual"):
     import uuid as _uuid
     campaign_id = "auto-" + str(_uuid.uuid4())[:6]
     sent = failed = 0
+    att = _sample_pack_attachment() if cfg.get("attach_sample_pack") else None
     for l in recs:
         subj = _personalize(cfg["subject"], l); html = _personalize(cfg["body"], l)
         rec = {"campaign_id": campaign_id, "lead_id": l["_id"], "email": l.get("email"),
@@ -2570,7 +2584,7 @@ async def _auto_outreach_sweep(reason: str = "manual"):
                "score": l.get("data_confidence_score"), "by": "auto-engine", "auto": True,
                "sent_at": datetime.now(timezone.utc).isoformat()}
         try:
-            await send_email(l["email"], subj, html, cfg.get("from_name", "Robert Burke"))
+            await send_email(l["email"], subj, html, cfg.get("from_name", "Robert Burke"), attachments=att)
             rec["status"] = "sent"; sent += 1
         except Exception as e:
             rec["status"] = "failed"; rec["error"] = str(e)[:200]; failed += 1
@@ -2744,6 +2758,12 @@ def _sample_pack_pdf() -> bytes:
     p.cell(0, 5, _pdf_txt("Prepared for NEXUS Lead Intelligence - nexuscloud.sh - representative sample, figures editable."),
            new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     return bytes(p.output())
+
+def _sample_pack_attachment() -> list:
+    pdf = _sample_pack_pdf()
+    return [{"filename": "NEXUS_Sample_Pilot_Pack.pdf",
+             "content": list(pdf),
+             "content_type": "application/pdf"}]
 
 @api.get("/outreach/sample-pack")
 async def outreach_sample_pack(user: dict = Depends(require_admin)):

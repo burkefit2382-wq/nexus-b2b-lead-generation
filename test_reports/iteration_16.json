@@ -1,0 +1,22 @@
+{
+  "summary": "Frontend-only verification of attach_sample_pack UI in Governance > Outreach. All acceptance criteria met.",
+  "verified_flows": [
+    "Admin login (admin@nexus.io / nexus123) -> nav-admin -> gov-tab-outreach opens Outreach Engine panel.",
+    "sample-pack-card visible; attach-sample-checkbox exists, default UNCHECKED. Label reads '... (off)'. Clicking toggles to CHECKED and label reads '... (ON)'.",
+    "With checkbox CHECKED, sandbox send (outreach-sandbox-email=test+attach@example.com, outreach-sandbox-send) issued POST /api/outreach/send with attach_sample_pack:true, response 200. outreach-msg: 'Sandbox test sent to test+attach@example.com (sample: Diendei, LLC).' No console errors.",
+    "Save settings (outreach-save) issued PUT /api/outreach/auto payload including attach_sample_pack:true -> 200; msg 'Auto-send settings saved.' After full page reload + re-navigating to Outreach tab, attach-sample-checkbox remained CHECKED (config round-trip OK).",
+    "Regression: sample-preview-btn returned 5 rows in the sample table; outreach-template dropdown selection filled subject ('10 AI-scored Tampa Bay leads for {{company}} (pilot)'); no JS console errors throughout."
+  ],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100%"},
+  "test_credentials": "admin@nexus.io / nexus123",
+  "seed_data_creation": "Reset checkbox to unchecked and saved after testing to avoid lingering state.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "attach_sample_pack UI + persistence verified end-to-end on cloud-saas-hub host. Payloads confirmed via request interception: POST /api/outreach/send and PUT /api/outreach/auto both include attach_sample_pack when checkbox toggled ON."
+}

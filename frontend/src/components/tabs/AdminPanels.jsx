@@ -133,7 +133,7 @@ function OutreachHistoryTable({ history }) {
 }
 
 export function OutreachPanel() {
-  const [cfg, setCfg] = useState({ enabled: false, category: "real_estate", subject: "", body: "", from_name: "Robert Burke", min_score: 0 });
+  const [cfg, setCfg] = useState({ enabled: false, category: "real_estate", subject: "", body: "", from_name: "Robert Burke", min_score: 0, attach_sample_pack: false });
   const [history, setHistory] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [sandboxTo, setSandboxTo] = useState("");
@@ -167,7 +167,7 @@ export function OutreachPanel() {
     if (!sandboxTo.trim()) { setMsg("Enter a sandbox email to receive the test."); return; }
     setBusy(true); setMsg("Sending sandbox test…");
     try {
-      const r = await api.post("/outreach/send", { subject: cfg.subject, body: cfg.body, from_name: cfg.from_name, category: cfg.category, test_to: sandboxTo.trim() });
+      const r = await api.post("/outreach/send", { subject: cfg.subject, body: cfg.body, from_name: cfg.from_name, category: cfg.category, test_to: sandboxTo.trim(), attach_sample_pack: cfg.attach_sample_pack });
       setMsg(`Sandbox test sent to ${r.data.to} (sample: ${r.data.sample_company}).`);
     } catch (e) { setMsg(e.response?.data?.detail || e.message); }
     setBusy(false);
@@ -212,6 +212,10 @@ export function OutreachPanel() {
               <button className="status-pill" style={{ cursor: "pointer" }} onClick={() => downloadSample("csv")} data-testid="sample-csv-btn"><Download size={13} style={{ marginRight: 6, verticalAlign: -2 }} />CSV</button>
             </div>
           </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, cursor: "pointer", fontSize: 12.5 }} data-testid="attach-sample-toggle">
+            <input type="checkbox" checked={!!cfg.attach_sample_pack} onChange={(e) => setCfg({ ...cfg, attach_sample_pack: e.target.checked })} data-testid="attach-sample-checkbox" />
+            <span>Attach this pack (PDF) to sandbox tests &amp; auto-send emails {cfg.attach_sample_pack ? "(ON)" : "(off)"}</span>
+          </label>
           {samplePack && (
             <div style={{ marginTop: 10, maxHeight: 260, overflow: "auto" }} data-testid="sample-preview">
               <table className="tbl">
