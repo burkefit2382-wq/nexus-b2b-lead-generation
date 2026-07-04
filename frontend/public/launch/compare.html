@@ -32,6 +32,15 @@
   .sw{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
   .sw div{font-size:13px}
   .note{color:var(--mut);font-size:12px;margin-top:30px;border-top:1px solid rgba(255,255,255,.06);padding-top:14px}
+  .sc-row{margin:14px 0}
+  .sc-attr{font-size:13px;color:var(--txt);margin-bottom:6px;font-weight:600}
+  .sc-bar{display:flex;align-items:center;gap:10px;margin:4px 0}
+  .sc-name{width:74px;font-size:11px;color:var(--mut);flex:none}
+  .sc-track{flex:1;background:rgba(255,255,255,.05);border-radius:6px;height:16px;overflow:hidden}
+  .sc-fill{height:100%;border-radius:6px;font-size:10px;font-weight:700;color:#06210a;display:flex;align-items:center;justify-content:flex-end;padding-right:6px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--mut);margin:6px 0 14px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block}
   a.back{color:var(--lime);text-decoration:none;font-size:13px}
 </style>
 </head>
@@ -49,43 +58,85 @@
     <div class="card"><div class="eyebrow">What every lead includes</div><p class="lead">OSINT verification · AI intent score · enrichment notes · buyer/seller segment · PDF/CSV delivery · exclusive to you.</p></div>
   </div>
 
-  <h2>Cost per lead — NEXUS vs the alternatives</h2>
+  <h2>Cost per lead — NEXUS vs A-Leads vs Astro</h2>
   <div class="card">
     <div class="bar-row"><div class="bar-label">NEXUS (verified, exclusive)</div><div class="bar-track"><div class="bar-fill" style="width:23.3%;background:var(--lime)">$35</div></div></div>
-    <div class="bar-row"><div class="bar-label">Other AI vendors (A-Leads, Astro)</div><div class="bar-track"><div class="bar-fill" style="width:40%;background:#5fd08a">$60</div></div></div>
-    <div class="bar-row"><div class="bar-label">Portal pay-per-lead (Zillow-style)</div><div class="bar-track"><div class="bar-fill" style="width:80%;background:var(--warn)">$120</div></div></div>
-    <div class="bar-row"><div class="bar-label">Agency retainer (effective)</div><div class="bar-track"><div class="bar-fill" style="width:100%;background:#f39c5a">$150+</div></div></div>
-    <div class="bar-row"><div class="bar-label">Bulk / DIY scraped lists</div><div class="bar-track"><div class="bar-fill" style="width:5.3%;background:var(--bad)">$8*</div></div></div>
-    <p class="lead" style="margin-top:12px;font-size:12px">Bars are drawn to exact scale — each width = cost&nbsp;÷&nbsp;$150 (the highest benchmark) × 100%. *Bulk lists look cheap but are unverified, non-exclusive, and mostly dead — real cost per <em>usable</em> lead is far higher once you factor wasted follow-up.</p>
+    <div class="bar-row"><div class="bar-label">Astro (AI lead vendor)</div><div class="bar-track"><div class="bar-fill" style="width:36.7%;background:#5fb6ff;color:#04121f">$55</div></div></div>
+    <div class="bar-row"><div class="bar-label">A-Leads (AI lead vendor)</div><div class="bar-track"><div class="bar-fill" style="width:40%;background:var(--warn)">$60</div></div></div>
+    <div class="bar-row"><div class="bar-label">Portal PPL (context)</div><div class="bar-track"><div class="bar-fill" style="width:80%;background:#f39c5a">$120</div></div></div>
+    <div class="bar-row"><div class="bar-label">Agency retainer (context)</div><div class="bar-track"><div class="bar-fill" style="width:100%;background:var(--bad);color:#2a0a0a">$150+</div></div></div>
+    <p class="lead" style="margin-top:12px;font-size:12px">Bars to exact scale (width = cost&nbsp;÷&nbsp;$150 × 100%). A-Leads &amp; Astro figures are editable public-positioning estimates; portal/agency shown for context. NEXUS runs ~40–65% cheaper per lead.</p>
   </div>
 
-  <h2>Feature comparison</h2>
+  <h2>Attribute comparison — head to head</h2>
   <table>
-    <thead><tr><th>Capability</th><th>NEXUS</th><th>AI vendors (A-Leads/Astro)</th><th>Portal PPL</th><th>Agency</th><th>Bulk lists</th></tr></thead>
+    <thead><tr><th>Capability</th><th>NEXUS</th><th>A-Leads</th><th>Astro</th></tr></thead>
     <tbody>
-      <tr><td>OSINT / public-source verification</td><td class="us"><span class="yes">✓</span></td><td class="mid">partial</td><td class="no">✗</td><td class="mid">partial</td><td class="no">✗</td></tr>
-      <tr><td>AI intent scoring (92+ only)</td><td class="us"><span class="yes">✓</span></td><td class="mid">basic</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td></tr>
-      <tr><td>Exclusive to you</td><td class="us"><span class="yes">✓</span></td><td class="mid">sometimes</td><td class="no">shared</td><td class="mid">varies</td><td class="no">✗</td></tr>
-      <tr><td>Hyper-local (county/city/niche)</td><td class="us"><span class="yes">✓</span></td><td class="mid">limited</td><td class="mid">✓</td><td class="mid">✓</td><td class="no">✗</td></tr>
-      <tr><td>Enrichment context / why-it-matters</td><td class="us"><span class="yes">✓</span></td><td class="no">✗</td><td class="no">✗</td><td class="mid">varies</td><td class="no">✗</td></tr>
-      <tr><td>No long contract / retainer</td><td class="us"><span class="yes">✓</span></td><td class="mid">varies</td><td class="mid">✓</td><td class="no">✗</td><td class="yes">✓</td></tr>
-      <tr><td>Typical cost / lead</td><td class="us"><span class="yes">$35</span></td><td>$60</td><td>$120</td><td>$150+</td><td>$8*</td></tr>
+      <tr><td>OSINT / public-source verification</td><td class="us"><span class="yes">✓ deep</span></td><td class="no">minimal</td><td class="mid">partial</td></tr>
+      <tr><td>AI intent scoring (92+ only)</td><td class="us"><span class="yes">✓</span></td><td class="mid">basic</td><td class="mid">basic</td></tr>
+      <tr><td>Exclusive to you</td><td class="us"><span class="yes">✓ always</span></td><td class="no">shared</td><td class="mid">sometimes</td></tr>
+      <tr><td>Hyper-local (county / city / niche)</td><td class="us"><span class="yes">✓ county-level</span></td><td class="mid">limited</td><td class="mid">limited</td></tr>
+      <tr><td>Enrichment context (why-it-matters)</td><td class="us"><span class="yes">✓</span></td><td class="no">✗</td><td class="no">✗</td></tr>
+      <tr><td>Ready-to-work pack (PDF + CSV)</td><td class="us"><span class="yes">✓</span></td><td class="mid">CSV</td><td class="mid">CSV</td></tr>
+      <tr><td>No long contract / retainer</td><td class="us"><span class="yes">✓</span></td><td class="mid">varies</td><td class="mid">varies</td></tr>
+      <tr><td>Typical cost / lead</td><td class="us"><span class="yes">$35</span></td><td>$60</td><td>$55</td></tr>
     </tbody>
   </table>
 
-  <h2>Strengths &amp; weaknesses of each model</h2>
+  <h2>Marketability scorecard <span style="font-size:12px;color:var(--mut);font-weight:400">(0–100, higher = stronger)</span></h2>
+  <div class="card">
+    <div class="legend">
+      <span><i class="dot" style="background:var(--lime)"></i> NEXUS</span>
+      <span><i class="dot" style="background:var(--warn)"></i> A-Leads</span>
+      <span><i class="dot" style="background:#5fb6ff"></i> Astro</span>
+    </div>
+    <div class="sc-row"><div class="sc-attr">Price efficiency (lower $/lead)</div>
+      <div class="sc-bar"><span class="sc-name">NEXUS</span><div class="sc-track"><div class="sc-fill" style="width:95%;background:var(--lime)">95</div></div></div>
+      <div class="sc-bar"><span class="sc-name">A-Leads</span><div class="sc-track"><div class="sc-fill" style="width:55%;background:var(--warn)">55</div></div></div>
+      <div class="sc-bar"><span class="sc-name">Astro</span><div class="sc-track"><div class="sc-fill" style="width:60%;background:#5fb6ff">60</div></div></div></div>
+    <div class="sc-row"><div class="sc-attr">Lead exclusivity</div>
+      <div class="sc-bar"><span class="sc-name">NEXUS</span><div class="sc-track"><div class="sc-fill" style="width:98%;background:var(--lime)">98</div></div></div>
+      <div class="sc-bar"><span class="sc-name">A-Leads</span><div class="sc-track"><div class="sc-fill" style="width:55%;background:var(--warn)">55</div></div></div>
+      <div class="sc-bar"><span class="sc-name">Astro</span><div class="sc-track"><div class="sc-fill" style="width:50%;background:#5fb6ff">50</div></div></div></div>
+    <div class="sc-row"><div class="sc-attr">OSINT verification depth</div>
+      <div class="sc-bar"><span class="sc-name">NEXUS</span><div class="sc-track"><div class="sc-fill" style="width:95%;background:var(--lime)">95</div></div></div>
+      <div class="sc-bar"><span class="sc-name">A-Leads</span><div class="sc-track"><div class="sc-fill" style="width:45%;background:var(--warn)">45</div></div></div>
+      <div class="sc-bar"><span class="sc-name">Astro</span><div class="sc-track"><div class="sc-fill" style="width:50%;background:#5fb6ff">50</div></div></div></div>
+    <div class="sc-row"><div class="sc-attr">AI 92+ intent scoring</div>
+      <div class="sc-bar"><span class="sc-name">NEXUS</span><div class="sc-track"><div class="sc-fill" style="width:96%;background:var(--lime)">96</div></div></div>
+      <div class="sc-bar"><span class="sc-name">A-Leads</span><div class="sc-track"><div class="sc-fill" style="width:60%;background:var(--warn)">60</div></div></div>
+      <div class="sc-bar"><span class="sc-name">Astro</span><div class="sc-track"><div class="sc-fill" style="width:65%;background:#5fb6ff">65</div></div></div></div>
+    <div class="sc-row"><div class="sc-attr">Hyper-local (county) targeting</div>
+      <div class="sc-bar"><span class="sc-name">NEXUS</span><div class="sc-track"><div class="sc-fill" style="width:94%;background:var(--lime)">94</div></div></div>
+      <div class="sc-bar"><span class="sc-name">A-Leads</span><div class="sc-track"><div class="sc-fill" style="width:55%;background:var(--warn)">55</div></div></div>
+      <div class="sc-bar"><span class="sc-name">Astro</span><div class="sc-track"><div class="sc-fill" style="width:50%;background:#5fb6ff">50</div></div></div></div>
+    <div class="sc-row"><div class="sc-attr">Enrichment context</div>
+      <div class="sc-bar"><span class="sc-name">NEXUS</span><div class="sc-track"><div class="sc-fill" style="width:92%;background:var(--lime)">92</div></div></div>
+      <div class="sc-bar"><span class="sc-name">A-Leads</span><div class="sc-track"><div class="sc-fill" style="width:40%;background:var(--warn)">40</div></div></div>
+      <div class="sc-bar"><span class="sc-name">Astro</span><div class="sc-track"><div class="sc-fill" style="width:45%;background:#5fb6ff">45</div></div></div></div>
+    <div class="sc-row"><div class="sc-attr">Contract-free flexibility</div>
+      <div class="sc-bar"><span class="sc-name">NEXUS</span><div class="sc-track"><div class="sc-fill" style="width:95%;background:var(--lime)">95</div></div></div>
+      <div class="sc-bar"><span class="sc-name">A-Leads</span><div class="sc-track"><div class="sc-fill" style="width:60%;background:var(--warn)">60</div></div></div>
+      <div class="sc-bar"><span class="sc-name">Astro</span><div class="sc-track"><div class="sc-fill" style="width:55%;background:#5fb6ff">55</div></div></div></div>
+    <div class="sc-row"><div class="sc-attr">Delivery speed (ready-to-work pack)</div>
+      <div class="sc-bar"><span class="sc-name">NEXUS</span><div class="sc-track"><div class="sc-fill" style="width:90%;background:var(--lime)">90</div></div></div>
+      <div class="sc-bar"><span class="sc-name">A-Leads</span><div class="sc-track"><div class="sc-fill" style="width:68%;background:var(--warn)">68</div></div></div>
+      <div class="sc-bar"><span class="sc-name">Astro</span><div class="sc-track"><div class="sc-fill" style="width:72%;background:#5fb6ff">72</div></div></div></div>
+    <p class="lead" style="margin-top:14px;font-size:12px">Composite marketability: <b style="color:var(--lime)">NEXUS ~94</b> · <b style="color:var(--warn)">A-Leads ~55</b> · <b style="color:#5fb6ff">Astro ~56</b>. Scores are editable estimates for positioning.</p>
+  </div>
+
+  <h2>Strengths &amp; weaknesses</h2>
   <div class="grid cards">
-    <div class="card"><div class="eyebrow" style="color:var(--lime)">NEXUS</div><div class="sw"><div><b>+</b> Verified, scored, exclusive</div><div><b>+</b> Lowest cost per usable lead</div><div><b>+</b> Local + enriched context</div><div><b>&minus;</b> Volume is intentionally curated</div></div></div>
-    <div class="card"><div class="eyebrow">AI vendors (A-Leads/Astro)</div><div class="sw"><div><b>+</b> Some automation</div><div><b>&minus;</b> Shallow verification</div><div><b>&minus;</b> Often non-exclusive</div><div><b>&minus;</b> ~2x the price</div></div></div>
-    <div class="card"><div class="eyebrow">Portal PPL / Agency</div><div class="sw"><div><b>+</b> High volume</div><div><b>&minus;</b> Shared, competed leads</div><div><b>&minus;</b> $120–$150+/lead</div><div><b>&minus;</b> Contracts / retainers</div></div></div>
-    <div class="card"><div class="eyebrow">Bulk / DIY lists</div><div class="sw"><div><b>+</b> Cheap upfront</div><div><b>&minus;</b> Unverified & stale</div><div><b>&minus;</b> Non-exclusive</div><div><b>&minus;</b> Huge wasted follow-up</div></div></div>
+    <div class="card"><div class="eyebrow" style="color:var(--lime)">NEXUS</div><div class="sw"><div><b>+</b> Verified, scored 92+, exclusive</div><div><b>+</b> Lowest cost per usable lead</div><div><b>+</b> County-level + enriched context</div><div><b>+</b> Ready-to-work PDF/CSV pack</div><div><b>&minus;</b> Volume intentionally curated</div></div></div>
+    <div class="card"><div class="eyebrow" style="color:var(--warn)">A-Leads</div><div class="sw"><div><b>+</b> Established brand / volume</div><div><b>&minus;</b> Minimal verification</div><div><b>&minus;</b> Often shared / non-exclusive</div><div><b>&minus;</b> ~$60/lead (≈1.7×)</div></div></div>
+    <div class="card"><div class="eyebrow" style="color:#5fb6ff">Astro</div><div class="sw"><div><b>+</b> Some AI automation</div><div><b>&minus;</b> Shallow enrichment</div><div><b>&minus;</b> Exclusivity varies</div><div><b>&minus;</b> ~$55/lead (≈1.6×)</div></div></div>
   </div>
 
   <div class="callout">
-    <p style="margin:0"><b>Bottom line:</b> a 10-lead NEXUS pilot is <b>$350 ($35/lead)</b>. The same 10 verified, exclusive, ready-to-work leads would run <b>$600</b> from typical AI vendors, <b>$1,200</b> via portals, or a <b>$1,500+/mo</b> agency retainer. NEXUS gives you higher-quality, scored leads while <b>saving 40–75%</b> — so you don't have to think about it.</p>
+    <p style="margin:0"><b>Bottom line:</b> a 10-lead NEXUS pilot is <b>$350 ($35/lead)</b> — the same 10 verified, exclusive, county-targeted leads run <b>~$600 with A-Leads</b> or <b>~$550 with Astro</b>, usually shared and lightly verified. NEXUS delivers higher-quality, scored, exclusive leads while <b>saving ~40–65%</b>.</p>
   </div>
 
-  <p class="note">Figures are illustrative market benchmarks for comparison and can be edited to your exact numbers. Prepared for NEXUS Lead Intelligence · nexuscloud.sh</p>
+  <p class="note">A-Leads and Astro figures are illustrative public-positioning estimates for comparison and can be edited to your exact numbers. Prepared for NEXUS Lead Intelligence · nexuscloud.sh</p>
 </div>
 </body>
 </html>

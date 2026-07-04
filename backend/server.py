@@ -2623,6 +2623,142 @@ OUTREACH_TEMPLATES = {
 async def outreach_templates(user: dict = Depends(require_admin)):
     return {"templates": [{"id": k, **v} for k, v in OUTREACH_TEMPLATES.items()]}
 
+# --- Sample pilot pack: 5 HQ (92+) cleaning-demand leads across Pinellas/Hillsborough/Pasco ---
+SAMPLE_PACK = {
+    "title": "NEXUS Sample Pilot Pack - Tampa Bay Cleaning Services",
+    "region": "Pinellas / Hillsborough / Pasco County, FL",
+    "note": ("Representative SAMPLE of the quality delivered in a live 5-lead pilot. Every lead is "
+             "OSINT-verified and AI-scored 92+, exclusive to the buyer. Contact details are masked and "
+             "unlock on purchase. Figures are illustrative and editable to your exact market."),
+    "pricing": "5 leads = $200 ($40/lead)  |  10 leads = $350 ($35/lead)",
+    "leads": [
+        {"rank": 1, "type": "Residential", "category": "residential_home_cleaning",
+         "county": "Pinellas", "city": "Palm Harbor, FL",
+         "entity_masked": "Waterfront Residence - Palm Harbor",
+         "contact_masked": "•••@•••  ·  (727) •••-••17", "score": 96, "tier": "Strategic",
+         "budget_est": "$190-$260 / mo (recurring)",
+         "intent_summary": "4BR/3BA waterfront home; owner seeking reliable bi-weekly whole-home cleaning after a recent move-in. High-intent, recurring, insured-preferred.",
+         "verification_nodes": ["Address verified", "Phone valid", "Property records matched", "Intent confirmed", "Geo-located"],
+         "source": "OSINT · public listing + permit + review signals"},
+        {"rank": 2, "type": "Residential", "category": "residential_home_cleaning",
+         "county": "Pasco", "city": "Wesley Chapel, FL",
+         "entity_masked": "New-Build Household - Wesley Chapel",
+         "contact_masked": "•••@•••  ·  (813) •••-••04", "score": 94, "tier": "Strategic",
+         "budget_est": "$220-$300 one-time + $150/mo",
+         "intent_summary": "New-construction move-in; homeowner requesting a deep move-in clean then monthly maintenance. Dual-income, time-poor, ready to book.",
+         "verification_nodes": ["Address verified", "Email valid", "Property records matched", "Intent confirmed"],
+         "source": "OSINT · new-home permit + local group signals"},
+        {"rank": 3, "type": "Residential", "category": "residential_home_cleaning",
+         "county": "Hillsborough", "city": "Tampa (Hyde Park), FL",
+         "entity_masked": "Historic Home - South Tampa",
+         "contact_masked": "•••@•••  ·  (813) •••-••88", "score": 93, "tier": "Tactical",
+         "budget_est": "$160-$220 / mo (weekly)",
+         "intent_summary": "Dual-income professional household in Hyde Park seeking weekly maid service; values eco-friendly products and vetted, background-checked staff.",
+         "verification_nodes": ["Address verified", "Phone valid", "Footprint consistent", "Geo-located"],
+         "source": "OSINT · public listing + review + social signals"},
+        {"rank": 4, "type": "Commercial", "category": "commercial_cleaning",
+         "county": "Pinellas", "city": "Clearwater, FL",
+         "entity_masked": "Dental / Medical Practice - Clearwater",
+         "contact_masked": "office•••@•••  ·  (727) •••-••31", "score": 95, "tier": "Strategic",
+         "budget_est": "$1,400-$2,100 / mo (nightly janitorial)",
+         "intent_summary": "~6,000 sqft dental/medical office needs nightly janitorial with medical-grade sanitation and restroom service. Decision-maker is the practice manager; renewing off a lapsed vendor.",
+         "verification_nodes": ["Business registry verified", "Phone valid", "Address verified", "Intent confirmed", "Geo-located"],
+         "source": "OSINT · registry + license + review signals"},
+        {"rank": 5, "type": "Commercial", "category": "commercial_cleaning",
+         "county": "Hillsborough", "city": "Brandon, FL",
+         "entity_masked": "Multi-Tenant Office Park - Brandon",
+         "contact_masked": "pm•••@•••  ·  (813) •••-••62", "score": 92, "tier": "Tactical",
+         "budget_est": "$2,600-$3,800 / mo (common areas + restrooms)",
+         "intent_summary": "Property manager sourcing common-area, lobby and restroom cleaning across a multi-tenant office park; wants one accountable vendor and a fixed monthly scope.",
+         "verification_nodes": ["Business registry verified", "Email valid", "Address verified", "Footprint consistent"],
+         "source": "OSINT · registry + property mgmt + review signals"},
+    ],
+}
+
+def _sample_pack_csv() -> str:
+    import io, csv
+    out = io.StringIO(); w = csv.writer(out)
+    w.writerow(["Rank", "Type", "Category", "County", "City", "Entity (masked)", "Contact (masked)",
+                "Score", "Tier", "Budget Est", "Intent Summary", "Verification Nodes", "Source"])
+    for l in SAMPLE_PACK["leads"]:
+        w.writerow([l["rank"], l["type"], l["category"], l["county"], l["city"], l["entity_masked"],
+                    l["contact_masked"], l["score"], l["tier"], l["budget_est"], l["intent_summary"],
+                    " | ".join(l["verification_nodes"]), l["source"]])
+    return out.getvalue()
+
+def _pdf_txt(s: str) -> str:
+    s = str(s)
+    for k, v in {"•": "*", "–": "-", "—": "-", "·": "-", "’": "'", "“": '"', "”": '"', "…": "..."}.items():
+        s = s.replace(k, v)
+    return s.encode("latin-1", "replace").decode("latin-1")
+
+def _sample_pack_pdf() -> bytes:
+    from fpdf import FPDF
+    from fpdf.enums import XPos, YPos
+    p = FPDF(format="A4")
+    p.set_auto_page_break(True, margin=16)
+    p.add_page()
+    p.set_fill_color(13, 26, 18)
+    p.rect(0, 0, 210, 30, "F")
+    p.set_xy(12, 8)
+    p.set_text_color(159, 232, 112)
+    p.set_font("Helvetica", "B", 15)
+    p.cell(0, 8, _pdf_txt(SAMPLE_PACK["title"]), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    p.set_x(12)
+    p.set_text_color(150, 180, 155)
+    p.set_font("Helvetica", "", 10)
+    p.cell(0, 6, _pdf_txt(SAMPLE_PACK["region"]), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    p.ln(8)
+    p.set_text_color(70, 70, 70)
+    p.set_font("Helvetica", "I", 9)
+    p.multi_cell(0, 4.5, _pdf_txt(SAMPLE_PACK["note"]))
+    p.ln(3)
+    for l in SAMPLE_PACK["leads"]:
+        p.set_text_color(20, 20, 20)
+        p.set_font("Helvetica", "B", 11)
+        p.cell(0, 6, _pdf_txt(f"#{l['rank']}   {l['type'].upper()} CLEANING   -   Score {l['score']}/100 ({l['tier']})"),
+               new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        p.set_font("Helvetica", "B", 10)
+        p.set_text_color(40, 90, 50)
+        p.cell(0, 5.5, _pdf_txt(f"{l['entity_masked']}  -  {l['city']} ({l['county']} County)"),
+               new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        p.set_font("Helvetica", "", 9)
+        p.set_text_color(50, 50, 50)
+        p.multi_cell(0, 4.5, _pdf_txt("Intent: " + l["intent_summary"]))
+        p.cell(0, 5, _pdf_txt(f"Budget est: {l['budget_est']}   |   Contact: {l['contact_masked']}"),
+               new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        p.set_text_color(95, 95, 95)
+        p.set_font("Helvetica", "", 8)
+        p.multi_cell(0, 4, _pdf_txt("Verified: " + ", ".join(l["verification_nodes"]) + "   |   " + l["source"]))
+        p.ln(2)
+        p.set_draw_color(215, 215, 215)
+        p.line(12, p.get_y(), 198, p.get_y())
+        p.ln(3)
+    p.ln(1)
+    p.set_font("Helvetica", "B", 10)
+    p.set_text_color(40, 90, 50)
+    p.multi_cell(0, 5, _pdf_txt("Pilot pricing: " + SAMPLE_PACK["pricing"] +
+                                ". Every lead OSINT-verified, AI-scored 92+, exclusive to you. Contacts unlock on purchase."))
+    p.set_font("Helvetica", "", 8)
+    p.set_text_color(120, 120, 120)
+    p.cell(0, 5, _pdf_txt("Prepared for NEXUS Lead Intelligence - nexuscloud.sh - representative sample, figures editable."),
+           new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    return bytes(p.output())
+
+@api.get("/outreach/sample-pack")
+async def outreach_sample_pack(user: dict = Depends(require_admin)):
+    return SAMPLE_PACK
+
+@api.get("/outreach/sample-pack.csv")
+async def outreach_sample_pack_csv(user: dict = Depends(require_admin)):
+    return StreamingResponse(iter([_sample_pack_csv()]), media_type="text/csv",
+                             headers={"Content-Disposition": "attachment; filename=nexus_sample_pilot_pack.csv"})
+
+@api.get("/outreach/sample-pack.pdf")
+async def outreach_sample_pack_pdf(user: dict = Depends(require_admin)):
+    return Response(content=_sample_pack_pdf(), media_type="application/pdf",
+                    headers={"Content-Disposition": "attachment; filename=nexus_sample_pilot_pack.pdf"})
+
 # ============================================================================
 # GOVERNMENT-GRADE INTELLIGENCE ENRICHMENT + PER-LEAD STOREFRONT
 # ============================================================================

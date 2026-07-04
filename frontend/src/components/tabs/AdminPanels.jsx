@@ -139,6 +139,7 @@ export function OutreachPanel() {
   const [sandboxTo, setSandboxTo] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  const [samplePack, setSamplePack] = useState(null);
   const loadHistory = () => api.get("/outreach/history").then((r) => setHistory(r.data.sends || [])).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only initial load
   useEffect(() => {
@@ -149,6 +150,18 @@ export function OutreachPanel() {
   const applyTemplate = (id) => {
     const t = templates.find((x) => x.id === id);
     if (t) { setCfg((c) => ({ ...c, subject: t.subject, body: t.body })); setMsg(`Loaded template: ${t.label}`); }
+  };
+  const loadSample = async () => {
+    try { const r = await api.get("/outreach/sample-pack"); setSamplePack(r.data); }
+    catch (e) { setMsg(e.response?.data?.detail || e.message); }
+  };
+  const downloadSample = async (fmt) => {
+    try {
+      const r = await api.get(`/outreach/sample-pack.${fmt}`, { responseType: "blob" });
+      const url = URL.createObjectURL(r.data);
+      const a = document.createElement("a"); a.href = url;
+      a.download = `nexus_sample_pilot_pack.${fmt}`; a.click(); URL.revokeObjectURL(url);
+    } catch (e) { setMsg(e.response?.data?.detail || e.message); }
   };
   const sandbox = async () => {
     if (!sandboxTo.trim()) { setMsg("Enter a sandbox email to receive the test."); return; }
@@ -186,6 +199,37 @@ export function OutreachPanel() {
             {templates.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
           </select>
           <a className="status-pill" href="/launch/compare.html" target="_blank" rel="noreferrer" style={{ textDecoration: "none" }} data-testid="outreach-compare-link"><Wand2 size={13} style={{ marginRight: 6, verticalAlign: -2 }} />Model &amp; comparison doc</a>
+        </div>
+        <div style={{ border: "1px solid rgba(159,232,112,0.25)", borderRadius: 8, padding: 12, background: "rgba(159,232,112,0.04)" }} data-testid="sample-pack-card">
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "space-between" }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 13 }}><ShieldCheck size={13} style={{ verticalAlign: -2, marginRight: 6 }} />Sample Pilot Pack — 5 HQ cleaning leads (92+)</div>
+              <div className="muted" style={{ fontSize: 11.5, marginTop: 2 }}>Residential + commercial · Pinellas · Hillsborough · Pasco. Attach to any pilot pitch.</div>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button className="status-pill" style={{ cursor: "pointer" }} onClick={loadSample} data-testid="sample-preview-btn"><Inbox size={13} style={{ marginRight: 6, verticalAlign: -2 }} />Preview</button>
+              <button className="status-pill" style={{ cursor: "pointer" }} onClick={() => downloadSample("pdf")} data-testid="sample-pdf-btn"><Download size={13} style={{ marginRight: 6, verticalAlign: -2 }} />PDF</button>
+              <button className="status-pill" style={{ cursor: "pointer" }} onClick={() => downloadSample("csv")} data-testid="sample-csv-btn"><Download size={13} style={{ marginRight: 6, verticalAlign: -2 }} />CSV</button>
+            </div>
+          </div>
+          {samplePack && (
+            <div style={{ marginTop: 10, maxHeight: 260, overflow: "auto" }} data-testid="sample-preview">
+              <table className="tbl">
+                <thead><tr><th>#</th><th>Type</th><th>City · County</th><th>Score</th><th>Budget est.</th></tr></thead>
+                <tbody>
+                  {samplePack.leads.map((l) => (
+                    <tr key={l.rank} data-testid={`sample-lead-${l.rank}`}>
+                      <td>{l.rank}</td>
+                      <td className="muted">{l.type}</td>
+                      <td className="name">{l.city} · {l.county}</td>
+                      <td><span className="badge">{l.score}</span></td>
+                      <td className="muted" style={{ fontSize: 11 }}>{l.budget_est}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }} data-testid="outreach-auto-toggle">
