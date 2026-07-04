@@ -16,8 +16,19 @@ def healthcheck() -> dict[str, str]:
 
 
 @app.get("/lead-control-center", response_class=HTMLResponse)
-def lead_control_center() -> str:
-    return LEAD_CONTROL_CENTER_PATH.read_text(encoding="utf-8")
+def lead_control_center() -> HTMLResponse:
+    """
+    Serves the Lead Control Center HTML dashboard.
+    Make sure lead-control-center.html is placed in app/static/.
+    """
+    if not LEAD_CONTROL_CENTER_PATH.exists():
+        return HTMLResponse(
+            "<h2>Lead Control Center file not found.</h2>"
+            "<p>Place lead-control-center.html inside app/static/.</p>",
+            status_code=404,
+        )
+
+    return HTMLResponse(LEAD_CONTROL_CENTER_PATH.read_text(encoding="utf-8"))
 
 
 @app.get("/api/leads/mock")
