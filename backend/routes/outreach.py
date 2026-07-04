@@ -2,7 +2,7 @@
 from server import (
     AutoOutreachCfg,
     Depends,
-    EnrichReq,
+    EmailEnrichReq,
     HTTPException,
     OUTREACH_TEMPLATES,
     OutreachSendReq,
@@ -104,7 +104,7 @@ async def outreach_history(user: dict = Depends(require_admin)):
 
 
 @api.post("/outreach/enrich-emails")
-async def enrich_emails(body: EnrichReq, user: dict = Depends(require_admin)):
+async def enrich_emails(body: EmailEnrichReq, user: dict = Depends(require_admin)):
     q = {"website": {"$nin": ["", None]},
          "$or": [{"email": ""}, {"email": None}, {"email": {"$exists": False}}]}
     if body.only_hq:

@@ -1579,7 +1579,7 @@ async def _enrich_lead_email(lead: dict):
     await db.leads.update_one({"_id": lead["_id"]}, {"$set": {"email": email, "email_source": "web_enriched", **fields}})
     return email
 
-class EnrichReq(BaseModel):
+class EmailEnrichReq(BaseModel):
     category: str = ""
     only_hq: bool = True
     fl_only: bool = False

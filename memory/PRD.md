@@ -103,6 +103,24 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - P2: People-intel rate limiting; lead unlock receipts/exports; usage analytics dashboard.
 
 ## Changelog
+- 2026-06-XX — **server.py monolith split into `core/` + `routes/` (verified, behavior-preserving).**
+  Refactored the 3790-line `server.py` into a clean service layer + domain routers (server.py now ~2340
+  lines = scraper engine + helpers/models + startup/shutdown/seed + composition root). **`core/`**: `db.py`
+  (a lazy `_DBProxy` forwarding attribute/item access to the live Motor db at call-time — lets modules
+  `from core.db import db` without binding None before startup; `init_db()`/`close()` wired into startup/
+  shutdown + worker.py), `security.py` (auth: get_current_user/require_admin/require_role/require_min_role +
+  token/password/apikey helpers), `ai.py` (deepseek_chat + model resolvers), `pdf.py` (SAMPLE_PACK +
+  6-page QR-CTA PDF/CSV). **`routes/`**: 87 `@api.*` handlers extracted into 13 domain modules (auth, keys,
+  admin, leads, enrichment, osint, scraper, people_intel, payments, threat, outreach, storefront, public);
+  each does `from server import (api, db, <helpers/models>)`, keeps decorators unchanged, and is imported by
+  server.py before `app.include_router(api)` (health/ready/webhook stay in server.py). Removed dead
+  scaffolding (`core/database.py`/`patterns.py`/`router.py` from a prior abandoned attempt). **Bug found &
+  fixed**: a latent duplicate `class EnrichReq` (lead-enrichment vs email-enrichment shapes) — harmless in
+  the monolith (definition order), but the route split imported the wrong one → renamed the email one to
+  `EmailEnrichReq`. testing_agent iteration_18: 26/26 new regression tests PASS
+  (`tests/test_refactor_regression.py`); db proxy confirmed clean; /api/ready db=connected; frontend login
+  renders + connects. Added `qrcode==8.2` earlier this session.
+
 - 2026-06-XX — **Sample Pilot Pack PDF cover → lead-capture asset (CTA + QR, verified).**
   Added a booking CTA block to page 1 of `_sample_pack_pdf()`: dark panel w/ lime accent bar,
   "READY TO ACTIVATE YOUR PIPELINE?" → **"Schedule a demo"** headline, "Scan the code or visit
