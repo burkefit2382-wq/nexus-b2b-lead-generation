@@ -24,6 +24,25 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT.parent / "data"
+
+
+def load_local_env() -> None:
+    env_path = ROOT / ".env"
+    if not env_path.exists():
+        return
+
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+load_local_env()
 WAITLIST_PATH = DATA_DIR / "waitlist_requests.jsonl"
 LEAD_PACKAGE_REQUESTS_PATH = DATA_DIR / "lead_package_requests.jsonl"
 FULFILLMENT_EVENTS_PATH = DATA_DIR / "fulfillment_events.jsonl"
@@ -35,6 +54,7 @@ HQ_FLORIDA_PRICING = (
     {"quantity": 25, "price": 700, "priceId": "price_tb_leads_25_700"},
     {"quantity": 50, "price": 1000, "priceId": "price_tb_leads_50_1000"},
 )
+STRIPE_API_VERSION = os.environ.get("STRIPE_API_VERSION", "2026-06-24.dahlia")
 STRIPE_CATALOG = {
     "price_tb_leads_10_350": {
         "name": "Tampa Bay 10-Lead Sprint",
@@ -363,7 +383,7 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             self.handle_checkout()
             return
 
-        if route == "/api/stripe-webhook":
+        if route in {"/api/stripe-webhook", "/stripe/webhook"}:
             self.handle_stripe_webhook()
             return
 
@@ -701,8 +721,8 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             return
 
         try:
-            public_base_url = os.environ.get("PUBLIC_BASE_URL", "https://nexuscloud.sh").rstrip("/")
-            stripe.api_key = stripe_secret
+            public_base_url = self.public_base_url()
+            self.configure_stripe(stripe, stripe_secret)
             resolved_price_id = self.resolve_stripe_price_id(stripe, price_id)
             line_items = [{"price": resolved_price_id, "quantity": 1}]
             setup_price_id = catalog_item.get("setupPriceId")
@@ -725,6 +745,8 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             self.send_json({"ok": True, "url": session.url, "catalogItem": catalog_item}, HTTPStatus.OK)
         except LookupError as exc:
             self.send_json({"error": str(exc), "catalogItem": catalog_item}, HTTPStatus.BAD_REQUEST)
+        except ValueError as exc:
+            self.send_json({"error": str(exc), "setupNeeded": True, "missing": ["PUBLIC_BASE_URL"]}, HTTPStatus.SERVICE_UNAVAILABLE)
         except Exception:  # noqa: BLE001 - return a safe payment error to the browser.
             self.send_json({"error": "Stripe checkout failed. Check server logs and Stripe configuration."}, HTTPStatus.INTERNAL_SERVER_ERROR)
 
@@ -766,7 +788,7 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         try:
             import stripe
 
-            stripe.api_key = stripe_secret
+            self.configure_stripe(stripe, stripe_secret)
             event = stripe.Webhook.construct_event(payload, signature, webhook_secret)
         except Exception:
             self.send_json({"error": "Invalid Stripe webhook signature."}, HTTPStatus.BAD_REQUEST)
@@ -784,7 +806,7 @@ class LaunchHandler(SimpleHTTPRequestHandler):
     def fulfill_checkout_session(self, session: Any) -> dict[str, Any]:
         session_id = str(self.object_value(session, "id", "") or "")
         existing = self.latest_fulfillment_record(session_id)
-        if existing and existing.get("status") == "delivered":
+        if existing:
             return existing
 
         metadata = self.object_to_dict(self.object_value(session, "metadata", {}) or {})
@@ -901,7 +923,7 @@ class LaunchHandler(SimpleHTTPRequestHandler):
 
             import resend
 
-            sender = os.environ["RESEND_FROM"]
+            sender = self.resend_sender()
             notify_to = os.environ.get("WAITLIST_NOTIFY_TO") or os.environ["RESEND_TO"]
             buyer_email = str(record["buyerEmail"])
             resend.api_key = os.environ["RESEND_API_KEY"]
@@ -979,6 +1001,22 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             return value.to_dict()
         return {}
 
+    def configure_stripe(self, stripe: Any, secret_key: str) -> None:
+        stripe.api_key = secret_key
+        stripe.api_version = STRIPE_API_VERSION
+
+    def public_base_url(self) -> str:
+        raw_url = (
+            os.environ.get("PUBLIC_BASE_URL")
+            or os.environ.get("CLOUDFLARE_TUNNEL_URL")
+            or os.environ.get("CF_PAGES_URL")
+            or "https://nexuscloud.sh"
+        )
+        url = raw_url.strip().rstrip("/")
+        if not url.startswith(("https://", "http://")):
+            raise ValueError("PUBLIC_BASE_URL or CLOUDFLARE_TUNNEL_URL must start with https:// or http://.")
+        return url
+
     def mask_email(self, email: str) -> str:
         if "@" not in email:
             return ""
@@ -1031,7 +1069,7 @@ class LaunchHandler(SimpleHTTPRequestHandler):
 
             import resend
 
-            sender = os.environ["RESEND_FROM"]
+            sender = self.resend_sender()
             notify_to = os.environ.get("WAITLIST_NOTIFY_TO") or os.environ["RESEND_TO"]
             resend.api_key = os.environ["RESEND_API_KEY"]
 
@@ -1070,7 +1108,7 @@ class LaunchHandler(SimpleHTTPRequestHandler):
 
             import resend
 
-            sender = os.environ["RESEND_FROM"]
+            sender = self.resend_sender()
             notify_to = os.environ.get("WAITLIST_NOTIFY_TO") or os.environ["RESEND_TO"]
             resend.api_key = os.environ["RESEND_API_KEY"]
 
@@ -1319,7 +1357,7 @@ class LaunchHandler(SimpleHTTPRequestHandler):
 
             import resend
 
-            sender = os.environ["RESEND_FROM"]
+            sender = self.resend_sender()
             notify_to = os.environ.get("WAITLIST_NOTIFY_TO") or os.environ["RESEND_TO"]
             resend.api_key = os.environ["RESEND_API_KEY"]
 
@@ -1369,28 +1407,52 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         }
 
     def resend_status(self) -> dict[str, Any]:
+        sender = self.resend_sender()
         required = {
             "RESEND_API_KEY": os.environ.get("RESEND_API_KEY"),
-            "RESEND_FROM": os.environ.get("RESEND_FROM"),
+            "RESEND_FROM or EMAIL_DOMAIN": sender,
             "WAITLIST_NOTIFY_TO or RESEND_TO": os.environ.get("WAITLIST_NOTIFY_TO") or os.environ.get("RESEND_TO"),
         }
         missing = [name for name, value in required.items() if not value]
         return {
             "configured": not missing,
             "missing": missing,
+            "sender": sender,
             "message": "Resend delivery is configured." if not missing else "Resend delivery needs production email secrets.",
         }
 
+    def resend_sender(self) -> str:
+        explicit_sender = os.environ.get("RESEND_FROM", "").strip()
+        if explicit_sender:
+            return explicit_sender
+
+        email_domain = os.environ.get("EMAIL_DOMAIN", "").strip()
+        if email_domain:
+            return f"NEXUS <no-reply@{email_domain}>"
+
+        return ""
+
     def stripe_status(self) -> dict[str, Any]:
+        public_url_error = ""
+        try:
+            public_base_url = self.public_base_url()
+        except ValueError as exc:
+            public_base_url = ""
+            public_url_error = str(exc)
+
         required = {
             "STRIPE_SECRET_KEY": self.valid_stripe_secret(os.environ.get("STRIPE_SECRET_KEY")),
             "STRIPE_WEBHOOK_SECRET": bool(os.environ.get("STRIPE_WEBHOOK_SECRET")),
-            "PRICE_ID": bool(os.environ.get("PRICE_ID")),
+            "PUBLIC_BASE_URL": bool(public_base_url),
         }
         missing = [name for name, ready in required.items() if not ready]
         return {
             "configured": not missing,
             "missing": missing,
+            "apiVersion": STRIPE_API_VERSION,
+            "publicBaseUrl": public_base_url,
+            "publicBaseUrlError": public_url_error,
+            "catalogCount": len(STRIPE_CATALOG),
             "message": "Stripe checkout is configured." if not missing else "Stripe checkout needs production payment secrets.",
         }
 

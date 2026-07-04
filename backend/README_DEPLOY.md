@@ -16,6 +16,40 @@ Open:
 http://127.0.0.1:4173/
 ```
 
+## Windows + Cloudflare Tunnel
+
+Use this when you want Stripe webhooks to reach the backend running on your Windows computer.
+
+Terminal 1:
+
+```powershell
+cd "C:\Users\Robert\OneDrive\Imports\burkefit2382@gmail.com - Google Drive\Google AI Studio\launch_site"
+python -m pip install -r requirements.txt
+$env:LAUNCH_HOST = "127.0.0.1"
+$env:PUBLIC_BASE_URL = "https://your-tunnel.trycloudflare.com"
+$env:STRIPE_SECRET_KEY = "sk_test_or_live_xxxxxxxxx"
+$env:STRIPE_WEBHOOK_SECRET = "whsec_xxxxxxxxx"
+$env:RESEND_API_KEY = "re_xxxxxxxxx"
+$env:RESEND_FROM = "NEXUS <no-reply@mail.nexuscloud.sh>"
+$env:EMAIL_DOMAIN = "mail.nexuscloud.sh"
+$env:WAITLIST_NOTIFY_TO = "you@yourdomain.com"
+python server.py
+```
+
+Terminal 2:
+
+```powershell
+cloudflared tunnel --url http://127.0.0.1:4173
+```
+
+Copy the `https://...trycloudflare.com` URL from Cloudflare into `PUBLIC_BASE_URL` before starting checkout tests. In Stripe, create a webhook endpoint at:
+
+```text
+https://your-tunnel.trycloudflare.com/api/stripe-webhook
+```
+
+Enable `checkout.session.completed`.
+
 ## Emergent Route Fallback
 
 Use these route rules for an Emergent/static SPA deployment:
@@ -48,10 +82,13 @@ Deploy the contents of `launch_site/` as the site root. Use a Python-capable hos
    - `LAUNCH_HOST=0.0.0.0`
    - `RESEND_API_KEY`
    - `RESEND_FROM`
+   - `EMAIL_DOMAIN=mail.nexuscloud.sh`
    - `WAITLIST_NOTIFY_TO`
    - `PUBLIC_BASE_URL=https://nexuscloud.sh`
+   - `STRIPE_API_VERSION=2026-06-24.dahlia`
    - `STRIPE_SECRET_KEY`
    - `STRIPE_WEBHOOK_SECRET`
+   - `PRICE_ID` only if you want a default fallback price when no button price is sent
 5. Health check path: `/healthz`.
 
 ### Railway
@@ -62,10 +99,13 @@ Deploy the contents of `launch_site/` as the site root. Use a Python-capable hos
    - `LAUNCH_HOST=0.0.0.0`
    - `RESEND_API_KEY`
    - `RESEND_FROM`
+   - `EMAIL_DOMAIN=mail.nexuscloud.sh`
    - `WAITLIST_NOTIFY_TO`
    - `PUBLIC_BASE_URL=https://nexuscloud.sh`
+   - `STRIPE_API_VERSION=2026-06-24.dahlia`
    - `STRIPE_SECRET_KEY`
    - `STRIPE_WEBHOOK_SECRET`
+   - `PRICE_ID` only if you want a default fallback price when no button price is sent
 4. Railway provides `PORT`; `server.py` reads it automatically.
 
 Required before public launch:
@@ -104,6 +144,14 @@ Required before public launch:
 
 The local Python server can send waitlist notifications through Resend when the `resend` package and environment variables are configured.
 
+Before enabling Resend in production:
+
+1. In Resend, add a sending subdomain such as `mail.nexuscloud.sh`; Resend recommends a subdomain instead of the root domain for deliverability.
+2. Copy the DKIM and SPF DNS records from the Resend domain Records tab into your DNS host exactly as generated.
+3. Wait for verification. Resend says verification often completes within about 15 minutes, but DNS propagation can take up to 72 hours.
+4. Add a DMARC record after the domain verifies.
+5. Use a sender address on that verified subdomain, such as `NEXUS <no-reply@mail.nexuscloud.sh>`.
+
 Install from this folder:
 
 ```powershell
@@ -122,7 +170,8 @@ For local testing, `server.py` calls the Resend helper when these environment va
 
 ```powershell
 $env:RESEND_API_KEY = "re_xxxxxxxxx"
-$env:RESEND_FROM = "LeadGen Virtual Hub <pilot@yourdomain.com>"
+$env:RESEND_FROM = "NEXUS <no-reply@mail.nexuscloud.sh>"
+$env:EMAIL_DOMAIN = "mail.nexuscloud.sh"
 $env:WAITLIST_NOTIFY_TO = "you@yourdomain.com"
 python server.py
 ```
@@ -155,6 +204,7 @@ For local testing after rotating any exposed key:
 
 ```powershell
 $env:PUBLIC_BASE_URL = "https://nexuscloud.sh"
+$env:STRIPE_API_VERSION = "2026-06-24.dahlia"
 $env:STRIPE_SECRET_KEY = "your_rotated_stripe_secret_key"
 python server.py
 ```
@@ -181,7 +231,7 @@ price_intel_neighborhood
 price_intel_competitor
 ```
 
-Create Stripe Prices with those lookup keys, or update `STRIPE_CATALOG` in `server.py` with the real Stripe `price_...` IDs.
+Create Stripe Prices with those lookup keys, or update `STRIPE_CATALOG` in `server.py` with the real Stripe `price_...` IDs. `PRICE_ID` is optional because browser buttons send their catalog key to `/api/checkout`.
 
 ## Automatic Fulfillment
 
@@ -189,6 +239,12 @@ Configure a Stripe webhook endpoint:
 
 ```text
 https://nexuscloud.sh/api/stripe-webhook
+```
+
+If you deploy the backend on an API subdomain, this alias is also supported:
+
+```text
+https://api.nexuscloud.sh/stripe/webhook
 ```
 
 Enable this event:

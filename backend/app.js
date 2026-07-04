@@ -103,7 +103,8 @@ async function loadRevenueStatus() {
     }
 
     const delivery = body.resend.configured ? "Resend delivery verified" : "Resend delivery needs secrets";
-    revenueStatus.textContent = `${body.leadMarket.status}: ${body.leadMarket.availableCount} ${body.leadMarket.name}. ${delivery}.`;
+    const checkout = body.stripe?.configured ? "Stripe checkout ready" : "Stripe checkout needs secrets";
+    revenueStatus.textContent = `${body.leadMarket.status}: ${body.leadMarket.availableCount} ${body.leadMarket.name}. ${checkout}. ${delivery}.`;
   } catch (error) {
     revenueStatus.textContent = "For Sale is on. Resend delivery status unavailable locally.";
   }
@@ -125,10 +126,13 @@ async function loadFulfillmentStatus() {
       throw new Error(body.error || "Unable to load fulfillment status.");
     }
 
+    const stripeMessage = body.stripe?.configured
+      ? `Stripe webhook is configured for ${body.stripe.publicBaseUrl}.`
+      : `Stripe needs: ${(body.stripe?.missing || ["configuration"]).join(", ")}.`;
     const resendMessage = body.resend.configured
       ? "Resend delivery is configured."
       : `Resend needs: ${body.resend.missing.join(", ")}.`;
-    fulfillmentStatus.textContent = `Stripe webhook is live. ${resendMessage}`;
+    fulfillmentStatus.textContent = `${stripeMessage} ${resendMessage}`;
 
     fulfillmentSummary.innerHTML = [
       fulfillmentMetric(body.summary.total, "Total orders"),

@@ -13,5 +13,17 @@ services:
         sync: false
       - key: RESEND_FROM
         sync: false
+      - key: EMAIL_DOMAIN
+        value: "mail.nexuscloud.sh"
       - key: WAITLIST_NOTIFY_TO
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: STRIPE_API_VERSION
+        value: "2026-06-24.dahlia"
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: PRICE_ID
         sync: false
