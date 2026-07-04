@@ -39,6 +39,7 @@ def test_lead_stats() -> None:
     assert response.status_code == 200
     data = response.json()
     assert {'today', 'week', 'total'} <= data.keys()
+    assert 'quality' in data
 
 
 def test_mock_leads_limit() -> None:

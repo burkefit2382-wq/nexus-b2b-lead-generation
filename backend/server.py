@@ -640,6 +640,7 @@ class LaunchHandler(SimpleHTTPRequestHandler):
                 "total": total,
                 "lastRunAt": last_run_at or None,
                 "source": "scraper summary" if summary else "default",
+                "quality": summary.get("quality") or {},
             },
             HTTPStatus.OK,
         )

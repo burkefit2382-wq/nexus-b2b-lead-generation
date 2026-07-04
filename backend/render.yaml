@@ -27,3 +27,17 @@ services:
         sync: false
       - key: PRICE_ID
         sync: false
+  - type: cron
+    name: nexus-osint-scraper-quality
+    runtime: python
+    plan: starter
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python workers/tampa_bay_lead_worker.py --delay-seconds 10"
+    schedule: "0 */6 * * *"
+    envVars:
+      - key: NEXUS_SCRAPER_USER_AGENT
+        value: "NexusLeadGen/1.0 buyer-safe OSINT quality scraper"
+      - key: NEXUS_SCRAPER_COUNTIES
+        value: "Pinellas,Hillsborough,Pasco,Hernando"
+      - key: NEXUS_SCRAPER_TARGETS
+        value: "real_estate,mortgage,insurance,home_services,professional_cleaning"

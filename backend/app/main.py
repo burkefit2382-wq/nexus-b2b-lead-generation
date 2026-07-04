@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -9,8 +10,8 @@ from fastapi.responses import HTMLResponse
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 LEAD_CONTROL_CENTER_PATH = STATIC_DIR / "lead-control-center.html"
-WORKSPACE_ROOT = Path(__file__).resolve().parents[4]
-DATA_DIR = WORKSPACE_ROOT / "data"
+APP_ROOT = Path(__file__).resolve().parents[1]
+DATA_DIR = Path(os.environ.get("NEXUS_DATA_DIR", APP_ROOT / "data"))
 SCRAPER_DIR = DATA_DIR / "scrapers"
 SCRAPER_SUMMARY_PATH = SCRAPER_DIR / "latest_summary.json"
 SCRAPER_STATE_PATH = SCRAPER_DIR / "worker_state.json"
@@ -65,6 +66,7 @@ def lead_stats() -> dict[str, Any]:
         "total": total,
         "lastRunAt": last_run_at or None,
         "source": "scraper summary" if summary else "default",
+        "quality": summary.get("quality") or {},
     }
 
 
