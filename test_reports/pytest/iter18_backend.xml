@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="7" failures="3" skipped="0" tests="36" time="67.460" timestamp="2026-07-04T17:43:55.075856+00:00" hostname="agent-env-cc6bc9fa-bb98-47db-bd6f-1f1e0fbef401"><testcase classname="backend.tests.backend_test" name="test_health" time="0.152" /><testcase classname="backend.tests.backend_test" name="test_admin_login_and_me" time="0.372" /><testcase classname="backend.tests.backend_test" name="test_register_user_returns_cookies" time="0.327"><error message="failed on setup with &quot;AssertionError: assert 'tenant_admin' == 'user'&#10;  &#10;  - user&#10;  + tenant_admin&quot;">backend/tests/backend_test.py:33: in user_account
+    assert body["role"] == "user"
+E   AssertionError: assert 'tenant_admin' == 'user'
+E     
+E     - user
+E     + tenant_admin</error></testcase><testcase classname="backend.tests.backend_test" name="test_login_invalid_password" time="0.341" /><testcase classname="backend.tests.backend_test" name="test_admin_list_users_works_for_admin" time="0.059" /><testcase classname="backend.tests.backend_test" name="test_admin_list_users_forbidden_for_user" time="0.000"><error message="failed on setup with &quot;AssertionError: assert 'tenant_admin' == 'user'&#10;  &#10;  - user&#10;  + tenant_admin&quot;">backend/tests/backend_test.py:33: in user_account
+    assert body["role"] == "user"
+E   AssertionError: assert 'tenant_admin' == 'user'
+E     
+E     - user
+E     + tenant_admin</error></testcase><testcase classname="backend.tests.backend_test" name="test_admin_role_update" time="0.000"><error message="failed on setup with &quot;AssertionError: assert 'tenant_admin' == 'user'&#10;  &#10;  - user&#10;  + tenant_admin&quot;">backend/tests/backend_test.py:33: in user_account
+    assert body["role"] == "user"
+E   AssertionError: assert 'tenant_admin' == 'user'
+E     
+E     - user
+E     + tenant_admin</error></testcase><testcase classname="backend.tests.backend_test" name="test_api_key_lifecycle" time="0.386" /><testcase classname="backend.tests.backend_test" name="test_leads_list_has_seed" time="0.067" /><testcase classname="backend.tests.backend_test" name="test_leads_stats" time="0.063" /><testcase classname="backend.tests.backend_test" name="test_leads_filter_and_search" time="0.118" /><testcase classname="backend.tests.backend_test" name="test_lead_create_sell_delete" time="0.227" /><testcase classname="backend.tests.backend_test" name="test_osint_dns" time="0.088" /><testcase classname="backend.tests.backend_test" name="test_osint_ip" time="0.191" /><testcase classname="backend.tests.backend_test" name="test_osint_phone" time="2.614" /><testcase classname="backend.tests.backend_test" name="test_osint_reports_list" time="0.069" /><testcase classname="backend.tests.backend_test" name="test_ai_chat_graceful" time="1.855" /><testcase classname="backend.tests.backend_test" name="test_ai_enrich_graceful" time="0.107"><failure message="assert 500 == 200&#10; +  where 500 = &lt;Response [500]&gt;.status_code">backend/tests/backend_test.py:216: in test_ai_enrich_graceful
+    assert r.status_code == 200
+E   assert 500 == 200
+E    +  where 500 = &lt;Response [500]&gt;.status_code</failure></testcase><testcase classname="backend.tests.backend_test" name="test_logout_clears_cookie" time="0.439" /><testcase classname="backend.tests.backend_test" name="test_scraper_status_shape" time="0.057" /><testcase classname="backend.tests.backend_test" name="test_scraper_config_get_and_admin_put" time="0.053"><failure message="AssertionError: assert False&#10; +  where False = &lt;built-in method issubset of set object at 0xffaaf2b19460&gt;({'apify_reddit', 'overpass'})&#10; +    where &lt;built-in method issubset of set object at 0xffaaf2b19460&gt; = {'github', 'hackernews', 'reddit'}.issubset">backend/tests/backend_test.py:249: in test_scraper_config_get_and_admin_put
+    assert {"hackernews", "github", "reddit"}.issubset(providers)
+E   AssertionError: assert False
+E    +  where False = &lt;built-in method issubset of set object at 0xffaaf2b19460&gt;({'apify_reddit', 'overpass'})
+E    +    where &lt;built-in method issubset of set object at 0xffaaf2b19460&gt; = {'github', 'hackernews', 'reddit'}.issubset</failure></testcase><testcase classname="backend.tests.backend_test" name="test_scraper_config_put_forbidden_for_user" time="0.000"><error message="failed on setup with &quot;AssertionError: assert 'tenant_admin' == 'user'&#10;  &#10;  - user&#10;  + tenant_admin&quot;">backend/tests/backend_test.py:33: in user_account
+    assert body["role"] == "user"
+E   AssertionError: assert 'tenant_admin' == 'user'
+E     
+E     - user
+E     + tenant_admin</error></testcase><testcase classname="backend.tests.backend_test" name="test_scraper_trigger_increments_cycles_and_feed" time="41.151"><failure message="AssertionError: cycle did not complete; status={'status': 'running', 'last_run': None, 'last_error': &quot;apify: {'error': {'type': 'not-enough-usage-to-run-paid-actor', 'message': 'By launching this job you will exceed your remaining usage of $0.011006.  Consider upgradin&quot;, 'found': 0, 'qualified': 0, 'cycles': 0, 'next_run': '2026-07-04T18:13:07.773391+00:00', 'reddit_status': 'idle', 'reddit_last_error': None, 'reddit_last_run': '2026-07-04T17:44:03.176125+00:00', 'scheduler_running': True, 'enabled': True, 'interval_min': 30, 'min_score': 55.0, 'total_scraped_leads': 294, 'reddit_next_run': '2026-07-04T18:43:07.773573+00:00', 'reddit_enabled': True, 'reddit_interval_min': 60, 'reddit_spend_today_usd': 0.0, 'reddit_daily_budget_usd': 5.0}&#10;assert 0 &gt; 0">backend/tests/backend_test.py:286: in test_scraper_trigger_increments_cycles_and_feed
+    assert cycles_after &gt; before["cycles"], f"cycle did not complete; status={st}"
+E   AssertionError: cycle did not complete; status={'status': 'running', 'last_run': None, 'last_error': "apify: {'error': {'type': 'not-enough-usage-to-run-paid-actor', 'message': 'By launching this job you will exceed your remaining usage of $0.011006.  Consider upgradin", 'found': 0, 'qualified': 0, 'cycles': 0, 'next_run': '2026-07-04T18:13:07.773391+00:00', 'reddit_status': 'idle', 'reddit_last_error': None, 'reddit_last_run': '2026-07-04T17:44:03.176125+00:00', 'scheduler_running': True, 'enabled': True, 'interval_min': 30, 'min_score': 55.0, 'total_scraped_leads': 294, 'reddit_next_run': '2026-07-04T18:43:07.773573+00:00', 'reddit_enabled': True, 'reddit_interval_min': 60, 'reddit_spend_today_usd': 0.0, 'reddit_daily_budget_usd': 5.0}
+E   assert 0 &gt; 0</failure></testcase><testcase classname="backend.tests.backend_test" name="test_ai_model_status_lists_both" time="0.051" /><testcase classname="backend.tests.backend_test" name="test_ai_chat_both_models_graceful[deepseek]" time="1.746" /><testcase classname="backend.tests.backend_test" name="test_ai_chat_both_models_graceful[qwen]" time="1.842" /><testcase classname="backend.tests.backend_test" name="test_payments_packages_shape" time="0.049" /><testcase classname="backend.tests.backend_test" name="test_payments_checkout_invalid_package" time="0.046" /><testcase classname="backend.tests.backend_test" name="test_payments_checkout_creates_pending_txn_and_status" time="1.191" /><testcase classname="backend.tests.backend_test" name="test_normal_user_sees_scraped_leads_locked" time="0.000"><error message="failed on setup with &quot;AssertionError: assert 'tenant_admin' == 'user'&#10;  &#10;  - user&#10;  + tenant_admin&quot;">backend/tests/backend_test.py:33: in user_account
+    assert body["role"] == "user"
+E   AssertionError: assert 'tenant_admin' == 'user'
+E     
+E     - user
+E     + tenant_admin</error></testcase><testcase classname="backend.tests.backend_test" name="test_admin_sees_scraped_leads_unlocked" time="0.108" /><testcase classname="backend.tests.backend_test" name="test_unlock_requires_credits_402" time="0.000"><error message="failed on setup with &quot;AssertionError: assert 'tenant_admin' == 'user'&#10;  &#10;  - user&#10;  + tenant_admin&quot;">backend/tests/backend_test.py:33: in user_account
+    assert body["role"] == "user"
+E   AssertionError: assert 'tenant_admin' == 'user'
+E     
+E     - user
+E     + tenant_admin</error></testcase><testcase classname="backend.tests.backend_test" name="test_unlock_decrements_credits_and_is_idempotent" time="0.000"><error message="failed on setup with &quot;AssertionError: assert 'tenant_admin' == 'user'&#10;  &#10;  - user&#10;  + tenant_admin&quot;">backend/tests/backend_test.py:33: in user_account
+    assert body["role"] == "user"
+E   AssertionError: assert 'tenant_admin' == 'user'
+E     
+E     - user
+E     + tenant_admin</error></testcase><testcase classname="backend.tests.backend_test" name="test_people_intel_scan_deepseek" time="6.438" /><testcase classname="backend.tests.backend_test" name="test_people_intel_scan_qwen_graceful" time="6.971" /><testcase classname="backend.tests.backend_test" name="test_people_intel_history" time="0.054" /></testsuite></testsuites>

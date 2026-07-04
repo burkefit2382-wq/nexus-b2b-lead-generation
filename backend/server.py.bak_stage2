@@ -72,10 +72,74 @@ def _pub(u: dict) -> dict:
             "tenant_id": u.get("tenant_id") or gov.DEFAULT_TENANT,
             "tenant_name": u.get("tenant_name", "")}
 
+@api.post("/auth/register")
+async def register(body: RegisterReq, request: Request, response: Response):
+    email = body.email.lower()
+    if await db.users.find_one({"email": email}):
+        raise HTTPException(status_code=400, detail="Email already registered")
+    # Provision an isolated tenant (org) for this operator — they administer their own workspace.
+    tenant_id = secrets.token_hex(8)
+    domain_part = email.split("@")[-1].split(".")[0] if "@" in email else "operator"
+    org_name = (body.org_name or "").strip() or f"{domain_part.title()} Org"
+    await db.tenants.insert_one({
+        "tenant_id": tenant_id, "name": org_name, "owner_email": email, "status": "active",
+        "created_at": datetime.now(timezone.utc).isoformat()})
+    doc = {"email": email, "password_hash": hash_password(body.password),
+           "name": body.name, "role": "tenant_admin", "credits": 0,
+           "tenant_id": tenant_id, "tenant_name": org_name,
+           "created_at": datetime.now(timezone.utc).isoformat()}
+    res = await db.users.insert_one(doc)
+    uid = str(res.inserted_id)
+    set_auth_cookies(response, create_access_token(uid, email), create_refresh_token(uid))
+    await gov.audit_log("user.register", user={"id": uid, **doc}, request=request,
+                        target=tenant_id, meta={"org": org_name})
+    return _pub({"id": uid, **doc})
 
+@api.post("/auth/login")
+async def login(body: LoginReq, request: Request, response: Response):
+    email = body.email.lower()
+    await gov.check_lockout(request, email)
+    user = await db.users.find_one({"email": email})
+    if not user or not verify_password(body.password, user["password_hash"]):
+        await gov.record_failed_login(request, email)
+        await gov.audit_log("user.login", user={"email": email}, request=request,
+                            status="failure", meta={"reason": "bad_credentials"})
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    await gov.clear_login_attempts(request, email)
+    uid = str(user["_id"])
+    set_auth_cookies(response, create_access_token(uid, email), create_refresh_token(uid))
+    await gov.audit_log("user.login", user={"id": uid, **user}, request=request)
+    return _pub({"id": uid, **user})
 
+@api.post("/auth/logout")
+async def logout(response: Response):
+    response.delete_cookie("access_token", path="/")
+    response.delete_cookie("refresh_token", path="/")
+    return {"ok": True}
 
+@api.post("/auth/refresh")
+async def refresh_token(request: Request, response: Response):
+    rt = request.cookies.get("refresh_token")
+    if not rt:
+        raise HTTPException(status_code=401, detail="No refresh token")
+    try:
+        payload = jwt.decode(rt, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
+        if payload.get("type") != "refresh":
+            raise HTTPException(status_code=401, detail="Invalid token type")
+        user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        uid = str(user["_id"])
+        access = create_access_token(uid, user["email"])
+        response.set_cookie("access_token", access, httponly=True, secure=False,
+                            samesite="lax", max_age=43200, path="/")
+        return {"refreshed": True}
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
 
+@api.get("/auth/me")
+async def me(user: dict = Depends(get_current_user)):
+    return _pub(user)
 
 # ====================== API KEYS (RBAC + machine auth) ======================
 class ApiKeyCreate(BaseModel):
@@ -86,14 +150,56 @@ def _key_pub(k: dict) -> dict:
             "created_at": k.get("created_at"), "last_used": k.get("last_used"),
             "calls": k.get("calls", 0), "revoked": k.get("revoked", False)}
 
+@api.post("/keys")
+async def create_api_key(body: ApiKeyCreate, request: Request, user: dict = Depends(get_current_user)):
+    raw = "nxs_" + secrets.token_urlsafe(32)
+    doc = {"user_id": user["id"], "tenant_id": gov.tenant_id_of(user), "name": body.name,
+           "key_hash": hash_api_key(raw), "prefix": raw[:12],
+           "created_at": datetime.now(timezone.utc).isoformat(),
+           "last_used": None, "calls": 0, "revoked": False}
+    res = await db.api_keys.insert_one(doc)
+    await gov.audit_log("apikey.create", user=user, request=request,
+                        target=str(res.inserted_id), meta={"name": body.name})
+    # full key returned ONCE only
+    return {"id": str(res.inserted_id), "name": body.name, "api_key": raw,
+            "prefix": doc["prefix"], "warning": "Store this key now — it will not be shown again."}
 
+@api.get("/keys")
+async def list_api_keys(user: dict = Depends(get_current_user)):
+    cur = db.api_keys.find({"user_id": user["id"]},
+                           {"name": 1, "prefix": 1, "created_at": 1, "last_used": 1, "calls": 1, "revoked": 1}
+                           ).sort("created_at", -1).limit(100)
+    return [_key_pub(k) async for k in cur]
 
+@api.delete("/keys/{key_id}")
+async def revoke_api_key(key_id: str, request: Request, user: dict = Depends(get_current_user)):
+    await db.api_keys.update_one({"_id": ObjectId(key_id), "user_id": user["id"]},
+                                 {"$set": {"revoked": True}})
+    await gov.audit_log("apikey.revoke", user=user, request=request, target=key_id)
+    return {"revoked": key_id}
 
 # ====================== ADMIN (role-gated) ======================
+@api.get("/admin/users")
+async def admin_list_users(user: dict = Depends(require_admin)):
+    cur = db.users.find({}, {"email": 1, "name": 1, "role": 1, "credits": 1, "tenant_id": 1,
+                             "tenant_name": 1, "created_at": 1}).sort("created_at", -1).limit(500)
+    return [{"id": str(u["_id"]), "email": u["email"], "name": u.get("name"),
+             "role": u.get("role"), "credits": u.get("credits", 0),
+             "tenant_id": u.get("tenant_id") or gov.DEFAULT_TENANT,
+             "tenant_name": u.get("tenant_name", ""),
+             "created_at": u.get("created_at")} async for u in cur]
 
 class RoleUpdate(BaseModel):
     role: str
 
+@api.patch("/admin/users/{user_id}/role")
+async def admin_set_role(user_id: str, body: RoleUpdate, request: Request, user: dict = Depends(require_admin)):
+    if body.role not in gov.VALID_ROLES:
+        raise HTTPException(status_code=400, detail=f"role must be one of: {', '.join(gov.VALID_ROLES)}")
+    await db.users.update_one({"_id": ObjectId(user_id)}, {"$set": {"role": body.role}})
+    await gov.audit_log("admin.set_role", user=user, request=request, target=user_id,
+                        meta={"role": body.role})
+    return {"updated": user_id, "role": body.role}
 
 # ====================== LEADS ======================
 def _lead_pub(l: dict) -> dict:
@@ -122,16 +228,147 @@ class LeadCreate(BaseModel):
     source_url: str = ""
     raw_text: str = ""
 
+@api.get("/leads")
+async def list_leads(category: Optional[str] = None, status: Optional[str] = None,
+                     min_score: float = 0.0, search: Optional[str] = None,
+                     limit: int = 100, offset: int = 0, user: dict = Depends(get_current_user)):
+    q = {}
+    if category: q["category"] = category
+    if status: q["status"] = status
+    if min_score: q["score"] = {"$gte": min_score}
+    if search:
+        rx = {"$regex": re.escape(search), "$options": "i"}
+        q["$or"] = [{"full_name": rx}, {"email": rx}, {"city": rx}, {"ai_summary": rx}, {"company": rx}]
+    total = await db.leads.count_documents(q)
+    cur = db.leads.find(q).sort("score", -1).skip(offset).limit(limit)
+    is_admin = user.get("role") == "admin"
+    leads = []
+    async for l in cur:
+        pub = _lead_pub(l)
+        # Monetization gate: scraped leads are locked until purchased with a credit
+        if l.get("scraped") and not is_admin and user["id"] not in (l.get("unlocked_by") or []):
+            pub["locked"] = True
+            pub["price"] = lead_price(l)
+            pub["email"] = ""
+            pub["phone"] = ""
+            pub["source_url"] = ""
+        else:
+            pub["locked"] = False
+        pub.pop("unlocked_by", None)
+        leads.append(pub)
+    return {"total": total, "leads": leads}
 
+@api.post("/leads/{lead_id}/unlock")
+async def unlock_lead(lead_id: str, user: dict = Depends(get_current_user)):
+    lead = await db.leads.find_one({"_id": ObjectId(lead_id)})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    if user["id"] in (lead.get("unlocked_by") or []):
+        return {"unlocked": True, "already": True, "lead": _lead_pub(lead)}
+    if user.get("role") != "admin":
+        u = await db.users.find_one({"_id": ObjectId(user["id"])})
+        if (u.get("credits") or 0) < 1:
+            raise HTTPException(status_code=402, detail="Insufficient credits — buy a pack to unlock leads")
+        await db.users.update_one({"_id": ObjectId(user["id"])}, {"$inc": {"credits": -1}})
+    await db.leads.update_one({"_id": ObjectId(lead_id)}, {"$addToSet": {"unlocked_by": user["id"]}})
+    lead = await db.leads.find_one({"_id": ObjectId(lead_id)})
+    pub = _lead_pub(lead); pub.pop("unlocked_by", None); pub["locked"] = False
+    return {"unlocked": True, "lead": pub}
 
 class LeadBuyReq(BaseModel):
     origin_url: str
 
+@api.post("/leads/{lead_id}/buy")
+async def buy_lead(lead_id: str, body: LeadBuyReq, request: Request, user: dict = Depends(get_current_user)):
+    """Pay-per-lead: direct Stripe checkout to unlock one lead (no pre-bought credits)."""
+    lead = await db.leads.find_one({"_id": ObjectId(lead_id)})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    if user["id"] in (lead.get("unlocked_by") or []):
+        raise HTTPException(status_code=400, detail="Lead already unlocked")
+    from urllib.parse import urlparse
+    o = urlparse(body.origin_url)
+    host = (o.hostname or "")
+    req_host = (request.base_url.hostname or "")
+    if o.scheme not in ("http", "https") or not (
+        host == req_host or host.endswith("emergentagent.com") or host in ("localhost", "127.0.0.1")):
+        raise HTTPException(status_code=400, detail="Invalid origin")
+    price = lead_price(lead)
+    from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest
+    host_url = str(request.base_url)
+    sc = StripeCheckout(api_key=os.environ["STRIPE_API_KEY"], webhook_url=f"{host_url}api/webhook/stripe")
+    origin = body.origin_url.rstrip("/")
+    success_url = f"{origin}/?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{origin}/"
+    meta = {"user_id": user["id"], "kind": "lead", "lead_id": lead_id}
+    req = CheckoutSessionRequest(amount=float(price), currency="usd",
+                                 success_url=success_url, cancel_url=cancel_url, metadata=meta)
+    session = await sc.create_checkout_session(req)
+    await db.payment_transactions.insert_one({
+        "session_id": session.session_id, "user_id": user["id"], "kind": "lead",
+        "lead_id": lead_id, "amount": float(price), "currency": "usd", "credits": 0,
+        "payment_status": "pending", "status": "initiated", "metadata": meta,
+        "created_at": datetime.now(timezone.utc).isoformat()})
+    return {"url": session.url, "session_id": session.session_id, "amount": float(price)}
 
+@api.get("/leads/stats")
+async def lead_stats(user: dict = Depends(get_current_user)):
+    total = await db.leads.count_documents({})
+    raw = await db.leads.count_documents({"status": "raw"})
+    enriched = await db.leads.count_documents({"status": "enriched"})
+    hot = await db.leads.count_documents({"score": {"$gte": 70}})
+    remodel = await db.leads.count_documents({"category": "home_remodeling"})
+    cleaning = await db.leads.count_documents({"category": "cleaning"})
+    sold = await db.leads.count_documents({"is_sold": True})
+    rev = 0.0
+    async for l in db.leads.find({"is_sold": True}, {"sold_price": 1}):
+        rev += l.get("sold_price") or 0
+    return {"total": total, "raw": raw, "enriched": enriched, "hot_leads": hot,
+            "home_remodeling": remodel, "cleaning": cleaning, "sold": sold, "total_revenue": rev}
 
+@api.post("/leads")
+async def create_lead(body: LeadCreate, user: dict = Depends(get_current_user)):
+    doc = body.model_dump()
+    doc.update({"status": "raw", "score": 0.0, "is_sold": False, "sold_price": 0.0,
+                "ai_summary": "", "ai_budget_est": "", "tags": "",
+                "purchase_status": "available", "buyer_user_id": None, "ready_to_sell": False,
+                "price_per_lead": 1, "data_confidence_score": 0.0, "quality_score": 0.0,
+                "cross_verification": [], "risk_matrix": [], "operational_value_tier": "Operational",
+                "created_at": datetime.now(timezone.utc).isoformat()})
+    res = await db.leads.insert_one(doc)
+    return _lead_pub({"_id": res.inserted_id, **doc})
 
+@api.patch("/leads/{lead_id}/sell")
+async def sell_lead(lead_id: str, price: float = 0.0, user: dict = Depends(get_current_user)):
+    await db.leads.update_one({"_id": ObjectId(lead_id)},
+                              {"$set": {"is_sold": True, "sold_price": price, "status": "sold"}})
+    return {"sold": lead_id, "price": price}
 
+@api.delete("/leads/{lead_id}")
+async def delete_lead(lead_id: str, user: dict = Depends(get_current_user)):
+    await db.leads.delete_one({"_id": ObjectId(lead_id)})
+    return {"deleted": lead_id}
 
+@api.get("/leads/export/csv")
+async def export_csv(category: Optional[str] = None, min_score: float = 0.0,
+                     user: dict = Depends(get_current_user)):
+    import csv, io
+    q = {}
+    if category: q["category"] = category
+    if min_score: q["score"] = {"$gte": min_score}
+    out = io.StringIO(); w = csv.writer(out)
+    w.writerow(["ID", "Category", "Status", "Score", "Name", "Email", "Phone",
+                "City", "State", "AI Summary", "Budget", "Tags", "Source"])
+    async for l in db.leads.find(q, {"category": 1, "status": 1, "score": 1, "full_name": 1,
+                                     "email": 1, "phone": 1, "city": 1, "state": 1, "ai_summary": 1,
+                                     "ai_budget_est": 1, "tags": 1, "source_url": 1}).sort("score", -1).limit(5000):
+        w.writerow([str(l["_id"]), l.get("category"), l.get("status"), l.get("score"),
+                    l.get("full_name"), l.get("email"), l.get("phone"), l.get("city"),
+                    l.get("state"), l.get("ai_summary"), l.get("ai_budget_est"),
+                    l.get("tags"), l.get("source_url")])
+    out.seek(0)
+    return StreamingResponse(iter([out.getvalue()]), media_type="text/csv",
+                             headers={"Content-Disposition": "attachment; filename=nexus_leads.csv"})
 
 # ====================== AI ENRICHMENT ======================
 class EnrichReq(BaseModel):
@@ -165,12 +402,44 @@ async def _enrich_one(lead: dict, model_key: str = "deepseek") -> dict:
         "tags": ",".join(data.get("category_tags", []) or []), "status": "enriched"}})
     return {"lead_id": str(lead["_id"]), **data}
 
+@api.post("/enrichment/enrich")
+async def enrich(body: EnrichReq, user: dict = Depends(get_current_user)):
+    if body.batch:
+        results = []
+        async for l in db.leads.find({"status": "raw"}).limit(body.limit):
+            results.append(await _enrich_one(l))
+        return {"status": "batch enrichment complete", "processed": len(results), "results": results}
+    if not body.lead_id:
+        raise HTTPException(status_code=400, detail="lead_id required")
+    lead = await db.leads.find_one({"_id": ObjectId(body.lead_id)})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return await _enrich_one(lead)
 
+@api.get("/enrichment/model-status")
+async def model_status(user: dict = Depends(get_current_user)):
+    configured = bool(os.environ.get("HF_TOKEN"))
+    return {"loaded": configured, "provider": "Hugging Face Router",
+            "models": {"deepseek": _resolve_model("deepseek"), "qwen": _resolve_model("qwen")},
+            "status": "ready" if configured else "no_token"}
 
 class ChatReq(BaseModel):
     message: str
     model: str = "deepseek"
 
+@api.post("/enrichment/chat")
+async def ai_chat(body: ChatReq, user: dict = Depends(get_current_user)):
+    total = await db.leads.count_documents({})
+    hot = await db.leads.count_documents({"score": {"$gte": 70}})
+    sys_p = (f"You are NEXUS, an elite OSINT and lead-generation AI assistant. "
+             f"System stats: {total} total leads, {hot} hot leads (score>=70). "
+             "Help with lead analysis, OSINT intel, digital footprints and cybersecurity. Be concise.")
+    mk = "qwen" if body.model == "qwen" else "deepseek"
+    r = await deepseek_chat([{"role": "system", "content": sys_p},
+                             {"role": "user", "content": body.message}], model_key=mk, max_tokens=500, temperature=0.7)
+    if "error" in r:
+        return {"error": r["error"]}
+    return {"response": r["content"], "model": r.get("model")}
 
 # ====================== OSINT TOOLS (cloud-native) ======================
 async def _save_report(target, tool, result, user=None):
@@ -202,18 +471,197 @@ class PortReq(BaseModel):
     target: str
     ports: Optional[List[int]] = None
 
+@api.post("/osint/ip")
+async def osint_ip(body: TargetReq, user: dict = Depends(get_current_user)):
+    async with httpx.AsyncClient(timeout=10) as c:
+        try:
+            geo = (await c.get(f"http://ip-api.com/json/{body.target}?fields=66846719")).json()
+        except Exception:
+            geo = {}
+    res = {"tool": "ip_lookup", "target": body.target, "geo": geo}
+    await _save_report(body.target, "ip_lookup", res, user)
+    return res
 
+@api.post("/osint/dns")
+async def osint_dns(body: TargetReq, user: dict = Depends(get_current_user)):
+    def run():
+        import dns.resolver
+        rec = {}
+        for rt in ["A", "MX", "NS", "TXT"]:
+            try:
+                rec[rt] = [str(x) for x in dns.resolver.resolve(body.target, rt, lifetime=5)]
+            except Exception:
+                rec[rt] = []
+        return rec
+    records = await asyncio.to_thread(run)
+    res = {"tool": "dns", "target": body.target, "records": records}
+    await _save_report(body.target, "dns", res, user)
+    return res
 
+@api.post("/osint/whois")
+async def osint_whois(body: TargetReq, user: dict = Depends(get_current_user)):
+    def run():
+        import whois as w
+        try:
+            return {k: str(v) for k, v in w.whois(body.target).items() if v}
+        except Exception as e:
+            return {"error": str(e)}
+    data = await asyncio.to_thread(run)
+    res = {"tool": "whois", "target": body.target, "data": data}
+    await _save_report(body.target, "whois", res)
+    return res
 
+@api.post("/osint/phone")
+async def osint_phone(body: PhoneReq, user: dict = Depends(get_current_user)):
+    def run():
+        import phonenumbers as pn
+        from phonenumbers import geocoder, carrier
+        try:
+            p = pn.parse(body.target, body.region)
+            return {"valid": pn.is_valid_number(p),
+                    "international": pn.format_number(p, pn.PhoneNumberFormat.INTERNATIONAL),
+                    "country": geocoder.description_for_number(p, "en"),
+                    "carrier": carrier.name_for_number(p, "en")}
+        except Exception as e:
+            return {"error": str(e)}
+    res = {"tool": "phone", "target": body.target, **(await asyncio.to_thread(run))}
+    await _save_report(body.target, "phone", res, user)
+    return res
 
+@api.post("/osint/social")
+async def osint_social(body: TargetReq, user: dict = Depends(get_current_user)):
+    plats = {"instagram": f"https://www.instagram.com/{body.target}/",
+             "twitter": f"https://twitter.com/{body.target}",
+             "github": f"https://github.com/{body.target}",
+             "reddit": f"https://www.reddit.com/user/{body.target}",
+             "tiktok": f"https://www.tiktok.com/@{body.target}"}
+    found = {}
+    async with httpx.AsyncClient(timeout=8, follow_redirects=True) as c:
+        for pl, url in plats.items():
+            try:
+                resp = await c.get(url, headers={"User-Agent": "Mozilla/5.0"})
+                found[pl] = {"exists": resp.status_code == 200, "url": url}
+            except Exception:
+                found[pl] = {"exists": False, "url": url}
+    res = {"tool": "social", "target": body.target, "platforms": found}
+    await _save_report(body.target, "social", res, user)
+    return res
 
+@api.post("/osint/geolocate")
+async def osint_geo(body: TargetReq, user: dict = Depends(get_current_user)):
+    def resolve():
+        try:
+            return socket.gethostbyname(body.target)
+        except Exception:
+            return body.target
+    ip = await asyncio.to_thread(resolve)
+    async with httpx.AsyncClient(timeout=10) as c:
+        try:
+            geo = (await c.get(f"http://ip-api.com/json/{ip}?fields=66846719")).json()
+        except Exception:
+            geo = {}
+    res = {"tool": "geolocate", "target": body.target, "ip": ip, "geo": geo}
+    await _save_report(body.target, "geolocate", res, user)
+    return res
 
+@api.post("/osint/breach")
+async def osint_breach(body: TargetReq, user: dict = Depends(get_current_user)):
+    async with httpx.AsyncClient(timeout=10) as c:
+        try:
+            resp = await c.get(f"https://haveibeenpwned.com/unifiedsearch/{body.target}",
+                               headers={"User-Agent": "NEXUS-OSINT"})
+            res = {"tool": "breach", "target": body.target,
+                   "breached": resp.status_code == 200, "status": resp.status_code}
+        except Exception as e:
+            res = {"tool": "breach", "target": body.target, "error": str(e)}
+    await _save_report(body.target, "breach", res, user)
+    return res
 
+@api.post("/osint/subdomains")
+async def osint_subdomains(body: TargetReq, user: dict = Depends(get_current_user)):
+    def run():
+        subs = ["www", "mail", "api", "admin", "dev", "staging", "blog", "shop", "portal", "vpn", "remote"]
+        found = []
+        for s in subs:
+            try:
+                h = f"{s}.{body.target}"
+                found.append({"subdomain": h, "ip": socket.gethostbyname(h)})
+            except Exception:
+                pass
+        return found
+    res = {"tool": "subdomains", "target": body.target, "found": await asyncio.to_thread(run)}
+    await _save_report(body.target, "subdomains", res, user)
+    return res
 
+@api.post("/osint/portscan")
+async def osint_portscan(body: PortReq, user: dict = Depends(get_current_user)):
+    ports = body.ports or [21, 22, 25, 80, 443, 3306, 3389, 5432, 6379, 8080, 27017]
+    def run():
+        open_p = []
+        for p in ports:
+            try:
+                s = socket.socket(); s.settimeout(1)
+                if s.connect_ex((body.target, p)) == 0:
+                    open_p.append(p)
+                s.close()
+            except Exception:
+                pass
+        return open_p
+    res = {"tool": "portscan", "target": body.target, "open_ports": await asyncio.to_thread(run)}
+    await _save_report(body.target, "portscan", res, user)
+    return res
 
+@api.post("/osint/metadata")
+async def osint_metadata(body: MetaReq, user: dict = Depends(get_current_user)):
+    ER = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
+    PHR = re.compile(r"\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}")
+    async with httpx.AsyncClient(timeout=12, follow_redirects=True,
+                                 headers={"User-Agent": "Mozilla/5.0"}) as c:
+        try:
+            resp = await c.get(body.url)
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(resp.text, "lxml")
+            txt = soup.get_text()
+            res = {"tool": "metadata", "url": body.url,
+                   "title": soup.title.string if soup.title else "",
+                   "emails": list(set(ER.findall(txt)))[:20],
+                   "phones": list(set(PHR.findall(txt)))[:20]}
+        except Exception as e:
+            res = {"tool": "metadata", "url": body.url, "error": str(e)}
+    await _save_report(body.url, "metadata", res, user)
+    return res
 
+@api.post("/osint/shodan")
+async def osint_shodan(body: ShodanReq, user: dict = Depends(get_current_user)):
+    if not body.api_key:
+        return {"tool": "shodan", "error": "No API key provided"}
+    def run():
+        try:
+            import shodan
+            r = shodan.Shodan(body.api_key).search(body.query, limit=10)
+            return {"total": r["total"], "results": r["matches"][:5]}
+        except Exception as e:
+            return {"error": str(e)}
+    return {"tool": "shodan", "query": body.query, **(await asyncio.to_thread(run))}
 
+@api.post("/osint/dork")
+async def osint_dork(body: DorkReq, user: dict = Depends(get_current_user)):
+    def run():
+        try:
+            from googlesearch import search
+            return list(search(body.dork, num_results=body.num))
+        except Exception as e:
+            return {"error": str(e)}
+    out = await asyncio.to_thread(run)
+    res = {"tool": "dork", "query": body.dork, "results": out}
+    await _save_report(body.dork, "dork", res, user)
+    return res
 
+@api.get("/osint/reports")
+async def osint_reports(limit: int = 50, user: dict = Depends(get_current_user)):
+    cur = db.osint_reports.find(gov.tenant_scope(user), {"target": 1, "tool_used": 1, "created_at": 1}).sort("created_at", -1).limit(limit)
+    return [{"id": str(r["_id"]), "target": r.get("target"), "tool": r.get("tool_used"),
+             "created_at": r.get("created_at")} async for r in cur]
 
 # ====================== 24/7 SCRAPER ENGINE (OSINT/AI HQ filter) ======================
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -791,9 +1239,59 @@ def reschedule(interval_min: int):
             pass
         scheduler.add_job(fn, "interval", minutes=mins, id=jid, replace_existing=True, max_instances=1)
 
+@api.get("/scraper/status")
+async def scraper_status(user: dict = Depends(get_current_user)):
+    cfg = await get_scraper_config()
+    job = scheduler.get_job("scrape")
+    nxt = job.next_run_time.isoformat() if job and job.next_run_time else None
+    rjob = scheduler.get_job("reddit")
+    rnxt = rjob.next_run_time.isoformat() if rjob and rjob.next_run_time else None
+    scraped = await db.leads.count_documents({"scraped": True})
+    usage = await db.apify_usage.find_one({"_id": "usage"}) or {}
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    reddit_spend = usage.get("spend", 0.0) if usage.get("date") == today else 0.0
+    return {**SCRAPER_STATE, "next_run": nxt, "scheduler_running": scheduler.running,
+            "enabled": cfg.get("enabled"), "interval_min": cfg.get("interval_min"),
+            "min_score": cfg.get("min_score"), "total_scraped_leads": scraped,
+            "reddit_next_run": rnxt, "reddit_enabled": bool(os.environ.get("APIFY_TOKEN")),
+            "reddit_interval_min": REDDIT_INTERVAL_MIN,
+            "reddit_spend_today_usd": round(reddit_spend, 2), "reddit_daily_budget_usd": APIFY_DAILY_BUDGET_USD}
 
+@api.get("/intel/sources")
+async def intel_sources(user: dict = Depends(get_current_user)):
+    usage = await db.apify_usage.find_one({"_id": "usage"}) or {}
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    spend = usage.get("spend", 0.0) if usage.get("date") == today else 0.0
+    has = lambda k: bool(os.environ.get(k))
+    return {"apify_spend_today_usd": round(spend, 2), "apify_budget_usd": APIFY_DAILY_BUDGET_USD,
+            "sources": [
+                {"key": "osm", "name": "OpenStreetMap / Overpass — B2B firms", "status": "live",
+                 "cost": "free", "detail": f"{len(SCRAPER_SECTORS)} HQ sectors × {len(SCRAPER_COUNTIES)} counties, OSINT-filtered, every 30 min"},
+                {"key": "reddit", "name": "Reddit (via Apify)", "status": "live" if has("APIFY_TOKEN") else "inactive",
+                 "cost": f"${spend:.2f} / ${APIFY_DAILY_BUDGET_USD:.0f} today", "detail": "hourly, $5/day budget guard"},
+                {"key": "shodan", "name": "Shodan — host & CVE intel", "status": "live" if has("SHODAN_API_KEY") else "inactive",
+                 "cost": "oss plan", "detail": "enriches Threat Intel scans"},
+                {"key": "dns", "name": "DNS · DNSSEC · SSL/TLS", "status": "live",
+                 "cost": "free", "detail": "records, cert expiry, weak protocols"},
+                {"key": "email", "name": "Resend — pitch sending", "status": "live" if has("RESEND_API_KEY") else "inactive",
+                 "cost": "free tier", "detail": os.environ.get("SENDER_EMAIL", "")},
+            ]}
 
+@api.post("/scraper/trigger")
+async def scraper_trigger(source: str = "all", user: dict = Depends(get_current_user)):
+    if source == "reddit":
+        asyncio.create_task(run_reddit_cycle("manual"))
+        return {"triggered": True, "status": "reddit cycle started"}
+    asyncio.create_task(run_scrape_cycle("manual"))
+    if source == "all":
+        asyncio.create_task(run_reddit_cycle("manual"))
+    return {"triggered": True, "status": "cycle started"}
 
+@api.get("/scraper/config")
+async def scraper_get_config(user: dict = Depends(get_current_user)):
+    cfg = await get_scraper_config()
+    cfg.pop("_id", None)
+    return cfg
 
 class ScraperConfig(BaseModel):
     enabled: bool = True
@@ -804,7 +1302,23 @@ class ScraperConfig(BaseModel):
     sources: List[dict] = []
     sources_version: int = SOURCES_VERSION
 
+@api.put("/scraper/config")
+async def scraper_set_config(body: ScraperConfig, user: dict = Depends(require_admin)):
+    data = body.model_dump()
+    await db.scraper_config.update_one({"_id": "config"}, {"$set": data}, upsert=True)
+    if data["enabled"] and RUN_SCHEDULER:
+        reschedule(data["interval_min"])
+        if not scheduler.running:
+            scheduler.start()
+    else:
+        try: scheduler.remove_job("scrape")
+        except Exception: pass
+    return {"updated": True, **data}
 
+@api.get("/scraper/feed")
+async def scraper_feed(limit: int = 30, user: dict = Depends(get_current_user)):
+    cur = db.leads.find({"scraped": True}).sort("created_at", -1).limit(limit)
+    return [_lead_pub(l) async for l in cur]
 
 # ====================== PEOPLE INTELLIGENCE ======================
 class IdentityInput(BaseModel):
@@ -903,7 +1417,38 @@ async def _ai_profile(d: IdentityInput, footprint: dict, records: dict, model_ke
 class PeopleScanReq(IdentityInput):
     model: str = "deepseek"
 
+@api.post("/people-intel/scan")
+async def people_intel_scan(body: PeopleScanReq, user: dict = Depends(get_current_user)):
+    d = IdentityInput(name=body.name, email=body.email, phone=body.phone, username=body.username)
+    mk = "qwen" if body.model == "qwen" else "deepseek"
+    identity = await _resolve_identity(d)
+    footprint = await _build_footprint(d)
+    public_records = await _public_records(d)
+    profile = await _ai_profile(d, footprint, public_records, mk)
+    risk_ind = profile.get("risk_indicators", []) or []
+    breached = any(r["category"] == "breach" for r in public_records["records"])
+    level = "high" if (risk_ind and breached) else "medium" if (risk_ind or breached) else "low"
+    reasons = list(risk_ind) + (["email found in breach datasets"] if breached else [])
+    report = {"input": d.model_dump(), "identity": identity, "footprint": footprint,
+              "public_records": public_records, "ai_profile": profile,
+              "risk": {"level": level, "reasons": reasons},
+              "summary": (f"People-intel for {d.name or d.username or d.email or 'subject'}: "
+                          f"identity confidence {identity['overall_confidence']:.2f}, "
+                          f"{len(footprint['accounts'])} accounts, "
+                          f"{len(public_records['records'])} records, risk={level}."),
+              "created_at": datetime.now(timezone.utc).isoformat(), "by": user["id"],
+              "tenant_id": gov.tenant_id_of(user)}
+    await db.people_reports.insert_one(dict(report))
+    report.pop("_id", None)
+    return report
 
+@api.get("/people-intel/history")
+async def people_intel_history(limit: int = 20, user: dict = Depends(get_current_user)):
+    q = gov.tenant_scope(user)
+    cur = db.people_reports.find(q, {"input": 1, "risk": 1, "summary": 1, "created_at": 1}).sort("created_at", -1).limit(limit)
+    return [{"id": str(r["_id"]), "subject": (r.get("input") or {}),
+             "risk": (r.get("risk") or {}).get("level"), "summary": r.get("summary"),
+             "created_at": r.get("created_at")} async for r in cur]
 
 # ====================== STRIPE PAYMENTS (lead credits) ======================
 CREDIT_PACKAGES = {
@@ -916,7 +1461,40 @@ class CheckoutReq(BaseModel):
     package_id: str
     origin_url: str
 
+@api.get("/payments/packages")
+async def payment_packages(user: dict = Depends(get_current_user)):
+    return [{"id": k, **v} for k, v in CREDIT_PACKAGES.items()]
 
+@api.post("/payments/checkout")
+async def payment_checkout(body: CheckoutReq, request: Request, user: dict = Depends(get_current_user)):
+    pkg = CREDIT_PACKAGES.get(body.package_id)
+    if not pkg:
+        raise HTTPException(status_code=400, detail="Invalid package")
+    # open-redirect guard: only allow same-host or trusted origins
+    from urllib.parse import urlparse
+    o = urlparse(body.origin_url)
+    host = (o.hostname or "")
+    req_host = (request.base_url.hostname or "")
+    if o.scheme not in ("http", "https") or not (
+        host == req_host or host.endswith("emergentagent.com") or host in ("localhost", "127.0.0.1")):
+        raise HTTPException(status_code=400, detail="Invalid origin")
+    from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest
+    host_url = str(request.base_url)
+    webhook_url = f"{host_url}api/webhook/stripe"
+    sc = StripeCheckout(api_key=os.environ["STRIPE_API_KEY"], webhook_url=webhook_url)
+    origin = body.origin_url.rstrip("/")
+    success_url = f"{origin}/?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{origin}/"
+    meta = {"user_id": user["id"], "package_id": body.package_id, "credits": str(pkg["credits"])}
+    req = CheckoutSessionRequest(amount=float(pkg["amount"]), currency="usd",
+                                 success_url=success_url, cancel_url=cancel_url, metadata=meta)
+    session = await sc.create_checkout_session(req)
+    await db.payment_transactions.insert_one({
+        "session_id": session.session_id, "user_id": user["id"], "package_id": body.package_id,
+        "amount": float(pkg["amount"]), "currency": "usd", "credits": pkg["credits"],
+        "payment_status": "pending", "status": "initiated", "metadata": meta,
+        "created_at": datetime.now(timezone.utc).isoformat()})
+    return {"url": session.url, "session_id": session.session_id}
 
 async def _settle_payment(session_id: str, payment_status: str):
     if payment_status == "paid":
@@ -939,6 +1517,21 @@ async def _settle_payment(session_id: str, payment_status: str):
             {"$set": {"payment_status": payment_status, "status": payment_status,
                       "updated_at": datetime.now(timezone.utc).isoformat()}})
 
+@api.get("/payments/status/{session_id}")
+async def payment_status(session_id: str, request: Request, user: dict = Depends(get_current_user)):
+    txn = await db.payment_transactions.find_one({"session_id": session_id})
+    if not txn or (txn["user_id"] != user["id"] and user.get("role") != "admin"):
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    from emergentintegrations.payments.stripe.checkout import StripeCheckout
+    sc = StripeCheckout(api_key=os.environ["STRIPE_API_KEY"],
+                        webhook_url=f"{str(request.base_url)}api/webhook/stripe")
+    cs = await sc.get_checkout_status(session_id)
+    await _settle_payment(session_id, cs.payment_status)
+    u = await db.users.find_one({"_id": ObjectId(user["id"])})
+    return {"status": cs.status, "payment_status": cs.payment_status,
+            "amount_total": cs.amount_total, "currency": cs.currency,
+            "kind": txn.get("kind", "credits"), "lead_id": txn.get("lead_id"),
+            "credits": (u or {}).get("credits", 0)}
 
 @app.post("/api/webhook/stripe")
 async def stripe_webhook(request: Request):
@@ -1116,12 +1709,58 @@ def score_lead(enriched: dict) -> dict:
     return {"score": score, "identity": identity, "grade": (
         "A" if score >= 75 else "B" if score >= 50 else "C" if score >= 25 else "D")}
 
+@api.get("/enrich/pricing")
+async def enrich_pricing(user: dict = Depends(get_current_user)):
+    return {"costs": ENRICH_COST, "unit": "credit", "credits": user.get("credits", 0)}
 
+@api.post("/enrich/business")
+async def enrich_business_api(payload: BusinessReq, user: dict = Depends(get_current_user)):
+    await _charge_credits(user, ENRICH_COST["business"], "Business enrichment")
+    res = await enrich_business(payload)
+    await _save_enrichment("business", payload.model_dump(), res, user["id"])
+    return res
 
+@api.post("/enrich/person")
+async def enrich_person_api(payload: PersonReq, user: dict = Depends(get_current_user)):
+    await _charge_credits(user, ENRICH_COST["person"], "Person enrichment")
+    res = await enrich_person(payload)
+    await _save_enrichment("person", payload.model_dump(), res, user["id"])
+    return res
 
+@api.post("/enrich/property")
+async def enrich_property_api(payload: PropertyReq, user: dict = Depends(get_current_user)):
+    await _charge_credits(user, ENRICH_COST["property"], "Property enrichment")
+    res = await enrich_property(payload)
+    await _save_enrichment("property", payload.model_dump(), res, user["id"])
+    return res
 
+@api.post("/enrich/osint")
+async def enrich_osint_api(payload: OSINTEnrichReq, user: dict = Depends(get_current_user)):
+    await _charge_credits(user, ENRICH_COST["osint"], "OSINT enrichment")
+    res = await enrich_osint(payload)
+    await _save_enrichment("osint", payload.model_dump(), res, user["id"])
+    return res
 
+@api.post("/enrich/lead")
+async def enrich_lead_api(payload: LeadEnrichReq, user: dict = Depends(get_current_user)):
+    await _charge_credits(user, ENRICH_COST["lead"], "Composite lead enrichment")
+    enriched = {}
+    if payload.business:
+        enriched["business"] = await enrich_business(payload.business)
+    if payload.person:
+        enriched["person"] = await enrich_person(payload.person)
+    if payload.osint:
+        enriched["osint"] = await enrich_osint(payload.osint)
+    enriched["score"] = score_lead(enriched)
+    await _save_enrichment("lead", payload.model_dump(), enriched, user["id"])
+    return enriched
 
+@api.get("/enrich/history")
+async def enrich_history(limit: int = 20, user: dict = Depends(get_current_user)):
+    q = {} if user.get("role") == "admin" else {"by": user["id"]}
+    cur = db.enrichments.find(q, {"type": 1, "input": 1, "created_at": 1}).sort("created_at", -1).limit(limit)
+    return [{"id": str(e["_id"]), "type": e.get("type"), "input": e.get("input"),
+             "created_at": e.get("created_at")} async for e in cur]
 
 # ====================== CORPORATE THREAT INTEL (owner-only high-ticket) ======================
 RISKY_PORTS = {21: "FTP", 23: "Telnet", 3389: "RDP", 3306: "MySQL", 5432: "Postgres",
@@ -1440,7 +2079,24 @@ async def _auto_threat_pipeline(lead_doc: dict):
     except Exception as e:
         logger.warning("auto threat pipeline error: %s", e)
 
+@api.post("/threat/scan")
+async def threat_scan(body: ThreatScanReq, request: Request, user: dict = Depends(require_admin),
+                      _rl: bool = Depends(gov.rate_limit(int(os.environ.get("RL_THREAT_PER_MIN", "10")), 60))):
+    mk = "qwen" if body.model == "qwen" else "deepseek"
+    result = await _run_threat_scan(body.domain, mk, by=user["id"], source="manual")
+    await gov.audit_log("threat.scan", user=user, request=request, target=body.domain,
+                        meta={"risk_score": result.get("risk_score"), "high_ticket": result.get("high_ticket")})
+    return result
 
+@api.get("/threat/reports")
+async def threat_reports(high_ticket_only: bool = False, limit: int = 50, user: dict = Depends(require_admin)):
+    q = {"high_ticket": True} if high_ticket_only else {}
+    cur = db.threat_reports.find(q).sort([("high_ticket", -1), ("risk_score", -1)]).limit(limit)
+    out = []
+    async for r in cur:
+        r["id"] = str(r.pop("_id"))
+        out.append(r)
+    return out
 
 class OutreachProfile(BaseModel):
     sender_name: str = ""
@@ -1451,11 +2107,38 @@ class OutreachProfile(BaseModel):
     provider: str = ""
     auto_send: bool = False
 
+@api.get("/threat/outreach-profile")
+async def get_outreach_profile(user: dict = Depends(require_admin)):
+    p = await db.outreach_profile.find_one({"_id": "profile"}) or {}
+    p.pop("_id", None)
+    return p
 
+@api.put("/threat/outreach-profile")
+async def set_outreach_profile(body: OutreachProfile, user: dict = Depends(require_admin)):
+    await db.outreach_profile.update_one({"_id": "profile"}, {"$set": body.model_dump()}, upsert=True)
+    return {"updated": True, **body.model_dump()}
 
 class SendPitchReq(BaseModel):
     to_email: str
 
+@api.post("/threat/reports/{report_id}/send-email")
+async def send_threat_email(report_id: str, body: SendPitchReq, user: dict = Depends(require_admin)):
+    rep = await db.threat_reports.find_one({"_id": ObjectId(report_id)})
+    if not rep:
+        raise HTTPException(status_code=404, detail="Report not found")
+    draft = rep.get("email_draft")
+    if not draft:
+        raise HTTPException(status_code=400, detail="No drafted pitch for this report")
+    prof = await db.outreach_profile.find_one({"_id": "profile"}) or {}
+    from_name = prof.get("sender_name") or prof.get("brand") or "NEXUS Security"
+    try:
+        await send_email(body.to_email, draft["subject"], draft["body"], from_name)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Email send failed: {str(e)[:200]}")
+    await db.threat_reports.update_one({"_id": ObjectId(report_id)},
+        {"$set": {"email_status": "sent", "sent_to": body.to_email,
+                  "sent_at": datetime.now(timezone.utc).isoformat()}})
+    return {"sent": True, "to": body.to_email}
 
 # ---------------- Bulk HQ outreach campaign (admin) ----------------
 _FL_STATES = {"fl", "florida"}
@@ -1516,8 +2199,75 @@ class OutreachSendReq(BaseModel):
     limit: int = 0         # 0 = no cap
     attach_sample_pack: bool = False  # attach the 5-lead sample pilot pack PDF
 
+@api.post("/outreach/preview")
+async def outreach_preview(body: OutreachSendReq, user: dict = Depends(require_admin)):
+    recs = await _outreach_recipients(body.min_score, body.max_score, body.fl_only, body.category)
+    already = set()
+    async for s in db.outreach_sends.find({"status": "sent"}, {"lead_id": 1}):
+        already.add(str(s.get("lead_id")))
+    pending = [r for r in recs if str(r["_id"]) not in already]
+    return {"total": len(recs), "already_sent": len(recs) - len(pending), "pending": len(pending),
+            "sender": os.environ.get("SENDER_EMAIL", ""),
+            "recipients": [{"company": r.get("company"), "email": r.get("email"), "city": r.get("city"),
+                            "category": r.get("category"), "score": r.get("data_confidence_score")}
+                           for r in pending[:300]]}
 
+@api.post("/outreach/send")
+async def outreach_send(body: OutreachSendReq, request: Request, user: dict = Depends(require_admin)):
+    if not body.subject.strip() or not body.body.strip():
+        raise HTTPException(status_code=400, detail="Subject and body are required.")
+    # Test mode: single email to a chosen address, personalized from the first matching lead. No DB writes.
+    if body.test_to.strip():
+        recs = await _outreach_recipients(body.min_score, body.max_score, body.fl_only, body.category)
+        s = recs[0] if recs else {"company": "Bay Area Realty", "city": "Tampa", "category": "real_estate", "state": "FL", "email": body.test_to}
+        try:
+            att = _sample_pack_attachment() if body.attach_sample_pack else None
+            await send_email(body.test_to.strip(), _personalize(body.subject, s), _personalize(body.body, s), body.from_name, attachments=att)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Test send failed: {str(e)[:220]}")
+        return {"test": True, "to": body.test_to.strip(), "sample_company": s.get("company")}
+    if not body.confirm:
+        raise HTTPException(status_code=400, detail="Set confirm=true to run the live campaign.")
+    recs = await _outreach_recipients(body.min_score, body.max_score, body.fl_only, body.category)
+    already = set()
+    async for s in db.outreach_sends.find({"status": "sent"}, {"lead_id": 1}):
+        already.add(str(s.get("lead_id")))
+    recs = [r for r in recs if str(r["_id"]) not in already]
+    if body.limit and body.limit > 0:
+        recs = recs[:body.limit]
+    import uuid as _uuid
+    campaign_id = str(_uuid.uuid4())[:8]
+    sent = failed = 0
+    first_error = ""
+    att = _sample_pack_attachment() if body.attach_sample_pack else None
+    for l in recs:
+        subj = _personalize(body.subject, l)
+        html = _personalize(body.body, l)
+        rec = {"campaign_id": campaign_id, "lead_id": l["_id"], "email": l.get("email"),
+               "company": l.get("company"), "subject": subj, "from_name": body.from_name,
+               "score": l.get("data_confidence_score"), "by": user.get("email"),
+               "sent_at": datetime.now(timezone.utc).isoformat()}
+        try:
+            await send_email(l["email"], subj, html, body.from_name, attachments=att)
+            rec["status"] = "sent"; sent += 1
+        except Exception as e:
+            rec["status"] = "failed"; rec["error"] = str(e)[:200]; failed += 1
+            first_error = first_error or str(e)[:200]
+        await db.outreach_sends.insert_one(rec)
+        await asyncio.sleep(0.6)  # gentle pacing for the mail provider
+    await gov.audit_log("outreach.campaign", user=user, request=request, target=campaign_id,
+                        meta={"sent": sent, "failed": failed, "attempted": len(recs), "category": body.category},
+                        status="success" if failed == 0 else "partial")
+    return {"campaign_id": campaign_id, "sent": sent, "failed": failed, "attempted": len(recs),
+            "first_error": first_error}
 
+@api.get("/outreach/history")
+async def outreach_history(user: dict = Depends(require_admin)):
+    out = []
+    async for r in db.outreach_sends.find().sort("sent_at", -1).limit(500):
+        r["id"] = str(r.pop("_id")); r["lead_id"] = str(r.get("lead_id"))
+        out.append(r)
+    return {"sends": out, "total": len(out)}
 
 # ---------------- Email enrichment (find emails from lead websites) ----------------
 _EMAIL_JUNK = ("example.com", "sentry", "wixpress", "wix.com", "godaddy", "squarespace",
@@ -1599,7 +2349,31 @@ async def _run_email_enrichment(job_id: str, leads: list):
     await db.enrich_jobs.update_one({"job_id": job_id},
         {"$set": {"status": "complete", "finished_at": datetime.now(timezone.utc).isoformat()}})
 
+@api.post("/outreach/enrich-emails")
+async def enrich_emails(body: EnrichReq, user: dict = Depends(require_admin)):
+    q = {"website": {"$nin": ["", None]},
+         "$or": [{"email": ""}, {"email": None}, {"email": {"$exists": False}}]}
+    if body.only_hq:
+        q["ready_to_sell"] = True
+    if body.category:
+        q["category"] = body.category
+    leads = [l async for l in db.leads.find(q).limit(body.limit)]
+    if body.fl_only:
+        leads = [l for l in leads if _is_fl_lead(l)]
+    import uuid as _uuid
+    job_id = str(_uuid.uuid4())[:8]
+    await db.enrich_jobs.insert_one({"job_id": job_id, "status": "running", "total": len(leads),
+                                     "done": 0, "found": 0, "started_at": datetime.now(timezone.utc).isoformat()})
+    asyncio.create_task(_run_email_enrichment(job_id, leads))
+    return {"job_id": job_id, "candidates": len(leads)}
 
+@api.get("/outreach/enrich-status/{job_id}")
+async def enrich_status(job_id: str, user: dict = Depends(require_admin)):
+    j = await db.enrich_jobs.find_one({"job_id": job_id})
+    if not j:
+        raise HTTPException(status_code=404, detail="Job not found")
+    j.pop("_id", None)
+    return j
 
 # ---------------- Auto-send engine (email new HQ leads automatically) ----------------
 class AutoOutreachCfg(BaseModel):
@@ -1611,7 +2385,17 @@ class AutoOutreachCfg(BaseModel):
     min_score: float = 0
     attach_sample_pack: bool = False  # auto-attach the 5-lead sample pilot pack PDF
 
+@api.get("/outreach/auto")
+async def get_auto_outreach(user: dict = Depends(require_admin)):
+    c = await db.outreach_auto.find_one({"_id": "config"}) or {}
+    c.pop("_id", None)
+    return c
 
+@api.put("/outreach/auto")
+async def set_auto_outreach(body: AutoOutreachCfg, user: dict = Depends(require_admin)):
+    await db.outreach_auto.update_one({"_id": "config"},
+        {"$set": {**body.model_dump(), "updated_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+    return {"updated": True, **body.model_dump()}
 
 async def _auto_outreach_sweep(reason: str = "manual"):
     cfg = await db.outreach_auto.find_one({"_id": "config"})
@@ -1647,6 +2431,9 @@ async def _auto_outreach_sweep(reason: str = "manual"):
         logger.info("Auto-outreach (%s): campaign=%s sent=%d failed=%d", reason, campaign_id, sent, failed)
     return {"campaign_id": campaign_id, "sent": sent, "failed": failed}
 
+@api.post("/outreach/auto/run")
+async def run_auto_outreach(user: dict = Depends(require_admin)):
+    return await _auto_outreach_sweep("manual-trigger")
 
 # ---------------- Pilot template library (5-lead / 10-lead offers) ----------------
 _SIG = "\n\nBest,\nRobert\nNEXUS Lead Intelligence\nhttps://nexuscloud.sh"
@@ -1683,10 +2470,24 @@ OUTREACH_TEMPLATES = {
                     "body": _re_body(5, 200)},
 }
 
+@api.get("/outreach/templates")
+async def outreach_templates(user: dict = Depends(require_admin)):
+    return {"templates": [{"id": k, **v} for k, v in OUTREACH_TEMPLATES.items()]}
 
 # --- Sample pilot pack: 5 HQ (92+) cleaning-demand leads across Pinellas/Hillsborough/Pasco ---
+@api.get("/outreach/sample-pack")
+async def outreach_sample_pack(user: dict = Depends(require_admin)):
+    return SAMPLE_PACK
 
+@api.get("/outreach/sample-pack.csv")
+async def outreach_sample_pack_csv(user: dict = Depends(require_admin)):
+    return StreamingResponse(iter([_sample_pack_csv()]), media_type="text/csv",
+                             headers={"Content-Disposition": "attachment; filename=nexus_sample_pilot_pack.csv"})
 
+@api.get("/outreach/sample-pack.pdf")
+async def outreach_sample_pack_pdf(user: dict = Depends(require_admin)):
+    return Response(content=_sample_pack_pdf(), media_type="application/pdf",
+                    headers={"Content-Disposition": "attachment; filename=nexus_sample_pilot_pack.pdf"})
 
 # ============================================================================
 # GOVERNMENT-GRADE INTELLIGENCE ENRICHMENT + PER-LEAD STOREFRONT
@@ -1957,7 +2758,62 @@ class ProcessLeadsReq(BaseModel):
     leads: List[Dict[str, Any]]
     ai_model: str = "llama"
 
+@api.post("/enrichment/process-leads")
+async def process_leads(body: ProcessLeadsReq, user: dict = Depends(require_admin)):
+    """Run a raw lead array through Llama 3 + OSINT verification and flag ready_to_sell."""
+    if not body.leads:
+        raise HTTPException(status_code=400, detail="No leads provided")
+    results = []
+    for raw in body.leads[:100]:
+        results.append(await _enrich_and_store(raw, body.ai_model))
+    return {"processed": len(results),
+            "ready_to_sell": sum(1 for r in results if r["ready_to_sell"]),
+            "model": _active_ai_model(body.ai_model), "leads": results}
 
+@api.get("/storefront/leads")
+async def storefront_leads(city: Optional[str] = None, state: Optional[str] = None,
+                           industry: Optional[str] = None, tier: Optional[str] = None,
+                           min_confidence: float = 0.0, limit: int = 60, offset: int = 0,
+                           user: dict = Depends(get_current_user)):
+    """Browse individual un-sold, verified leads with full intelligence metrics (PII masked)."""
+    fl_clause = [{"state": {"$regex": "^(fl|florida)$", "$options": "i"}},
+                 {"state": {"$in": [None, ""]}}]  # FL-only marketplace (Tampa Bay region)
+    q = {"ready_to_sell": True, "purchase_status": {"$ne": "sold"}}
+    if city:
+        q["city"] = {"$regex": re.escape(city), "$options": "i"}
+    if state:
+        q["state"] = {"$regex": f"^{re.escape(state)}$", "$options": "i"}
+    else:
+        q["$or"] = fl_clause
+    if industry:
+        q["category"] = industry
+    if tier:
+        q["operational_value_tier"] = tier
+    if min_confidence:
+        q["data_confidence_score"] = {"$gte": min_confidence}
+    total = await db.leads.count_documents(q)
+    cur = db.leads.find(q).sort("data_confidence_score", -1).skip(offset).limit(min(limit, 200))
+    leads = [_intel_pub(l) async for l in cur]
+    base_q = {"ready_to_sell": True, "purchase_status": {"$ne": "sold"}, "$or": fl_clause}
+    industries = await db.leads.distinct("category", base_q)
+    states = await db.leads.distinct("state", base_q)
+    bundle_pipeline = [
+        {"$match": base_q},
+        {"$group": {"_id": "$category", "count": {"$sum": 1},
+                    "avg_confidence": {"$avg": "$data_confidence_score"},
+                    "from_price": {"$min": "$price_per_lead"},
+                    "strategic": {"$sum": {"$cond": [
+                        {"$eq": ["$operational_value_tier", "Strategic"]}, 1, 0]}}}},
+        {"$sort": {"count": -1}},
+    ]
+    bundles = [{"industry": b["_id"], "count": b["count"],
+                "avg_confidence": round(b.get("avg_confidence") or 0, 1),
+                "from_price": int(b.get("from_price") or 1), "strategic": b.get("strategic", 0)}
+               async for b in db.leads.aggregate(bundle_pipeline) if b.get("_id")]
+    return {"total": total, "leads": leads, "bundles": bundles,
+            "filters": {"industries": [i for i in industries if i],
+                        "states": [s for s in states if s],
+                        "tiers": ["Strategic", "Tactical", "Operational"]}}
 
 class RFPRequest(BaseModel):
     agency_name: str
@@ -1970,11 +2826,78 @@ class RFPRequest(BaseModel):
     classification: str = "Unclassified"
     scope: str = ""
 
+@api.post("/storefront/rfp")
+async def submit_rfp(body: RFPRequest, request: Request, user: dict = Depends(get_current_user)):
+    """Government / municipal custom-intelligence scope request (RFP intake)."""
+    doc = body.model_dump()
+    doc.update({"user_id": user["id"], "tenant_id": gov.tenant_id_of(user), "status": "new",
+                "created_at": datetime.now(timezone.utc).isoformat()})
+    res = await db.rfp_requests.insert_one(doc)
+    await gov.audit_log("rfp.submit", user=user, request=request, target=str(res.inserted_id),
+                        meta={"agency": body.agency_name, "classification": body.classification})
+    return {"id": str(res.inserted_id), "status": "received",
+            "message": "Agency scope request received. Our intelligence desk will respond within 1 business day."}
 
+@api.get("/storefront/rfp")
+async def list_rfp(user: dict = Depends(require_admin)):
+    out = []
+    async for r in db.rfp_requests.find().sort("created_at", -1).limit(200):
+        r["id"] = str(r.pop("_id"))
+        out.append(r)
+    return {"requests": out, "total": len(out)}
 
 class PurchaseLeadsReq(BaseModel):
     lead_ids: List[str]
 
+@api.post("/storefront/purchase-leads")
+async def purchase_leads(body: PurchaseLeadsReq, request: Request, user: dict = Depends(get_current_user)):
+    """Atomically buy specific leads with credits; marks sold to prevent double-selling."""
+    try:
+        oids = [ObjectId(i) for i in body.lead_ids]
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid lead id")
+    if not oids:
+        raise HTTPException(status_code=400, detail="No leads specified")
+    is_admin = gov.is_admin(user)
+    available = [l async for l in db.leads.find(
+        {"_id": {"$in": oids}, "purchase_status": {"$ne": "sold"}})]
+    if not available:
+        raise HTTPException(status_code=400, detail="None of the selected leads are available")
+    total_cost = sum(int(l.get("price_per_lead", 1)) for l in available)
+    if not is_admin:
+        res = await db.users.update_one(
+            {"_id": ObjectId(user["id"]), "credits": {"$gte": total_cost}},
+            {"$inc": {"credits": -total_cost}})
+        if res.modified_count == 0:
+            u = await db.users.find_one({"_id": ObjectId(user["id"])})
+            have = (u or {}).get("credits", 0)
+            raise HTTPException(status_code=402,
+                detail=f"Insufficient credits — need {total_cost}, you have {have}")
+    now = datetime.now(timezone.utc).isoformat()
+    purchased, refund = [], 0
+    for l in available:
+        price = int(l.get("price_per_lead", 1))
+        upd = await db.leads.update_one(
+            {"_id": l["_id"], "purchase_status": {"$ne": "sold"}},
+            {"$set": {"purchase_status": "sold", "buyer_user_id": user["id"], "is_sold": True,
+                      "sold_price": price, "sold_at": now, "status": "sold"},
+             "$addToSet": {"unlocked_by": user["id"]}})
+        if upd.modified_count == 1:
+            purchased.append(await db.leads.find_one({"_id": l["_id"]}))
+        else:
+            refund += price
+    if refund and not is_admin:
+        await db.users.update_one({"_id": ObjectId(user["id"])}, {"$inc": {"credits": refund}})
+    await db.storefront_orders.insert_one({
+        "buyer_user_id": user["id"], "tenant_id": gov.tenant_id_of(user),
+        "lead_ids": [str(l["_id"]) for l in purchased],
+        "charged_credits": total_cost - refund, "count": len(purchased), "created_at": now})
+    await gov.audit_log("lead.purchase", user=user, request=request,
+                        meta={"count": len(purchased), "charged_credits": total_cost - refund})
+    u = await db.users.find_one({"_id": ObjectId(user["id"])})
+    return {"purchased": len(purchased), "charged_credits": total_cost - refund,
+            "credits_remaining": (u or {}).get("credits", 0),
+            "leads": [_intel_pub(l, full=True) for l in purchased]}
 
 # ---- On-demand lead generator (OSM + OSINT + background AI enrichment) ----
 SECTOR_OSM_TAGS = {
@@ -2138,8 +3061,63 @@ class GenerateReq(BaseModel):
     limit: int = 100
     ai_enrich: bool = True
 
+@api.get("/storefront/sectors")
+async def storefront_sectors(user: dict = Depends(get_current_user)):
+    return {"sectors": sorted(SECTOR_OSM_TAGS.keys())}
 
+@api.post("/storefront/generate-leads")
+async def generate_leads(body: GenerateReq, request: Request, user: dict = Depends(require_admin),
+                         _rl: bool = Depends(gov.rate_limit(int(os.environ.get("RL_GENERATE_PER_MIN", "5")), 60))):
+    """Pull real businesses for a sector+county from OSM, OSINT-verify, store as storefront leads."""
+    sector = body.sector.strip().lower().replace(" ", "_")
+    if sector not in SECTOR_OSM_TAGS:
+        raise HTTPException(status_code=400,
+                            detail=f"Unsupported sector. Options: {', '.join(sorted(SECTOR_OSM_TAGS))}")
+    county = body.county.strip() or "Pinellas County"
+    raws = await _overpass_generate(sector, county, min(max(body.limit, 1), 300))
+    if not raws:
+        return {"generated": 0, "new": 0, "sector": sector, "county": county,
+                "message": f"No {sector.replace('_', ' ')} entities found in {county} on OpenStreetMap."}
+    sem = asyncio.Semaphore(20)
+    new_ids = []
 
+    async def proc(r):
+        async with sem:
+            created = await _store_generated(r, sector, county)
+        if created:
+            doc = await db.leads.find_one(
+                {"company": r["company"].strip(), "city": r.get("city", "").strip(), "source": "generator"})
+            if doc:
+                new_ids.append(doc["_id"])
+
+    await asyncio.gather(*(proc(r) for r in raws))
+    job_id = None
+    if body.ai_enrich and new_ids:
+        job_id = secrets.token_hex(12)
+        await db.generate_jobs.insert_one({
+            "job_id": job_id, "total": len(new_ids), "done": 0, "status": "running",
+            "sector": sector, "county": county, "tenant_id": gov.tenant_id_of(user),
+            "by": user["id"], "started_at": datetime.now(timezone.utc).isoformat(),
+            "expires_at": datetime.now(timezone.utc) + timedelta(hours=6)})
+        asyncio.create_task(_bg_ai_enrich(new_ids, job_id))
+    avail = await db.leads.count_documents({"category": sector, "purchase_status": {"$ne": "sold"}})
+    await gov.audit_log("lead.generate", user=user, request=request, target=sector,
+                        meta={"county": county, "generated": len(raws), "new": len(new_ids)})
+    return {"generated": len(raws), "new": len(new_ids), "sector": sector, "county": county,
+            "available_in_storefront": avail, "job_id": job_id,
+            "enrich_total": len(new_ids) if job_id else 0,
+            "message": f"Ingested {len(raws)} {sector.replace('_', ' ')} entities from {county}." +
+                       (" Deep AI enrichment is running in the background." if body.ai_enrich and new_ids else "")}
+
+@api.get("/storefront/generate-status/{job_id}")
+async def generate_status(job_id: str, user: dict = Depends(require_admin)):
+    job = await db.generate_jobs.find_one({"job_id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"job_id": job_id, "total": job.get("total", 0), "done": job.get("done", 0),
+            "status": job.get("status", "running"), "sector": job.get("sector"),
+            "county": job.get("county"), "started_at": job.get("started_at"),
+            "finished_at": job.get("finished_at")}
 
 # ====================== PUBLIC LAUNCH SITE (marketing landing — no auth) ======================
 # Backs the static launch site at /launch (pilot waitlist capture + lightweight demos).
@@ -2147,7 +3125,24 @@ class WaitlistReq(BaseModel):
     email: str
     company: str = ""
 
+@api.post("/waitlist")
+async def waitlist_signup(body: WaitlistReq, request: Request):
+    email = (body.email or "").strip().lower()
+    if not EMAIL_RX.fullmatch(email):
+        raise HTTPException(status_code=400, detail="Enter a valid email address.")
+    rec = {"email": email, "company": (body.company or "").strip(), "source": "launch_site",
+           "captured_at": datetime.now(timezone.utc).isoformat(),
+           "remote": request.client.host if request.client else ""}
+    await db.waitlist.update_one({"email": email}, {"$setOnInsert": rec}, upsert=True)
+    return {"ok": True, "message": "Pilot request received."}
 
+@api.get("/waitlist")
+async def waitlist_list(user: dict = Depends(require_admin)):
+    out = []
+    async for r in db.waitlist.find().sort("captured_at", -1).limit(500):
+        r["id"] = str(r.pop("_id"))
+        out.append(r)
+    return {"requests": out, "total": len(out)}
 
 def _lgvh_enrich(lead: dict) -> dict:
     company = str(lead.get("company") or "Unknown lead").strip()
@@ -2175,7 +3170,28 @@ def _lgvh_enrich(lead: dict) -> dict:
 class LeadDemoReq(BaseModel):
     lead: Dict[str, Any] = {}
 
+@api.post("/enrich-score")
+async def lgvh_enrich_score(body: LeadDemoReq):
+    if not body.lead:
+        raise HTTPException(status_code=400, detail="Request requires a lead object.")
+    return {"ok": True, "result": _lgvh_enrich(body.lead)}
 
+@api.post("/sale-listing")
+async def lgvh_sale_listing(body: LeadDemoReq):
+    if not body.lead:
+        raise HTTPException(status_code=400, detail="Request requires a lead object.")
+    e = _lgvh_enrich(body.lead)
+    score = int(e["score"])
+    price = 49 if score < 70 else 129 if score < 85 else 249
+    listing = {"title": f"{e['company']} - AI-enriched {e['scoreBand']} priority lead",
+               "category": e["storefrontSafeFields"]["category"], "summary": e["storefrontSafeFields"]["summary"],
+               "score": score, "scoreBand": e["scoreBand"], "confidence": e["confidence"],
+               "price": price, "currency": "USD",
+               "included": ["AI enrichment summary", "Lead score and reasons", "Source type and provenance notes",
+                            "Suggested next action", "Storefront-safe company profile"],
+               "privateFieldsExcluded": ["Raw phone/email", "Internal notes", "Sensitive identifiers", "Unreviewed personal data"],
+               "cta": "Request this lead package", "status": "Ready for review"}
+    return {"ok": True, "listing": listing}
 
 class ChatDemoReq(BaseModel):
     prompt: str = ""
@@ -2197,17 +3213,101 @@ def _lgvh_safe_answer(prompt: str) -> str:
     return ("Nexus safe mode is online. I can help with lead workflows, 24/7 scraper operations, Pi Suite edge "
             "nodes, onsite privacy checks, storefront drafts, and launch readiness.")
 
+@api.post("/chat")
+async def lgvh_chat(body: ChatDemoReq,
+                    _rl: bool = Depends(gov.rate_limit(int(os.environ.get("RL_CHAT_PER_MIN", "8")), 60))):
+    prompt = (body.prompt or "").strip()[:1000]
+    if not prompt:
+        raise HTTPException(status_code=400, detail="Enter a message for Nexus AI.")
+    sys_p = ("You are Nexus AI, the assistant on the LeadGen Virtual Hub launch site — a lead-intelligence "
+             "platform that runs 24/7 OSINT-filtered scrapers, AI enrichment/scoring, a compliant lead "
+             "storefront, Pi Suite edge nodes, and onsite privacy checks. Answer as a knowledgeable product "
+             "guide: concise (2-4 sentences), practical, privacy- and compliance-aware. Never fabricate private "
+             "contact data. If asked something off-topic, steer back to lead-gen, scraping, or launch readiness.")
+    r = await deepseek_chat([{"role": "system", "content": sys_p},
+                             {"role": "user", "content": prompt}], max_tokens=320, temperature=0.6)
+    if isinstance(r, dict) and "error" not in r and r.get("content"):
+        return {"ok": True, "assistant": "Nexus AI", "mode": "live",
+                "model": r.get("model"), "answer": r["content"].strip()}
+    logger.warning("lgvh_chat falling back to safe mode: %s", (r or {}).get("error"))
+    return {"ok": True, "assistant": "Nexus AI", "mode": "safe_mode", "answer": _lgvh_safe_answer(prompt)}
 
 # ====================== GOVERNANCE (multi-tenant, RBAC, audit, monitoring) ======================
+@api.get("/governance/me")
+async def governance_me(user: dict = Depends(get_current_user)):
+    """Caller's tenant + effective role/permission level."""
+    tenant = await db.tenants.find_one({"tenant_id": gov.tenant_id_of(user)}) or {}
+    members = await db.users.count_documents({"tenant_id": gov.tenant_id_of(user)})
+    return {"tenant_id": gov.tenant_id_of(user), "tenant_name": tenant.get("name", user.get("tenant_name", "")),
+            "role": user.get("role", "user"), "role_level": gov.role_level(user.get("role")),
+            "is_platform_admin": gov.is_admin(user), "members": members,
+            "roles_available": gov.VALID_ROLES}
 
+@api.get("/governance/tenant/members")
+async def tenant_members(user: dict = Depends(require_min_role("tenant_admin"))):
+    """Members of the caller's tenant (platform admins see every tenant)."""
+    q = {} if gov.is_admin(user) else {"tenant_id": gov.tenant_id_of(user)}
+    cur = db.users.find(q, {"email": 1, "name": 1, "role": 1, "credits": 1, "tenant_id": 1,
+                            "tenant_name": 1, "created_at": 1}).sort("created_at", -1).limit(500)
+    return [{"id": str(u["_id"]), "email": u["email"], "name": u.get("name"),
+             "role": u.get("role"), "credits": u.get("credits", 0),
+             "tenant_id": u.get("tenant_id") or gov.DEFAULT_TENANT,
+             "tenant_name": u.get("tenant_name", ""), "created_at": u.get("created_at")} async for u in cur]
 
+@api.get("/admin/tenants")
+async def admin_tenants(user: dict = Depends(require_admin)):
+    pipeline = [{"$group": {"_id": "$tenant_id", "members": {"$sum": 1}}}]
+    counts = {b["_id"]: b["members"] async for b in db.users.aggregate(pipeline)}
+    out = []
+    async for t in db.tenants.find().sort("created_at", -1).limit(500):
+        out.append({"tenant_id": t.get("tenant_id"), "name": t.get("name"),
+                    "owner_email": t.get("owner_email"), "status": t.get("status", "active"),
+                    "members": counts.get(t.get("tenant_id"), 0), "created_at": t.get("created_at")})
+    return {"tenants": out, "total": len(out)}
 
+@api.get("/admin/audit")
+async def admin_audit(limit: int = 100, action: Optional[str] = None,
+                      tenant_id: Optional[str] = None, status: Optional[str] = None,
+                      user: dict = Depends(require_admin)):
+    q = {}
+    if action:
+        q["action"] = action
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    if status:
+        q["status"] = status
+    cur = db.audit_logs.find(q).sort("created_at", -1).limit(min(limit, 500))
+    logs = [gov.audit_pub(r) async for r in cur]
+    actions = await db.audit_logs.distinct("action")
+    return {"logs": logs, "total": len(logs), "actions": sorted(actions)}
 
+@api.get("/admin/monitoring")
+async def admin_monitoring(user: dict = Depends(require_admin)):
+    """Application-level health & operations snapshot (for per-environment monitoring)."""
+    db_ok = True
+    try:
+        await db.command("ping")
+    except Exception:
+        db_ok = False
+    since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    return {
+        "db_connected": db_ok,
+        "scheduler_running": scheduler.running,
+        "scraper_status": SCRAPER_STATE.get("status"),
+        "tenants": await db.tenants.count_documents({}),
+        "users": await db.users.count_documents({}),
+        "leads_total": await db.leads.count_documents({}),
+        "leads_available": await db.leads.count_documents({"purchase_status": {"$ne": "sold"}}),
+        "leads_sold": await db.leads.count_documents({"purchase_status": "sold"}),
+        "audit_events_24h": await db.audit_logs.count_documents({"created_at": {"$gte": since}}),
+        "logins_failed_24h": await db.audit_logs.count_documents(
+            {"action": "user.login", "status": "failure", "created_at": {"$gte": since}}),
+        "locked_identities": await db.login_attempts.count_documents({"count": {"$gte": gov.MAX_FAILED}}),
+        "ai_provider": _active_ai_model(),
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 # ----------------------------------------------------------------------------- mount + startup
-# --------------------------------------------------------------------------- API route modules
-from routes import (admin, auth, enrichment, keys, leads, osint, outreach, payments, people_intel, public, scraper, storefront, threat)  # noqa: F401  (registers routes on `api`)
-
 app.include_router(api)
 app.add_middleware(CORSMiddleware, allow_credentials=True,
                    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
