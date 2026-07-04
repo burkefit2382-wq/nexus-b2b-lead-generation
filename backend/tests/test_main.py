@@ -14,6 +14,13 @@ def test_healthcheck() -> None:
     assert response.json() == {'status': 'ok'}
 
 
+def test_lead_control_center() -> None:
+    response = client.get('/lead-control-center')
+    assert response.status_code == 200
+    assert 'Lead Control Center' in response.text
+    assert 'Render web service' in response.text
+
+
 def test_mock_leads_limit() -> None:
     response = client.get('/api/leads/mock?limit=3')
     assert response.status_code == 200

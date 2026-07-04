@@ -1,4 +1,11 @@
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
+
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+LEAD_CONTROL_CENTER_PATH = STATIC_DIR / "lead-control-center.html"
 
 app = FastAPI(title="NEXUS B2B Lead Generation API", version="0.1.0")
 
@@ -6,6 +13,11 @@ app = FastAPI(title="NEXUS B2B Lead Generation API", version="0.1.0")
 @app.get("/health")
 def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/lead-control-center", response_class=HTMLResponse)
+def lead_control_center() -> str:
+    return LEAD_CONTROL_CENTER_PATH.read_text(encoding="utf-8")
 
 
 @app.get("/api/leads/mock")
