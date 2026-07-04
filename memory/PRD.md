@@ -103,6 +103,20 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - P2: People-intel rate limiting; lead unlock receipts/exports; usage analytics dashboard.
 
 ## Changelog
+- 2026-07-04 — **Sample Pilot Pack + A-Leads/Astro marketability chart (verified).**
+  (1) One-click **Sample Pilot Pack** in the admin Outreach tab: 5 HQ (92+) cleaning-demand leads —
+  3 residential home-cleaning + 2 commercial — across Pinellas/Hillsborough/Pasco (Palm Harbor, Wesley Chapel,
+  Tampa, Clearwater, Brandon), scores 96/94/93/95/92. Backend `GET /api/outreach/sample-pack` (JSON),
+  `.csv` (StreamingResponse), `.pdf` (fpdf2) — all admin-only, curl-verified. Frontend `OutreachPanel` card
+  (`sample-pack-card`) with Preview/PDF/CSV buttons (blob download). Contacts masked; clearly a representative
+  SAMPLE. Added `fpdf2==2.8.7` to requirements.txt.
+  (2) **compare.html** reworked for marketability head-to-head: NEXUS vs **A-Leads** vs **Astro** cost-per-lead
+  chart ($35/$60/$55, exact-scaled), attribute table, and a CSS **Marketability scorecard** (8 attributes ×3
+  vendors, composite NEXUS ~94 / A-Leads ~55 / Astro ~56) — figures labeled editable estimates.
+  testing_agent iteration_15: 100% (UI + endpoints); compare.html screenshot-verified.
+  NOTE: only 2 real `cleaning` leads exist in DB (36 total 92+), so the pack is curated representative sample
+  per user's chosen default (option a).
+
 - 2026-06-30 (4) — **Complexity slice #2 (verified).** Decomposed the remaining high-complexity units:
   Frontend `Storefront()` (C24) → `StorefrontFilters` + `IntelGrid` + `CartBar`; `IntelCard()` (C17) →
   `VerificationNodes` + `RiskMatrix`; `OutreachPanel()` (C25) → extracted `OutreachHistoryTable`.
