@@ -103,6 +103,17 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - P2: People-intel rate limiting; lead unlock receipts/exports; usage analytics dashboard.
 
 ## Changelog
+- 2026-06-XX — **Resend production DNS for `mail.nexuscloud.sh` fully verified (P1 closed).**
+  Live DNS diagnostic (dnspython @ 8.8.8.8/1.1.1.1) found + fixed the verification blockers in Cloudflare:
+  (1) removed a **duplicate/truncated DKIM TXT** (`p=MIGfMA0G...` placeholder) at
+  `resend._domainkey.mail.nexuscloud.sh` that was breaking DKIM (two TXT RRs at one selector) → now exactly
+  ONE valid full RSA key. (2) Added the missing return-path records on `send.mail.nexuscloud.sh`:
+  SPF TXT `v=spf1 include:amazonses.com ~all` + MX `feedback-smtp.us-east-1.amazonses.com`. DMARC inherited
+  from org (`_dmarc.nexuscloud.sh`, p=none). All 4 confirmed green. Fired a LIVE test send via
+  `/api/outreach/send` (test_to) → Resend accepted (200) to burkefit2382@gmail.com. NOTE for PRODUCTION:
+  keep RESEND_API_KEY + SENDER_EMAIL=robert@mail.nexuscloud.sh in the deployed env and redeploy; MX priority
+  came in as 1 (harmless for a single host).
+
 - 2026-07-04 (3) — **Sample Pilot Pack upgraded to a print-ready handout demo (verified).**
   Rebuilt `_sample_pack_pdf()` into a polished **6-page** leave-behind: a branded cover (value prop, "what's
   inside", pilot pricing box, sample disclaimer) + **one full page per lead** (dark header band with score badge
