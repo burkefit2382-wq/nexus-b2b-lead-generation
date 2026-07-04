@@ -301,7 +301,7 @@ class LaunchHandler(SimpleHTTPRequestHandler):
 
     def end_headers(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
-        if parsed.path in {"", "/", "/index.html", "/dashboard.html", "/lead-control-center.html"}:
+        if parsed.path in {"", "/", "/index.html", "/dashboard.html", "/lead-control-center.html", "/static/lead-control-center.html"}:
             self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
             self.send_header("Pragma", "no-cache")
             self.send_header("Expires", "0")
@@ -330,7 +330,7 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         if parsed.path.rstrip("/") == "/dashboard":
             self.path = "/dashboard.html"
 
-        if parsed.path.rstrip("/") in {"/lead-control-center", "/control-center", "/control"}:
+        if parsed.path.rstrip("/") in {"/lead-control-center", "/control-center", "/control", "/static/lead-control-center.html"}:
             self.path = "/lead-control-center.html"
 
         self.apply_index_fallback()
