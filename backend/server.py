@@ -2709,6 +2709,7 @@ def _pdf_txt(s: str) -> str:
 def _sample_pack_pdf() -> bytes:
     from fpdf import FPDF
     from fpdf.enums import XPos, YPos
+    import io, qrcode
     LIME = (159, 232, 112); DARK = (13, 26, 18); GREEN = (34, 110, 58)
     GREY = (95, 95, 95); INK = (25, 25, 25)
     p = FPDF(format="A4")
@@ -2752,6 +2753,27 @@ def _sample_pack_pdf() -> bytes:
     p.set_y(y + 27); p.set_text_color(*GREY); p.set_font("Helvetica", "I", 8.5)
     p.multi_cell(0, 4, _pdf_txt("Representative sample - names and contact details are masked and unlock on purchase. "
                                 "Figures are editable. Prepared by NEXUS Lead Intelligence - nexuscloud.sh"))
+
+    # ---------- Booking CTA + QR code ----------
+    site = os.environ.get("PUBLIC_SITE_URL", "https://nexuscloud.sh")
+    site_label = site.replace("https://", "").replace("http://", "").rstrip("/")
+    cy = p.get_y() + 8
+    if cy > 233:
+        cy = 233
+    p.set_fill_color(*DARK); p.rect(15, cy, 180, 52, "F")
+    p.set_fill_color(*LIME); p.rect(15, cy, 3, 52, "F")
+    p.set_xy(24, cy + 9); p.set_text_color(*LIME); p.set_font("Helvetica", "B", 9)
+    p.cell(0, 5, _pdf_txt("READY TO ACTIVATE YOUR PIPELINE?"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    p.set_x(24); p.set_text_color(255, 255, 255); p.set_font("Helvetica", "B", 22)
+    p.cell(0, 12, _pdf_txt("Schedule a demo"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    p.set_x(24); p.set_text_color(205, 225, 210); p.set_font("Helvetica", "", 10)
+    p.cell(0, 5.5, _pdf_txt("Scan the code or visit"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    p.set_x(24); p.set_text_color(*LIME); p.set_font("Helvetica", "B", 13)
+    p.cell(0, 6, _pdf_txt(site_label), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    p.set_fill_color(255, 255, 255); p.rect(150, cy + 6, 40, 40, "F")
+    qbuf = io.BytesIO(); qrcode.make(site).save(qbuf, format="PNG"); qbuf.seek(0)
+    p.image(qbuf, x=153, y=cy + 9, w=34, h=34)
+    p.link(15, cy, 180, 52, site)
 
     # ---------- One page per lead ----------
     def _section(title, body, is_list=False):

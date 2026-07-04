@@ -103,6 +103,16 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - P2: People-intel rate limiting; lead unlock receipts/exports; usage analytics dashboard.
 
 ## Changelog
+- 2026-06-XX — **Sample Pilot Pack PDF cover → lead-capture asset (CTA + QR, verified).**
+  Added a booking CTA block to page 1 of `_sample_pack_pdf()`: dark panel w/ lime accent bar,
+  "READY TO ACTIVATE YOUR PIPELINE?" → **"Schedule a demo"** headline, "Scan the code or visit
+  nexuscloud.sh" link text, and a **scannable QR code** (generated via `qrcode` lib) on a white plaque
+  pointing to `PUBLIC_SITE_URL` (env, default `https://nexuscloud.sh` = user's public storefront). The
+  whole block is a clickable PDF link. Page count preserved at 6; live endpoint `/api/outreach/sample-pack.pdf`
+  serves it (200, application/pdf); `_sample_pack_attachment()` reuses the same generator so ALL outreach
+  emails (sandbox/campaign/auto-sweep) now carry the CTA cover. Added `qrcode==8.2` to requirements +
+  `PUBLIC_SITE_URL` to backend/.env. Rendered & visually verified (fitz), QR link decoded correct.
+
 - 2026-06-XX — **Resend production DNS for `mail.nexuscloud.sh` fully verified (P1 closed).**
   Live DNS diagnostic (dnspython @ 8.8.8.8/1.1.1.1) found + fixed the verification blockers in Cloudflare:
   (1) removed a **duplicate/truncated DKIM TXT** (`p=MIGfMA0G...` placeholder) at
