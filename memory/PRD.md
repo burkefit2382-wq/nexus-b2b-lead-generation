@@ -103,6 +103,16 @@ app — and asked to "launch and deploy my SaaS". Ported to the Emergent cloud s
 - P2: People-intel rate limiting; lead unlock receipts/exports; usage analytics dashboard.
 
 ## Changelog
+- 2026-07-04 (3) — **Sample Pilot Pack upgraded to a print-ready handout demo (verified).**
+  Rebuilt `_sample_pack_pdf()` into a polished **6-page** leave-behind: a branded cover (value prop, "what's
+  inside", pilot pricing box, sample disclaimer) + **one full page per lead** (dark header band with score badge
+  + tier, entity, "The opportunity", budget, verification nodes, masked contact, source, page footer). Fixed a
+  footer auto-page-break bug (was emitting 11 pages) by disabling auto-break; page count now exactly 6. Rendered
+  & visually verified (fitz); live endpoint `/api/outreach/sample-pack.pdf` serves it (200, application/pdf, 6
+  pages). Content is the 5 HQ (92+) Tampa Bay cleaning leads (3 residential + 2 commercial, Pinellas/Hillsborough/
+  Pasco). Also flipped auto-attach ON in the live auto-outreach config (attach_sample_pack=true, enabled=true).
+  A-Leads/Astro chart figures left as labeled estimates (no public pricing exists; parked per user).
+
 - 2026-07-04 (2) — **Auto-attach Sample Pilot Pack PDF to outreach emails (verified).**
   `send_email()` now supports `attachments` (Resend `content` as List[int] + `content_type`; Gmail fallback via
   MIMEApplication). `_sample_pack_attachment()` builds the 5-lead PDF. Wired into all 3 send paths: sandbox test,

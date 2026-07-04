@@ -2709,54 +2709,87 @@ def _pdf_txt(s: str) -> str:
 def _sample_pack_pdf() -> bytes:
     from fpdf import FPDF
     from fpdf.enums import XPos, YPos
+    LIME = (159, 232, 112); DARK = (13, 26, 18); GREEN = (34, 110, 58)
+    GREY = (95, 95, 95); INK = (25, 25, 25)
     p = FPDF(format="A4")
-    p.set_auto_page_break(True, margin=16)
+    p.set_auto_page_break(False)
+
+    # ---------- Cover ----------
     p.add_page()
-    p.set_fill_color(13, 26, 18)
-    p.rect(0, 0, 210, 30, "F")
-    p.set_xy(12, 8)
-    p.set_text_color(159, 232, 112)
-    p.set_font("Helvetica", "B", 15)
-    p.cell(0, 8, _pdf_txt(SAMPLE_PACK["title"]), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    p.set_x(12)
-    p.set_text_color(150, 180, 155)
-    p.set_font("Helvetica", "", 10)
+    p.set_fill_color(*DARK); p.rect(0, 0, 210, 62, "F")
+    p.set_xy(15, 13); p.set_text_color(*LIME); p.set_font("Helvetica", "B", 12)
+    p.cell(0, 6, _pdf_txt("NEXUS LEAD INTELLIGENCE"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    p.set_x(15); p.set_text_color(255, 255, 255); p.set_font("Helvetica", "B", 26)
+    p.cell(0, 13, _pdf_txt("Sample Pilot Pack"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    p.set_x(15); p.set_text_color(205, 225, 210); p.set_font("Helvetica", "", 13)
+    p.cell(0, 7, _pdf_txt("5 AI-scored cleaning leads (92+) - Tampa Bay"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    p.set_x(15); p.set_text_color(150, 180, 155); p.set_font("Helvetica", "", 10)
     p.cell(0, 6, _pdf_txt(SAMPLE_PACK["region"]), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    p.ln(8)
-    p.set_text_color(70, 70, 70)
-    p.set_font("Helvetica", "I", 9)
-    p.multi_cell(0, 4.5, _pdf_txt(SAMPLE_PACK["note"]))
-    p.ln(3)
-    for l in SAMPLE_PACK["leads"]:
-        p.set_text_color(20, 20, 20)
-        p.set_font("Helvetica", "B", 11)
-        p.cell(0, 6, _pdf_txt(f"#{l['rank']}   {l['type'].upper()} CLEANING   -   Score {l['score']}/100 ({l['tier']})"),
-               new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        p.set_font("Helvetica", "B", 10)
-        p.set_text_color(40, 90, 50)
-        p.cell(0, 5.5, _pdf_txt(f"{l['entity_masked']}  -  {l['city']} ({l['county']} County)"),
-               new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        p.set_font("Helvetica", "", 9)
-        p.set_text_color(50, 50, 50)
-        p.multi_cell(0, 4.5, _pdf_txt("Intent: " + l["intent_summary"]))
-        p.cell(0, 5, _pdf_txt(f"Budget est: {l['budget_est']}   |   Contact: {l['contact_masked']}"),
-               new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        p.set_text_color(95, 95, 95)
-        p.set_font("Helvetica", "", 8)
-        p.multi_cell(0, 4, _pdf_txt("Verified: " + ", ".join(l["verification_nodes"]) + "   |   " + l["source"]))
-        p.ln(2)
-        p.set_draw_color(215, 215, 215)
-        p.line(12, p.get_y(), 198, p.get_y())
-        p.ln(3)
-    p.ln(1)
-    p.set_font("Helvetica", "B", 10)
-    p.set_text_color(40, 90, 50)
-    p.multi_cell(0, 5, _pdf_txt("Pilot pricing: " + SAMPLE_PACK["pricing"] +
-                                ". Every lead OSINT-verified, AI-scored 92+, exclusive to you. Contacts unlock on purchase."))
-    p.set_font("Helvetica", "", 8)
-    p.set_text_color(120, 120, 120)
-    p.cell(0, 5, _pdf_txt("Prepared for NEXUS Lead Intelligence - nexuscloud.sh - representative sample, figures editable."),
+
+    p.set_y(72); p.set_text_color(*INK); p.set_font("Helvetica", "", 11)
+    p.multi_cell(0, 5.5, _pdf_txt("A representative sample of what a live NEXUS pilot delivers: verified, exclusive, "
+        "ready-to-work cleaning opportunities across Pinellas, Hillsborough and Pasco counties - each researched "
+        "from public sources, AI-scored, and enriched so your team knows exactly why the lead matters and what to "
+        "say first."))
+    p.ln(4)
+    p.set_font("Helvetica", "B", 12); p.set_text_color(*GREEN)
+    p.cell(0, 7, _pdf_txt("What's inside"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    p.set_font("Helvetica", "", 10.5); p.set_text_color(*INK)
+    for b in ["5 high-quality leads - 3 residential home-cleaning + 2 commercial cleaning",
+              "Every lead OSINT-verified and AI-scored 92+ (out of 100)",
+              "Exclusive to you - never resold or shared",
+              "Budget estimate, intent summary and verification nodes on each",
+              "Delivered as a clean PDF + CSV your crew can act on today"]:
+        p.set_x(17); p.multi_cell(0, 5.5, _pdf_txt("- " + b))
+    p.ln(4)
+    y = p.get_y(); p.set_fill_color(240, 248, 240); p.set_draw_color(*GREEN)
+    p.rect(15, y, 180, 22, "DF")
+    p.set_xy(20, y + 4); p.set_text_color(*GREEN); p.set_font("Helvetica", "B", 12)
+    p.cell(0, 6, _pdf_txt("Pilot pricing"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    p.set_x(20); p.set_text_color(*INK); p.set_font("Helvetica", "B", 11)
+    p.cell(0, 6, _pdf_txt("5 leads = $200 ($40/lead)        |        10 leads = $350 ($35/lead)"),
            new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    p.set_y(y + 27); p.set_text_color(*GREY); p.set_font("Helvetica", "I", 8.5)
+    p.multi_cell(0, 4, _pdf_txt("Representative sample - names and contact details are masked and unlock on purchase. "
+                                "Figures are editable. Prepared by NEXUS Lead Intelligence - nexuscloud.sh"))
+
+    # ---------- One page per lead ----------
+    def _section(title, body, is_list=False):
+        p.set_text_color(*GREEN); p.set_font("Helvetica", "B", 11)
+        p.cell(0, 6, _pdf_txt(title), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        p.set_text_color(*INK); p.set_font("Helvetica", "", 10.5)
+        if is_list:
+            for x in body:
+                p.set_x(17); p.multi_cell(0, 5.2, _pdf_txt("+  " + x))
+        else:
+            p.multi_cell(0, 5.5, _pdf_txt(body))
+        p.ln(3)
+
+    total = len(SAMPLE_PACK["leads"])
+    for l in SAMPLE_PACK["leads"]:
+        p.add_page()
+        p.set_fill_color(*DARK); p.rect(0, 0, 210, 30, "F")
+        p.set_text_color(*LIME); p.set_font("Helvetica", "B", 15)
+        p.set_xy(15, 10); p.cell(120, 8, _pdf_txt(f"LEAD #{l['rank']}  -  {l['type'].upper()} CLEANING"))
+        p.set_text_color(255, 255, 255); p.set_font("Helvetica", "B", 20)
+        p.set_xy(140, 7); p.cell(55, 9, _pdf_txt(f"{l['score']}/100"), align="R")
+        p.set_text_color(*LIME); p.set_font("Helvetica", "B", 9)
+        p.set_xy(140, 18); p.cell(55, 5, _pdf_txt(l["tier"].upper() + " TIER"), align="R")
+
+        p.set_y(40); p.set_text_color(*GREEN); p.set_font("Helvetica", "B", 15)
+        p.multi_cell(0, 7, _pdf_txt(l["entity_masked"]))
+        p.set_text_color(*GREY); p.set_font("Helvetica", "", 11)
+        p.set_x(15); p.multi_cell(0, 6, _pdf_txt(f"{l['city']}  -  {l['county']} County, FL"))
+        p.ln(4)
+        _section("The opportunity", l["intent_summary"])
+        _section("Estimated budget", l["budget_est"])
+        _section("Verification nodes", l["verification_nodes"], is_list=True)
+        _section("Contact", l["contact_masked"] + "   (unlocks on purchase)")
+        p.set_text_color(*GREY); p.set_font("Helvetica", "I", 8.5)
+        p.multi_cell(0, 4, _pdf_txt("Source: " + l["source"]))
+        p.set_y(-15); p.set_text_color(*GREY); p.set_font("Helvetica", "", 8)
+        p.cell(0, 6, _pdf_txt(f"NEXUS Lead Intelligence  -  nexuscloud.sh          Lead {l['rank']} of {total}"), align="C")
+
     return bytes(p.output())
 
 def _sample_pack_attachment() -> list:
