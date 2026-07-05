@@ -56,6 +56,19 @@ CREATE INDEX IF NOT EXISTS events_lead_id_idx ON events(lead_id);
 CREATE INDEX IF NOT EXISTS events_event_name_idx ON events(event_name);
 CREATE INDEX IF NOT EXISTS events_created_at_idx ON events(created_at);
 
+CREATE TABLE IF NOT EXISTS tracking_events (
+  id SERIAL PRIMARY KEY,
+  event_name TEXT NOT NULL,
+  user_id TEXT,
+  metadata JSONB,
+  client_ip TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS tracking_events_event_name_idx ON tracking_events(event_name);
+CREATE INDEX IF NOT EXISTS tracking_events_user_id_idx ON tracking_events(user_id);
+CREATE INDEX IF NOT EXISTS tracking_events_created_at_idx ON tracking_events(created_at);
+
 CREATE TABLE IF NOT EXISTS weekly_summaries (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   week_start DATE,

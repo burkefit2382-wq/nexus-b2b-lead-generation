@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 try:
@@ -6,6 +8,7 @@ except ModuleNotFoundError:
     from app.main import app
 
 client = TestClient(app)
+SCHEMA_PATH = Path(__file__).resolve().parents[1] / 'db' / 'schema.sql'
 
 
 def test_healthcheck() -> None:
@@ -35,6 +38,12 @@ def test_config_status_does_not_expose_secret(monkeypatch) -> None:
     assert data['databaseUrlConfigured'] is True
     assert 'password' not in response.text
     assert 'example.com' not in response.text
+
+
+def test_schema_includes_tracking_events_table() -> None:
+    schema = SCHEMA_PATH.read_text(encoding='utf-8')
+    assert 'CREATE TABLE IF NOT EXISTS tracking_events' in schema
+    assert 'metadata JSONB' in schema
 
 
 def test_scraper_queue() -> None:
