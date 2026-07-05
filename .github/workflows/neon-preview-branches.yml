@@ -1,0 +1,101 @@
+name: Create/Delete Neon Branch for Pull Request
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - closed
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  setup:
+    name: Setup
+    outputs:
+      branch: ${{ steps.branch_name.outputs.current_branch }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get branch name
+        id: branch_name
+        uses: tj-actions/branch-names@v8
+
+  create_neon_branch:
+    name: Create Neon Branch
+    outputs:
+      db_url: ${{ steps.create_neon_branch.outputs.db_url }}
+      db_url_with_pooler: ${{ steps.create_neon_branch.outputs.db_url_with_pooler }}
+    needs: setup
+    if: |
+      github.event_name == 'pull_request' && (
+      github.event.action == 'synchronize'
+      || github.event.action == 'opened'
+      || github.event.action == 'reopened')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Get branch expiration date as an env variable
+        run: echo "EXPIRES_AT=$(date -u --date '+14 days' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+
+      - name: Create Neon Branch
+        id: create_neon_branch
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch_name: preview/pr-${{ github.event.number }}-${{ needs.setup.outputs.branch }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+          expires_at: ${{ env.EXPIRES_AT }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install migration dependency
+        working-directory: backend
+        run: python -m pip install "psycopg[binary]>=3.2.0"
+
+      - name: Run schema migration
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ steps.create_neon_branch.outputs.db_url_with_pooler }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          import psycopg
+
+          schema = Path("db/schema.sql").read_text(encoding="utf-8")
+          with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+              with conn.cursor() as cursor:
+                  cursor.execute(schema)
+          PY
+
+      - name: Post Schema Diff Comment to PR
+        uses: neondatabase/schema-diff-action@v1
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          compare_branch: preview/pr-${{ github.event.number }}-${{ needs.setup.outputs.branch }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+  delete_neon_branch:
+    name: Delete Neon Branch
+    needs: setup
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete Neon Branch
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch: preview/pr-${{ github.event.number }}-${{ needs.setup.outputs.branch }}
+          api_key: ${{ secrets.NEON_API_KEY }}
