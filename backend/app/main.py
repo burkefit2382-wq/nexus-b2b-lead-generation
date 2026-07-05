@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
+from .api.leads import router as leads_router
 from .services import config
 from .services.database import run_migrations
 
@@ -48,6 +49,7 @@ app.add_middleware(
     allow_methods=["POST", "OPTIONS"],
     allow_headers=["Content-Type"],
 )
+app.include_router(leads_router, prefix="/leads", tags=["Leads"])
 
 
 @app.get("/health")

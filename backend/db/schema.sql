@@ -41,6 +41,11 @@ CREATE INDEX IF NOT EXISTS leads_visitor_id_idx ON leads(visitor_id);
 CREATE INDEX IF NOT EXISTS leads_created_at_idx ON leads(created_at);
 CREATE INDEX IF NOT EXISTS leads_status_idx ON leads(status);
 
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS intent TEXT;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS location TEXT;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS budget TEXT;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS notes TEXT;
+
 CREATE TABLE IF NOT EXISTS events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   visitor_id UUID REFERENCES visitors(id),

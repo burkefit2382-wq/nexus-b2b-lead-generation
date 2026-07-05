@@ -49,6 +49,27 @@ def test_schema_includes_tracking_events_table() -> None:
     assert 'metadata JSONB' in schema
 
 
+def test_schema_includes_lead_crud_columns() -> None:
+    schema = SCHEMA_PATH.read_text(encoding='utf-8')
+    assert 'ALTER TABLE leads ADD COLUMN IF NOT EXISTS intent TEXT' in schema
+    assert 'ALTER TABLE leads ADD COLUMN IF NOT EXISTS location TEXT' in schema
+    assert 'ALTER TABLE leads ADD COLUMN IF NOT EXISTS budget TEXT' in schema
+    assert 'ALTER TABLE leads ADD COLUMN IF NOT EXISTS notes TEXT' in schema
+
+
+def test_leads_router_is_registered() -> None:
+    paths = client.get('/openapi.json').json()['paths']
+    assert '/leads/' in paths
+    assert 'post' in paths['/leads/']
+    assert 'get' in paths['/leads/']
+
+
+def test_leads_requires_database_url(monkeypatch) -> None:
+    monkeypatch.delenv('DATABASE_URL', raising=False)
+    response = client.get('/leads/')
+    assert response.status_code == 503
+
+
 def test_scraper_queue() -> None:
     response = client.get('/api/scraper-queue')
     assert response.status_code == 200
