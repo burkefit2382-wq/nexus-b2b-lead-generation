@@ -29,6 +29,40 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
+      - key: R2_ACCESS_KEY
+        sync: false
+      - key: R2_SECRET_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_ENDPOINT_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+  - type: web
+    name: nexus-tracking-api
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port 10000"
+    healthCheckPath: "/health"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: R2_ACCESS_KEY
+        sync: false
+      - key: R2_SECRET_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_ENDPOINT_URL
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: TRACKING_ALLOWED_ORIGIN
+        value: "*"
   - type: cron
     name: nexus-osint-scraper-quality
     runtime: python

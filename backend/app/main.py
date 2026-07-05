@@ -1,6 +1,6 @@
 import json
-import os
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -9,11 +9,14 @@ from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
+from .services import config
+from .services.database import run_migrations
+
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 LEAD_CONTROL_CENTER_PATH = STATIC_DIR / "lead-control-center.html"
 APP_ROOT = Path(__file__).resolve().parents[1]
-DATA_DIR = Path(os.environ.get("NEXUS_DATA_DIR", APP_ROOT / "data"))
+DATA_DIR = config.NEXUS_DATA_DIR
 SCRAPER_DIR = DATA_DIR / "scrapers"
 SCRAPER_SUMMARY_PATH = SCRAPER_DIR / "latest_summary.json"
 SCRAPER_STATE_PATH = SCRAPER_DIR / "worker_state.json"
@@ -30,10 +33,17 @@ ALLOWED_EVENT_NAMES = {
     "bad_lead",
 }
 
-app = FastAPI(title="NEXUS B2B Lead Generation API", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    run_migrations(config.DATABASE_URL)
+    yield
+
+
+app = FastAPI(title="NEXUS B2B Lead Generation API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.environ.get("TRACKING_ALLOWED_ORIGIN", "*")],
+    allow_origins=[config.TRACKING_ALLOWED_ORIGIN],
     allow_credentials=False,
     allow_methods=["POST", "OPTIONS"],
     allow_headers=["Content-Type"],
@@ -97,7 +107,7 @@ def create_event(payload: dict[str, Any], response: Response) -> dict[str, str |
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    database_url = os.environ.get("DATABASE_URL", "").strip()
+    database_url = config.DATABASE_URL
     if not database_url:
         response.status_code = 503
         return {"ok": False, "error": "DATABASE_URL is not configured for event tracking."}

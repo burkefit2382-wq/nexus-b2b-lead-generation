@@ -1,0 +1,16 @@
+import os
+from pathlib import Path
+
+
+APP_ROOT = Path(__file__).resolve().parents[2]
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+TRACKING_ALLOWED_ORIGIN = os.environ.get("TRACKING_ALLOWED_ORIGIN", "*")
+NEXUS_DATA_DIR = Path(os.environ.get("NEXUS_DATA_DIR", APP_ROOT / "data"))
+
+R2_ACCESS_KEY = os.environ.get("R2_ACCESS_KEY", "").strip()
+R2_SECRET_KEY = os.environ.get("R2_SECRET_KEY", "").strip()
+R2_BUCKET = os.environ.get("R2_BUCKET", "").strip()
+R2_ENDPOINT_URL = os.environ.get("R2_ENDPOINT_URL", "").strip()
+
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "").strip()
+JWT_SECRET = os.environ.get("JWT_SECRET", "").strip()
