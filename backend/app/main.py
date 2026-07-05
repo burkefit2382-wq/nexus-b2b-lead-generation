@@ -36,7 +36,7 @@ ALLOWED_EVENT_NAMES = {
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    run_migrations(config.DATABASE_URL)
+    run_migrations(config.database_url())
     yield
 
 
@@ -62,6 +62,18 @@ def api_health() -> dict[str, Any]:
         "status": "healthy",
         "service": "nexus-b2b-lead-generation-api",
         "healthz": "/healthz",
+        "checkedAt": utc_now(),
+    }
+
+
+@app.get("/api/config-status")
+def config_status() -> dict[str, bool | str]:
+    return {
+        "ok": True,
+        "databaseUrlConfigured": bool(config.database_url()),
+        "r2Configured": bool(config.R2_ACCESS_KEY and config.R2_SECRET_KEY and config.R2_BUCKET),
+        "resendConfigured": bool(config.RESEND_API_KEY),
+        "jwtConfigured": bool(config.JWT_SECRET),
         "checkedAt": utc_now(),
     }
 
@@ -107,7 +119,7 @@ def create_event(payload: dict[str, Any], response: Response) -> dict[str, str |
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    database_url = config.DATABASE_URL
+    database_url = config.database_url()
     if not database_url:
         response.status_code = 503
         return {"ok": False, "error": "DATABASE_URL is not configured for event tracking."}
