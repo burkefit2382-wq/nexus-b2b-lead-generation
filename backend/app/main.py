@@ -71,9 +71,9 @@ def config_status() -> dict[str, bool | str]:
     return {
         "ok": True,
         "databaseUrlConfigured": bool(config.database_url()),
-        "r2Configured": bool(config.R2_ACCESS_KEY and config.R2_SECRET_KEY and config.R2_BUCKET),
-        "resendConfigured": bool(config.RESEND_API_KEY),
-        "jwtConfigured": bool(config.JWT_SECRET),
+        "r2Configured": config.r2_configured(),
+        "resendConfigured": config.resend_configured(),
+        "jwtConfigured": config.jwt_configured(),
         "checkedAt": utc_now(),
     }
 

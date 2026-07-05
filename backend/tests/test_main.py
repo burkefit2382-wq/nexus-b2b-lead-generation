@@ -32,12 +32,15 @@ def test_api_health() -> None:
 
 def test_config_status_does_not_expose_secret(monkeypatch) -> None:
     monkeypatch.setenv('DATABASE_URL', 'postgresql://user:password@example.com/neondb?sslmode=require')
+    monkeypatch.setenv('JWT_SECRET', 'test-secret-value')
     response = client.get('/api/config-status')
     assert response.status_code == 200
     data = response.json()
     assert data['databaseUrlConfigured'] is True
+    assert data['jwtConfigured'] is True
     assert 'password' not in response.text
     assert 'example.com' not in response.text
+    assert 'test-secret-value' not in response.text
 
 
 def test_schema_includes_tracking_events_table() -> None:

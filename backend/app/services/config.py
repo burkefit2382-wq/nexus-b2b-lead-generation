@@ -19,4 +19,20 @@ def database_url() -> str:
     return os.environ.get("DATABASE_URL", "").strip()
 
 
+def r2_configured() -> bool:
+    return bool(
+        os.environ.get("R2_ACCESS_KEY", "").strip()
+        and os.environ.get("R2_SECRET_KEY", "").strip()
+        and os.environ.get("R2_BUCKET", "").strip()
+    )
+
+
+def resend_configured() -> bool:
+    return bool(os.environ.get("RESEND_API_KEY", "").strip())
+
+
+def jwt_configured() -> bool:
+    return bool(os.environ.get("JWT_SECRET", "").strip())
+
+
 DATABASE_URL = database_url()
