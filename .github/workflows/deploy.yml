@@ -1,0 +1,83 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      (github.event.workflow_run.head_branch == 'dev' || github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate required deployment configuration
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ github.event.workflow_run.head_branch == 'dev' && secrets.RENDER_STG_SERVICE_ID || secrets.RENDER_PROD_SERVICE_ID }}
+          DATABASE_URL: ${{ github.event.workflow_run.head_branch == 'dev' && secrets.DATABASE_URL_STG || secrets.DATABASE_URL_PROD }}
+        run: |
+          test -n "$RENDER_API_KEY" || { echo "RENDER_API_KEY is required"; exit 1; }
+          test -n "$RENDER_SERVICE_ID" || { echo "Render service ID is required"; exit 1; }
+          test -n "$DATABASE_URL" || { echo "Environment database URL is required"; exit 1; }
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install migration dependency
+        run: python -m pip install "psycopg[binary]>=3.2.0"
+
+      - name: Run database migration
+        env:
+          DATABASE_URL: ${{ github.event.workflow_run.head_branch == 'dev' && secrets.DATABASE_URL_STG || secrets.DATABASE_URL_PROD }}
+          DEPLOY_BRANCH: ${{ github.event.workflow_run.head_branch == 'dev' && 'dev' || 'main' }}
+        run: |
+          curl --fail --silent --show-error \
+            "https://raw.githubusercontent.com/${{ github.repository }}/$DEPLOY_BRANCH/backend/db/schema.sql" \
+            -o schema.sql
+
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          import psycopg
+
+          schema_sql = Path("schema.sql").read_text(encoding="utf-8")
+          with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+              with conn.cursor() as cursor:
+                  cursor.execute(schema_sql)
+          PY
+
+      - name: Trigger Render deploy
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ github.event.workflow_run.head_branch == 'dev' && secrets.RENDER_STG_SERVICE_ID || secrets.RENDER_PROD_SERVICE_ID }}
+          DEPLOY_ENVIRONMENT: ${{ github.event.workflow_run.head_branch == 'dev' && 'staging' || 'production' }}
+          DEPLOY_BRANCH: ${{ github.event.workflow_run.head_branch == 'dev' && 'dev' || 'main' }}
+        run: |
+          payload=$(cat <<JSON
+          {
+            "environment": "$DEPLOY_ENVIRONMENT",
+            "branch": "$DEPLOY_BRANCH",
+            "commitSha": "${{ github.event.workflow_run.head_sha }}",
+            "workflowRunId": "${{ github.event.workflow_run.id }}"
+          }
+          JSON
+          )
+          echo "Deployment metadata: $payload"
+
+          response=$(curl --fail-with-body -sS -X POST \
+            "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" \
+            --oauth2-bearer "$RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{}')
+
+          echo "Render deployment response: $response"

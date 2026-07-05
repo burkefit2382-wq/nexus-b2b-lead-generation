@@ -135,6 +135,11 @@ Copy `.env.example` and set values for your environment:
 - `VITE_API_BASE_URL`
 - `API_PORT`
 - `CORS_ORIGINS`
+- `DATABASE_URL_DEV`
+- `DATABASE_URL_STG`
+- `DATABASE_URL_PROD`
+
+See `backend/docs/deployment.md` for Neon schema, Render service setup, CI/CD deployment flow, smoke checks, and rollback steps.
 
 ## Cloudflare Workers deployment
 
