@@ -77,3 +77,23 @@ services:
         value: "Pinellas,Hillsborough,Pasco,Hernando"
       - key: NEXUS_SCRAPER_TARGETS
         value: "real_estate,mortgage,insurance,home_services,professional_cleaning"
+
+staticSites:
+  - name: nexus-frontend
+    buildCommand: "npm --prefix ../frontend ci && npm --prefix ../frontend run build"
+    staticPublishPath: "../frontend/dist"
+    pullRequestPreviewsEnabled: true
+    headers:
+      - path: "/*"
+        name: X-Frame-Options
+        value: DENY
+      - path: "/*"
+        name: X-Content-Type-Options
+        value: nosniff
+    routes:
+      - type: rewrite
+        source: "/*"
+        destination: "/index.html"
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false
