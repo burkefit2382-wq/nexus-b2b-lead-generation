@@ -7,7 +7,7 @@
     "setup:backend": "python -m pip install -r backend/requirements-dev.txt",
     "dev:frontend": "npm --prefix frontend run dev",
     "dev:backend": "uvicorn backend.app.main:app --host 0.0.0.0 --port ${API_PORT:-8000} --reload",
-    "build": "npm --prefix frontend install && npm --prefix frontend run build",
+    "build": "npm --prefix frontend install && npm --prefix frontend run build && python -m pip install -r backend/requirements.txt",
     "test": "PYTHONPATH=. python -m pytest backend/tests",
     "wrangler:login": "wrangler login",
     "cf:deploy": "wrangler deploy",
