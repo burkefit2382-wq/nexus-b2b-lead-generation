@@ -1,10 +1,12 @@
 import json
 import os
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
 
@@ -16,8 +18,26 @@ SCRAPER_DIR = DATA_DIR / "scrapers"
 SCRAPER_SUMMARY_PATH = SCRAPER_DIR / "latest_summary.json"
 SCRAPER_STATE_PATH = SCRAPER_DIR / "worker_state.json"
 SCRAPER_JSONL_PATH = SCRAPER_DIR / "tampa_bay_real_estate_leads.jsonl"
+ALLOWED_EVENT_NAMES = {
+    "page_view",
+    "form_start",
+    "generate_lead",
+    "phone_click",
+    "email_click",
+    "quote_request",
+    "qualified_lead",
+    "closed_deal",
+    "bad_lead",
+}
 
 app = FastAPI(title="NEXUS B2B Lead Generation API", version="0.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[os.environ.get("TRACKING_ALLOWED_ORIGIN", "*")],
+    allow_credentials=False,
+    allow_methods=["POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
+)
 
 
 @app.get("/health")
@@ -70,6 +90,26 @@ def lead_stats() -> dict[str, Any]:
     }
 
 
+@app.post("/api/event", status_code=201)
+def create_event(payload: dict[str, Any], response: Response) -> dict[str, str | bool]:
+    try:
+        event = normalize_event_payload(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    database_url = os.environ.get("DATABASE_URL", "").strip()
+    if not database_url:
+        response.status_code = 503
+        return {"ok": False, "error": "DATABASE_URL is not configured for event tracking."}
+
+    try:
+        saved = save_event(database_url, event)
+    except Exception as exc:  # noqa: BLE001 - tracking clients should receive JSON failures.
+        raise HTTPException(status_code=500, detail=f"Event save failed: {exc}") from exc
+
+    return {"ok": True, **saved}
+
+
 @app.get("/lead-control-center", response_class=HTMLResponse)
 def lead_control_center() -> HTMLResponse:
     """
@@ -98,6 +138,155 @@ def get_mock_leads(limit: int = 5) -> dict[str, list[dict[str, str]]]:
         for index in range(1, safe_limit + 1)
     ]
     return {"leads": leads}
+
+
+def normalize_event_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    event_name = str(payload.get("event_name") or "").strip()
+    if event_name not in ALLOWED_EVENT_NAMES:
+        allowed = ", ".join(sorted(ALLOWED_EVENT_NAMES))
+        raise ValueError(f"event_name must be one of: {allowed}.")
+
+    event_data = payload.get("event_data") or {}
+    if not isinstance(event_data, dict):
+        raise ValueError("event_data must be a JSON object when provided.")
+    event_data = dict(event_data)
+
+    visitor_id, external_visitor_id = uuid_or_external(payload.get("visitor_id"))
+    lead_id, external_lead_id = uuid_or_external(payload.get("lead_id"))
+    if external_visitor_id:
+        event_data["external_visitor_id"] = external_visitor_id
+    if external_lead_id:
+        event_data["external_lead_id"] = external_lead_id
+
+    return {
+        "event_name": event_name,
+        "client_id": clean_text(payload.get("client_id"), 256),
+        "visitor_id": visitor_id,
+        "lead_id": lead_id,
+        "page_url": clean_text(payload.get("page_url"), 2048),
+        "referrer": clean_text(payload.get("referrer"), 2048),
+        "utm_source": clean_text(payload.get("utm_source"), 256),
+        "utm_medium": clean_text(payload.get("utm_medium"), 256),
+        "utm_campaign": clean_text(payload.get("utm_campaign"), 256),
+        "utm_content": clean_text(payload.get("utm_content"), 256),
+        "utm_term": clean_text(payload.get("utm_term"), 256),
+        "gclid": clean_text(payload.get("gclid"), 512),
+        "msclkid": clean_text(payload.get("msclkid"), 512),
+        "fbclid": clean_text(payload.get("fbclid"), 512),
+        "event_data": event_data,
+    }
+
+
+def save_event(database_url: str, event: dict[str, Any]) -> dict[str, str]:
+    import psycopg
+
+    with psycopg.connect(database_url) as conn:
+        with conn.cursor() as cursor:
+            visitor_id = resolve_visitor_id(cursor, event)
+            cursor.execute(
+                """
+                INSERT INTO events (visitor_id, lead_id, event_name, page_url, event_data)
+                VALUES (%s, %s, %s, %s, %s::jsonb)
+                RETURNING id
+                """,
+                (
+                    visitor_id,
+                    resolve_lead_id(cursor, event),
+                    event["event_name"],
+                    event["page_url"],
+                    json.dumps(event["event_data"], sort_keys=True),
+                ),
+            )
+            event_id = cursor.fetchone()[0]
+    return {"event_id": str(event_id), "visitor_id": str(visitor_id)}
+
+
+def resolve_visitor_id(cursor: Any, event: dict[str, Any]) -> uuid.UUID:
+    if event["visitor_id"]:
+        cursor.execute(
+            """
+            INSERT INTO visitors (
+              id, client_id, first_page_url, referrer, utm_source, utm_medium,
+              utm_campaign, utm_content, utm_term, gclid, msclkid, fbclid
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (id) DO UPDATE SET last_seen_at = NOW()
+            RETURNING id
+            """,
+            (
+                event["visitor_id"],
+                event["client_id"],
+                event["page_url"],
+                event["referrer"],
+                event["utm_source"],
+                event["utm_medium"],
+                event["utm_campaign"],
+                event["utm_content"],
+                event["utm_term"],
+                event["gclid"],
+                event["msclkid"],
+                event["fbclid"],
+            ),
+        )
+        return cursor.fetchone()[0]
+
+    if event["client_id"]:
+        cursor.execute("SELECT id FROM visitors WHERE client_id = %s ORDER BY last_seen_at DESC LIMIT 1", (event["client_id"],))
+        row = cursor.fetchone()
+        if row:
+            cursor.execute("UPDATE visitors SET last_seen_at = NOW() WHERE id = %s RETURNING id", (row[0],))
+            return cursor.fetchone()[0]
+
+    cursor.execute(
+        """
+        INSERT INTO visitors (
+          client_id, first_page_url, referrer, utm_source, utm_medium,
+          utm_campaign, utm_content, utm_term, gclid, msclkid, fbclid
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING id
+        """,
+        (
+            event["client_id"],
+            event["page_url"],
+            event["referrer"],
+            event["utm_source"],
+            event["utm_medium"],
+            event["utm_campaign"],
+            event["utm_content"],
+            event["utm_term"],
+            event["gclid"],
+            event["msclkid"],
+            event["fbclid"],
+        ),
+    )
+    return cursor.fetchone()[0]
+
+
+def resolve_lead_id(cursor: Any, event: dict[str, Any]) -> uuid.UUID | None:
+    if not event["lead_id"]:
+        return None
+    cursor.execute("SELECT id FROM leads WHERE id = %s LIMIT 1", (event["lead_id"],))
+    row = cursor.fetchone()
+    if row:
+        return row[0]
+    event["event_data"]["unmatched_lead_id"] = str(event["lead_id"])
+    return None
+
+
+def clean_text(value: Any, max_length: int) -> str:
+    text = "" if value is None else str(value).strip()
+    return text[:max_length]
+
+
+def uuid_or_external(value: Any) -> tuple[uuid.UUID | None, str]:
+    text = clean_text(value, 256)
+    if not text:
+        return None, ""
+    try:
+        return uuid.UUID(text), ""
+    except ValueError:
+        return None, text
 
 
 def utc_now() -> str:

@@ -27,6 +27,8 @@ services:
         sync: false
       - key: PRICE_ID
         sync: false
+      - key: DATABASE_URL
+        sync: false
   - type: cron
     name: nexus-osint-scraper-quality
     runtime: python

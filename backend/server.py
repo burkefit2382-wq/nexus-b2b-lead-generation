@@ -15,6 +15,7 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -51,6 +52,17 @@ SCRAPER_DIR = DATA_DIR / "scrapers"
 SCRAPER_SUMMARY_PATH = SCRAPER_DIR / "latest_summary.json"
 SCRAPER_JSONL_PATH = SCRAPER_DIR / "tampa_bay_real_estate_leads.jsonl"
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+ALLOWED_EVENT_NAMES = {
+    "page_view",
+    "form_start",
+    "generate_lead",
+    "phone_click",
+    "email_click",
+    "quote_request",
+    "qualified_lead",
+    "closed_deal",
+    "bad_lead",
+}
 HQ_FLORIDA_LEAD_COUNT = 137
 HQ_FLORIDA_PRICING = (
     {"quantity": 10, "price": 350, "priceId": "price_tb_leads_10_350"},
@@ -304,12 +316,26 @@ class LaunchHandler(SimpleHTTPRequestHandler):
 
     def end_headers(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/api/event":
+            self.send_header("Access-Control-Allow-Origin", os.environ.get("TRACKING_ALLOWED_ORIGIN", "*"))
+            self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Access-Control-Max-Age", "86400")
+
         if parsed.path in {"", "/", "/index.html", "/dashboard.html", "/lead-control-center.html", "/static/lead-control-center.html"}:
             self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
             self.send_header("Pragma", "no-cache")
             self.send_header("Expires", "0")
 
         super().end_headers()
+
+    def do_OPTIONS(self) -> None:
+        if urllib.parse.urlparse(self.path).path.rstrip("/") == "/api/event":
+            self.send_response(HTTPStatus.NO_CONTENT)
+            self.end_headers()
+            return
+        self.send_response(HTTPStatus.NOT_FOUND)
+        self.end_headers()
 
     def do_GET(self) -> None:
         if self.path.rstrip("/") == "/healthz":
@@ -391,6 +417,10 @@ class LaunchHandler(SimpleHTTPRequestHandler):
 
         if route == "/api/fulfillment-status":
             self.handle_fulfillment_status()
+            return
+
+        if route == "/api/event":
+            self.handle_event()
             return
 
         if route == "/api/lead-package-request":
@@ -644,6 +674,30 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             },
             HTTPStatus.OK,
         )
+
+    def handle_event(self) -> None:
+        try:
+            payload = self.read_json_body(max_length=32768)
+            event = self.normalize_event_payload(payload)
+        except ValueError as exc:
+            self.send_json({"ok": False, "error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+
+        database_url = os.environ.get("DATABASE_URL", "").strip()
+        if not database_url:
+            self.send_json(
+                {"ok": False, "error": "DATABASE_URL is not configured for event tracking."},
+                HTTPStatus.SERVICE_UNAVAILABLE,
+            )
+            return
+
+        try:
+            saved = self.save_event(database_url, event)
+        except Exception as exc:  # noqa: BLE001 - return a JSON error instead of dropping browser events silently.
+            self.send_json({"ok": False, "error": f"Event save failed: {exc}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+
+        self.send_json({"ok": True, **saved}, HTTPStatus.CREATED)
 
     def handle_fulfillment_status(self) -> None:
         all_records = self.read_fulfillment_records()
@@ -1103,8 +1157,8 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         code = str(currency or "usd").upper()
         return f"${cents / 100:,.2f} {code}"
 
-    def read_json_body(self) -> dict[str, Any]:
-        raw_body = self.read_raw_body(max_length=8192)
+    def read_json_body(self, max_length: int = 8192) -> dict[str, Any]:
+        raw_body = self.read_raw_body(max_length=max_length)
         raw = raw_body.decode("utf-8")
         try:
             payload = json.loads(raw)
@@ -1129,6 +1183,152 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(body)
+
+    def normalize_event_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        event_name = str(payload.get("event_name") or "").strip()
+        if event_name not in ALLOWED_EVENT_NAMES:
+            allowed = ", ".join(sorted(ALLOWED_EVENT_NAMES))
+            raise ValueError(f"event_name must be one of: {allowed}.")
+
+        event_data = payload.get("event_data") or {}
+        if not isinstance(event_data, dict):
+            raise ValueError("event_data must be a JSON object when provided.")
+        event_data = dict(event_data)
+
+        visitor_id, external_visitor_id = self.uuid_or_external(payload.get("visitor_id"))
+        lead_id, external_lead_id = self.uuid_or_external(payload.get("lead_id"))
+        if external_visitor_id:
+            event_data["external_visitor_id"] = external_visitor_id
+        if external_lead_id:
+            event_data["external_lead_id"] = external_lead_id
+
+        return {
+            "event_name": event_name,
+            "client_id": self.clean_text(payload.get("client_id"), 256),
+            "visitor_id": visitor_id,
+            "lead_id": lead_id,
+            "page_url": self.clean_text(payload.get("page_url"), 2048),
+            "referrer": self.clean_text(payload.get("referrer"), 2048),
+            "utm_source": self.clean_text(payload.get("utm_source"), 256),
+            "utm_medium": self.clean_text(payload.get("utm_medium"), 256),
+            "utm_campaign": self.clean_text(payload.get("utm_campaign"), 256),
+            "utm_content": self.clean_text(payload.get("utm_content"), 256),
+            "utm_term": self.clean_text(payload.get("utm_term"), 256),
+            "gclid": self.clean_text(payload.get("gclid"), 512),
+            "msclkid": self.clean_text(payload.get("msclkid"), 512),
+            "fbclid": self.clean_text(payload.get("fbclid"), 512),
+            "event_data": event_data,
+        }
+
+    def save_event(self, database_url: str, event: dict[str, Any]) -> dict[str, str]:
+        import psycopg
+
+        with psycopg.connect(database_url) as conn:
+            with conn.cursor() as cursor:
+                visitor_id = self.resolve_visitor_id(cursor, event)
+                cursor.execute(
+                    """
+                    INSERT INTO events (visitor_id, lead_id, event_name, page_url, event_data)
+                    VALUES (%s, %s, %s, %s, %s::jsonb)
+                    RETURNING id
+                    """,
+                    (
+                        visitor_id,
+                        self.resolve_lead_id(cursor, event),
+                        event["event_name"],
+                        event["page_url"],
+                        json.dumps(event["event_data"], sort_keys=True),
+                    ),
+                )
+                event_id = cursor.fetchone()[0]
+        return {"event_id": str(event_id), "visitor_id": str(visitor_id)}
+
+    def resolve_visitor_id(self, cursor: Any, event: dict[str, Any]) -> uuid.UUID:
+        if event["visitor_id"]:
+            cursor.execute(
+                """
+                INSERT INTO visitors (
+                  id, client_id, first_page_url, referrer, utm_source, utm_medium,
+                  utm_campaign, utm_content, utm_term, gclid, msclkid, fbclid
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (id) DO UPDATE SET last_seen_at = NOW()
+                RETURNING id
+                """,
+                (
+                    event["visitor_id"],
+                    event["client_id"],
+                    event["page_url"],
+                    event["referrer"],
+                    event["utm_source"],
+                    event["utm_medium"],
+                    event["utm_campaign"],
+                    event["utm_content"],
+                    event["utm_term"],
+                    event["gclid"],
+                    event["msclkid"],
+                    event["fbclid"],
+                ),
+            )
+            return cursor.fetchone()[0]
+
+        if event["client_id"]:
+            cursor.execute(
+                "SELECT id FROM visitors WHERE client_id = %s ORDER BY last_seen_at DESC LIMIT 1",
+                (event["client_id"],),
+            )
+            row = cursor.fetchone()
+            if row:
+                cursor.execute("UPDATE visitors SET last_seen_at = NOW() WHERE id = %s RETURNING id", (row[0],))
+                return cursor.fetchone()[0]
+
+        cursor.execute(
+            """
+            INSERT INTO visitors (
+              client_id, first_page_url, referrer, utm_source, utm_medium,
+              utm_campaign, utm_content, utm_term, gclid, msclkid, fbclid
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (
+                event["client_id"],
+                event["page_url"],
+                event["referrer"],
+                event["utm_source"],
+                event["utm_medium"],
+                event["utm_campaign"],
+                event["utm_content"],
+                event["utm_term"],
+                event["gclid"],
+                event["msclkid"],
+                event["fbclid"],
+            ),
+        )
+        return cursor.fetchone()[0]
+
+    def resolve_lead_id(self, cursor: Any, event: dict[str, Any]) -> uuid.UUID | None:
+        if not event["lead_id"]:
+            return None
+        cursor.execute("SELECT id FROM leads WHERE id = %s LIMIT 1", (event["lead_id"],))
+        row = cursor.fetchone()
+        if row:
+            return row[0]
+        event["event_data"]["unmatched_lead_id"] = str(event["lead_id"])
+        return None
+
+    def clean_text(self, value: Any, max_length: int) -> str:
+        text = "" if value is None else str(value).strip()
+        return text[:max_length]
+
+    def uuid_or_external(self, value: Any) -> tuple[uuid.UUID | None, str]:
+        text = self.clean_text(value, 256)
+        if not text:
+            return None, ""
+        try:
+            return uuid.UUID(text), ""
+        except ValueError:
+            return None, text
 
     def try_send_resend_notification(self, record: dict[str, Any]) -> str:
         if not os.environ.get("RESEND_API_KEY"):
