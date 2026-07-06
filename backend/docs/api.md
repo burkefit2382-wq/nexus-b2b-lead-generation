@@ -52,7 +52,7 @@ Captures lead package request metadata and sends an internal notification when R
 
 `GET /api/hubspot-status`
 
-Returns whether `HUBSPOT_ACCESS_TOKEN` is configured.
+Returns whether a HubSpot token is configured. Nexus checks `HUBSPOT_ACCESS_TOKEN`, `HUBSPOT_PRIVATE_APP_TOKEN`, then `HUBSPOT_API_KEY`.
 
 `POST /api/hubspot-export`
 

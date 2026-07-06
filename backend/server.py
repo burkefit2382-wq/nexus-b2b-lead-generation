@@ -694,10 +694,10 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             self.send_json({"ok": False, "error": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
 
-        token = os.environ.get("HUBSPOT_ACCESS_TOKEN", "").strip()
+        token = self.hubspot_access_token()
         if not token:
             self.send_json(
-                {"ok": False, "error": "HubSpot is not configured.", "missing": ["HUBSPOT_ACCESS_TOKEN"]},
+                {"ok": False, "error": "HubSpot is not configured.", "missing": self.hubspot_missing_token_names()},
                 HTTPStatus.SERVICE_UNAVAILABLE,
             )
             return
@@ -1237,12 +1237,28 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         return f"${cents / 100:,.2f} {code}"
 
     def hubspot_status(self) -> dict[str, Any]:
-        token = os.environ.get("HUBSPOT_ACCESS_TOKEN", "").strip()
+        token_name, token = self.hubspot_token_source()
+        portal_id = os.environ.get("HUBSPOT_PORTAL_ID", "").strip()
         return {
             "configured": bool(token),
-            "missing": [] if token else ["HUBSPOT_ACCESS_TOKEN"],
+            "configuredBy": token_name if token else "",
+            "portalIdConfigured": bool(portal_id),
+            "missing": [] if token else self.hubspot_missing_token_names(),
             "endpoint": "https://api.hubapi.com/crm/v3/objects/contacts",
         }
+
+    def hubspot_access_token(self) -> str:
+        return self.hubspot_token_source()[1]
+
+    def hubspot_token_source(self) -> tuple[str, str]:
+        for name in ("HUBSPOT_ACCESS_TOKEN", "HUBSPOT_PRIVATE_APP_TOKEN", "HUBSPOT_API_KEY"):
+            value = os.environ.get(name, "").strip()
+            if value:
+                return name, value
+        return "", ""
+
+    def hubspot_missing_token_names(self) -> list[str]:
+        return ["HUBSPOT_ACCESS_TOKEN", "HUBSPOT_PRIVATE_APP_TOKEN", "HUBSPOT_API_KEY"]
 
     def hubspot_contact_properties(self, lead: dict[str, Any]) -> dict[str, str]:
         email = str(lead.get("email") or lead.get("enriched_email") or "").strip().lower()
