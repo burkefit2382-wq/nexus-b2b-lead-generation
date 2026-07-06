@@ -25,7 +25,12 @@ RESEND_FROM=Nexus <sales@nexuscloud.sh>
 WAITLIST_NOTIFY_TO=...
 LLAMA_CHAT_ENDPOINT=...
 LLAMA_CHAT_MODEL=llama3
+HUBSPOT_ACCESS_TOKEN=...
 ```
+
+## HubSpot CRM
+
+Create a HubSpot private app and grant contact read/write scopes, then set the private app token as `HUBSPOT_ACCESS_TOKEN` in Render or your local environment. Nexus sends the token only from the server using a Bearer Authorization header.
 
 ## Cloudflare Tunnel
 
@@ -64,4 +69,3 @@ checkout.session.completed
 ```
 
 Store the webhook signing secret as `STRIPE_WEBHOOK_SECRET`.
-

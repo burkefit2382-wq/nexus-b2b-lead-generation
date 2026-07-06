@@ -88,6 +88,7 @@ Deploy the contents of `launch_site/` as the site root. Use a Python-capable hos
    - `STRIPE_API_VERSION=2026-06-24.dahlia`
    - `STRIPE_SECRET_KEY`
    - `STRIPE_WEBHOOK_SECRET`
+   - `HUBSPOT_ACCESS_TOKEN` for CRM contact export
    - `PRICE_ID` only if you want a default fallback price when no button price is sent
 5. Health check path: `/healthz`.
 
@@ -105,6 +106,7 @@ Deploy the contents of `launch_site/` as the site root. Use a Python-capable hos
    - `STRIPE_API_VERSION=2026-06-24.dahlia`
    - `STRIPE_SECRET_KEY`
    - `STRIPE_WEBHOOK_SECRET`
+   - `HUBSPOT_ACCESS_TOKEN` for CRM contact export
    - `PRICE_ID` only if you want a default fallback price when no button price is sent
 4. Railway provides `PORT`; `server.py` reads it automatically.
 

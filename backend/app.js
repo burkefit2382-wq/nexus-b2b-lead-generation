@@ -17,6 +17,9 @@ const testFulfillmentList = document.querySelector("#testFulfillmentList");
 const osintReportForm = document.querySelector("#osintReportForm");
 const osintReportNote = document.querySelector("#osintReportNote");
 const osintReportResults = document.querySelector("#osintReportResults");
+const hubspotStatus = document.querySelector("#hubspotStatus");
+const hubspotExportDemo = document.querySelector("#hubspotExportDemo");
+const hubspotResults = document.querySelector("#hubspotResults");
 const nexusApiBaseUrl = (window.NEXUS_API_BASE_URL || "https://nexus-tracking-api.onrender.com").replace(/\/$/, "");
 
 window.addEventListener("hashchange", renderPage);
@@ -24,6 +27,7 @@ window.addEventListener("load", () => {
   renderPage();
   loadRevenueStatus();
   loadFulfillmentStatus();
+  loadHubspotStatus();
 });
 renderPage();
 
@@ -241,6 +245,26 @@ async function loadFulfillmentStatus() {
   }
 }
 
+async function loadHubspotStatus() {
+  if (!hubspotStatus) {
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/hubspot-status");
+    const body = await response.json();
+    if (!response.ok) {
+      throw new Error(body.error || "Unable to load HubSpot status.");
+    }
+
+    hubspotStatus.textContent = body.hubspot.configured
+      ? "HubSpot CRM is configured. Demo export is ready."
+      : `HubSpot needs: ${body.hubspot.missing.join(", ")}.`;
+  } catch (error) {
+    hubspotStatus.textContent = error.message || "HubSpot status unavailable.";
+  }
+}
+
 function fulfillmentMetric(value, label) {
   return `<article><strong>${escapeHtml(value)}</strong><span>${escapeHtml(label)}</span></article>`;
 }
@@ -406,6 +430,45 @@ runEnrichment?.addEventListener("click", async () => {
     pipelineResults.innerHTML = resultCard("Error", "Pipeline unavailable", "Restart the launch server and try again.");
   } finally {
     runEnrichment.disabled = false;
+  }
+});
+
+hubspotExportDemo?.addEventListener("click", async () => {
+  hubspotExportDemo.disabled = true;
+  hubspotResults.innerHTML = resultCard("Exporting", "Sending demo contact to HubSpot", "Creating or updating a CRM contact by email.");
+
+  try {
+    const response = await fetch("/api/hubspot-export", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        lead: {
+          email: "demo.agent@example.com",
+          contactName: "Demo Agent",
+          company: "NEXUS Tampa Bay Pilot",
+          phone: "+1-727-555-0199",
+          website: "https://nexuscloud.sh",
+          city: "St Petersburg",
+          state: "FL",
+          postcode: "33709",
+          street: "St Pete, FL",
+        },
+      }),
+    });
+    const body = await response.json();
+    if (!response.ok) {
+      throw new Error(body.error || "HubSpot export failed.");
+    }
+
+    hubspotResults.innerHTML = [
+      resultCard("HubSpot", body.message, `Contact ID: ${body.hubspot.id}`),
+      resultCard("Action", body.hubspot.action, "Nexus logged the CRM export event server-side."),
+    ].join("");
+  } catch (error) {
+    hubspotResults.innerHTML = resultCard("Setup needed", "HubSpot export unavailable", error.message || "Check HUBSPOT_ACCESS_TOKEN.");
+  } finally {
+    hubspotExportDemo.disabled = false;
+    loadHubspotStatus();
   }
 });
 

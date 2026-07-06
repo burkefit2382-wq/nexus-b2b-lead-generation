@@ -91,6 +91,7 @@ RESEND_FROM=Nexus <sales@verified-domain.com>
 WAITLIST_NOTIFY_TO=ops@example.com
 LLAMA_CHAT_ENDPOINT=https://your-llama-compatible-endpoint
 LLAMA_CHAT_MODEL=llama3
+HUBSPOT_ACCESS_TOKEN=your_hubspot_private_app_token
 ```
 
 ## Monetization Catalog
@@ -135,4 +136,3 @@ See [SECURITY.md](SECURITY.md) and [docs/security.md](docs/security.md).
 ## Status
 
 NEXUS is live, checkout-enabled, and configured for continued hardening. The next enterprise milestones are multi-tenant accounts, durable database storage, RBAC, audit-log export, and SLA-backed worker orchestration.
-
