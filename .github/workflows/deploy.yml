@@ -1,0 +1,136 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+    branches:
+      - main
+      - dev
+
+permissions: {}
+
+jobs:
+  deploy-staging:
+    name: Deploy to Staging (Render)
+    runs-on: ubuntu-latest
+    permissions: {}
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'dev'
+    environment:
+      name: staging
+      url: ${{ steps.deploy-backend.outputs.deploy_url }}
+
+    steps:
+      - name: Trigger Render staging backend deploy
+        id: deploy-backend
+        env:
+          RTOKEN: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ secrets.RENDER_STG_SERVICE_ID }}
+          COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          echo "Deploying backend to staging service=${SERVICE_ID} sha=${COMMIT_SHA}"
+          RESPONSE=$(curl --silent --show-error --fail \
+            --request POST \
+            --url "https://api.render.com/v1/services/${SERVICE_ID}/deploys" \
+            --oauth2-bearer "${RTOKEN}" \
+            --header "Content-Type: application/json" \
+            --data '{"clearCache": "do_not_clear"}')
+          echo "Response: ${RESPONSE}"
+          DEPLOY_ID=$(echo "${RESPONSE}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('id','unknown'))")
+          DEPLOY_URL=$(echo "${RESPONSE}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('serviceDetails',{}).get('url',''))")
+          echo "deploy_id=${DEPLOY_ID}" >> "${GITHUB_OUTPUT}"
+          echo "deploy_url=${DEPLOY_URL}" >> "${GITHUB_OUTPUT}"
+          echo "Staging backend deploy triggered: id=${DEPLOY_ID}"
+
+      - name: Trigger Render staging frontend deploy
+        env:
+          RTOKEN: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ secrets.RENDER_STG_FRONTEND_SERVICE_ID }}
+        run: |
+          if [ -z "${SERVICE_ID}" ]; then
+            echo "No staging frontend service ID configured, skipping."
+            exit 0
+          fi
+          echo "Deploying frontend to staging service=${SERVICE_ID}"
+          curl --silent --show-error --fail \
+            --request POST \
+            --url "https://api.render.com/v1/services/${SERVICE_ID}/deploys" \
+            --oauth2-bearer "${RTOKEN}" \
+            --header "Content-Type: application/json" \
+            --data '{"clearCache": "do_not_clear"}'
+
+      - name: Log staging deployment
+        env:
+          COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
+          DEPLOY_ID: ${{ steps.deploy-backend.outputs.deploy_id }}
+        run: |
+          echo "=== STAGING DEPLOYMENT ==="
+          echo "Branch  : dev"
+          echo "Commit  : ${COMMIT_SHA}"
+          echo "DeployID: ${DEPLOY_ID}"
+          echo "Time    : $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+
+  deploy-production:
+    name: Deploy to Production (Render)
+    runs-on: ubuntu-latest
+    permissions: {}
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    environment:
+      name: production
+      url: ${{ steps.deploy-backend.outputs.deploy_url }}
+
+    steps:
+      - name: Trigger Render production backend deploy
+        id: deploy-backend
+        env:
+          RTOKEN: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ secrets.RENDER_PROD_SERVICE_ID }}
+          COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          echo "Deploying backend to production service=${SERVICE_ID} sha=${COMMIT_SHA}"
+          RESPONSE=$(curl --silent --show-error --fail \
+            --request POST \
+            --url "https://api.render.com/v1/services/${SERVICE_ID}/deploys" \
+            --oauth2-bearer "${RTOKEN}" \
+            --header "Content-Type: application/json" \
+            --data '{"clearCache": "do_not_clear"}')
+          echo "Response: ${RESPONSE}"
+          DEPLOY_ID=$(echo "${RESPONSE}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('id','unknown'))")
+          DEPLOY_URL=$(echo "${RESPONSE}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('serviceDetails',{}).get('url',''))")
+          echo "deploy_id=${DEPLOY_ID}" >> "${GITHUB_OUTPUT}"
+          echo "deploy_url=${DEPLOY_URL}" >> "${GITHUB_OUTPUT}"
+          echo "Production backend deploy triggered: id=${DEPLOY_ID}"
+
+      - name: Trigger Render production frontend deploy
+        env:
+          RTOKEN: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ secrets.RENDER_PROD_FRONTEND_SERVICE_ID }}
+        run: |
+          if [ -z "${SERVICE_ID}" ]; then
+            echo "No production frontend service ID configured, skipping."
+            exit 0
+          fi
+          echo "Deploying frontend to production service=${SERVICE_ID}"
+          curl --silent --show-error --fail \
+            --request POST \
+            --url "https://api.render.com/v1/services/${SERVICE_ID}/deploys" \
+            --oauth2-bearer "${RTOKEN}" \
+            --header "Content-Type: application/json" \
+            --data '{"clearCache": "do_not_clear"}'
+
+      - name: Log production deployment
+        env:
+          COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
+          DEPLOY_ID: ${{ steps.deploy-backend.outputs.deploy_id }}
+        run: |
+          echo "=== PRODUCTION DEPLOYMENT ==="
+          echo "Branch  : main"
+          echo "Commit  : ${COMMIT_SHA}"
+          echo "DeployID: ${DEPLOY_ID}"
+          echo "Time    : $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          echo "Tag release in GitHub after verifying health checks."

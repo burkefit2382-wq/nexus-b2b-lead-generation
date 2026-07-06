@@ -24,7 +24,9 @@ def get_engine() -> Engine:
     if _engine is None:
         database_url = sqlalchemy_database_url()
         if not database_url:
-            raise HTTPException(status_code=503, detail="DATABASE_URL is not configured.")
+            raise HTTPException(
+                status_code=503, detail="DATABASE_URL is not configured."
+            )
         _engine = create_engine(database_url, pool_pre_ping=True)
     return _engine
 
@@ -32,7 +34,9 @@ def get_engine() -> Engine:
 def get_session_local() -> sessionmaker[Session]:
     global _session_local
     if _session_local is None:
-        _session_local = sessionmaker(autocommit=False, autoflush=False, bind=get_engine())
+        _session_local = sessionmaker(
+            autocommit=False, autoflush=False, bind=get_engine()
+        )
     return _session_local
 
 

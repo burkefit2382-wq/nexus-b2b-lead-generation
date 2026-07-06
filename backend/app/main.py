@@ -83,7 +83,9 @@ def config_status() -> dict[str, bool | str]:
 @app.get("/api/scraper-queue")
 def scraper_queue() -> dict[str, Any]:
     summary = load_json(SCRAPER_SUMMARY_PATH)
-    errors = summary.get("errors", []) if isinstance(summary.get("errors"), list) else []
+    errors = (
+        summary.get("errors", []) if isinstance(summary.get("errors"), list) else []
+    )
     return {
         "ok": True,
         "status": "Queue Idle",
@@ -124,12 +126,17 @@ def create_event(payload: dict[str, Any], response: Response) -> dict[str, str |
     database_url = config.database_url()
     if not database_url:
         response.status_code = 503
-        return {"ok": False, "error": "DATABASE_URL is not configured for event tracking."}
+        return {
+            "ok": False,
+            "error": "DATABASE_URL is not configured for event tracking.",
+        }
 
     try:
         saved = save_event(database_url, event)
     except Exception as exc:  # noqa: BLE001 - tracking clients should receive JSON failures.
-        raise HTTPException(status_code=500, detail=f"Event save failed: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"Event save failed: {exc}"
+        ) from exc
 
     return {"ok": True, **saved}
 
@@ -255,10 +262,16 @@ def resolve_visitor_id(cursor: Any, event: dict[str, Any]) -> uuid.UUID:
         return cursor.fetchone()[0]
 
     if event["client_id"]:
-        cursor.execute("SELECT id FROM visitors WHERE client_id = %s ORDER BY last_seen_at DESC LIMIT 1", (event["client_id"],))
+        cursor.execute(
+            "SELECT id FROM visitors WHERE client_id = %s ORDER BY last_seen_at DESC LIMIT 1",
+            (event["client_id"],),
+        )
         row = cursor.fetchone()
         if row:
-            cursor.execute("UPDATE visitors SET last_seen_at = NOW() WHERE id = %s RETURNING id", (row[0],))
+            cursor.execute(
+                "UPDATE visitors SET last_seen_at = NOW() WHERE id = %s RETURNING id",
+                (row[0],),
+            )
             return cursor.fetchone()[0]
 
     cursor.execute(

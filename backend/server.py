@@ -317,13 +317,25 @@ class LaunchHandler(SimpleHTTPRequestHandler):
     def end_headers(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == "/api/event":
-            self.send_header("Access-Control-Allow-Origin", os.environ.get("TRACKING_ALLOWED_ORIGIN", "*"))
+            self.send_header(
+                "Access-Control-Allow-Origin",
+                os.environ.get("TRACKING_ALLOWED_ORIGIN", "*"),
+            )
             self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
             self.send_header("Access-Control-Allow-Headers", "Content-Type")
             self.send_header("Access-Control-Max-Age", "86400")
 
-        if parsed.path in {"", "/", "/index.html", "/dashboard.html", "/lead-control-center.html", "/static/lead-control-center.html"}:
-            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        if parsed.path in {
+            "",
+            "/",
+            "/index.html",
+            "/dashboard.html",
+            "/lead-control-center.html",
+            "/static/lead-control-center.html",
+        }:
+            self.send_header(
+                "Cache-Control", "no-store, no-cache, must-revalidate, max-age=0"
+            )
             self.send_header("Pragma", "no-cache")
             self.send_header("Expires", "0")
 
@@ -339,7 +351,9 @@ class LaunchHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:
         if self.path.rstrip("/") == "/healthz":
-            self.send_json({"ok": True, "service": "leadgen-launch-site"}, HTTPStatus.OK)
+            self.send_json(
+                {"ok": True, "service": "leadgen-launch-site"}, HTTPStatus.OK
+            )
             return
 
         parsed = urllib.parse.urlparse(self.path)
@@ -371,7 +385,12 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         if parsed.path.rstrip("/") == "/dashboard":
             self.path = "/dashboard.html"
 
-        if parsed.path.rstrip("/") in {"/lead-control-center", "/control-center", "/control", "/static/lead-control-center.html"}:
+        if parsed.path.rstrip("/") in {
+            "/lead-control-center",
+            "/control-center",
+            "/control",
+            "/static/lead-control-center.html",
+        }:
             self.path = "/lead-control-center.html"
 
         self.apply_index_fallback()
@@ -449,7 +468,9 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         company = str(payload.get("company", "")).strip()
 
         if not EMAIL_RE.match(email):
-            self.send_json({"error": "Enter a valid email address."}, HTTPStatus.BAD_REQUEST)
+            self.send_json(
+                {"error": "Enter a valid email address."}, HTTPStatus.BAD_REQUEST
+            )
             return
 
         record = {
@@ -483,7 +504,9 @@ class LaunchHandler(SimpleHTTPRequestHandler):
 
         prompt = str(payload.get("prompt", "")).strip()
         if not prompt:
-            self.send_json({"error": "Enter a message for Nexus AI."}, HTTPStatus.BAD_REQUEST)
+            self.send_json(
+                {"error": "Enter a message for Nexus AI."}, HTTPStatus.BAD_REQUEST
+            )
             return
 
         if len(prompt) > 2000:
@@ -510,7 +533,9 @@ class LaunchHandler(SimpleHTTPRequestHandler):
 
         lead = payload.get("lead")
         if not isinstance(lead, dict):
-            self.send_json({"error": "Request requires a lead object."}, HTTPStatus.BAD_REQUEST)
+            self.send_json(
+                {"error": "Request requires a lead object."}, HTTPStatus.BAD_REQUEST
+            )
             return
 
         result = self.enrich_and_score_lead(lead)
@@ -525,7 +550,9 @@ class LaunchHandler(SimpleHTTPRequestHandler):
 
         lead = payload.get("lead")
         if not isinstance(lead, dict):
-            self.send_json({"error": "Request requires a lead object."}, HTTPStatus.BAD_REQUEST)
+            self.send_json(
+                {"error": "Request requires a lead object."}, HTTPStatus.BAD_REQUEST
+            )
             return
 
         enriched = self.enrich_and_score_lead(lead)
@@ -554,23 +581,44 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             "digital": "Digital Footprint Report",
         }
         if report_type not in allowed_types:
-            self.send_json({"error": "Choose a valid OSINT report type."}, HTTPStatus.BAD_REQUEST)
+            self.send_json(
+                {"error": "Choose a valid OSINT report type."}, HTTPStatus.BAD_REQUEST
+            )
             return
 
         if not subject or len(subject) > 160:
-            self.send_json({"error": "Enter a report subject under 160 characters."}, HTTPStatus.BAD_REQUEST)
+            self.send_json(
+                {"error": "Enter a report subject under 160 characters."},
+                HTTPStatus.BAD_REQUEST,
+            )
             return
 
         if not EMAIL_RE.match(requester_email):
-            self.send_json({"error": "Enter a valid requester email."}, HTTPStatus.BAD_REQUEST)
+            self.send_json(
+                {"error": "Enter a valid requester email."}, HTTPStatus.BAD_REQUEST
+            )
             return
 
         if not authorized:
-            self.send_json({"error": "Authorization confirmation is required before OSINT intake."}, HTTPStatus.BAD_REQUEST)
+            self.send_json(
+                {
+                    "error": "Authorization confirmation is required before OSINT intake."
+                },
+                HTTPStatus.BAD_REQUEST,
+            )
             return
 
         unsafe_text = " ".join([subject, use_case, scope_notes]).lower()
-        blocked_terms = ("live location", "track phone", "phone location", "gps", "stalk", "password", "bypass", "hack")
+        blocked_terms = (
+            "live location",
+            "track phone",
+            "phone location",
+            "gps",
+            "stalk",
+            "password",
+            "bypass",
+            "hack",
+        )
         if any(term in unsafe_text for term in blocked_terms):
             self.send_json(
                 {
@@ -588,7 +636,9 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             "requesterEmail": requester_email,
             "useCase": use_case or "Authorized public-source due diligence",
             "scopeNotes": scope_notes,
-            "publicUrls": [item.strip() for item in public_urls.splitlines() if item.strip()][:8],
+            "publicUrls": [
+                item.strip() for item in public_urls.splitlines() if item.strip()
+            ][:8],
             "authorized": authorized,
             "status": "generated_safe_preview",
             "capturedAt": datetime.now(timezone.utc).isoformat(),
@@ -656,7 +706,9 @@ class LaunchHandler(SimpleHTTPRequestHandler):
 
     def handle_lead_stats(self) -> None:
         summary = self.load_json_file(SCRAPER_SUMMARY_PATH)
-        total = int(summary.get("total_records") or self.count_lines(SCRAPER_JSONL_PATH) or 0)
+        total = int(
+            summary.get("total_records") or self.count_lines(SCRAPER_JSONL_PATH) or 0
+        )
         last_run_at = str(summary.get("last_run_at") or "")
         new_records = int(summary.get("new_records") or 0)
         today = new_records if self.is_today(last_run_at) else 0
@@ -686,7 +738,10 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         database_url = os.environ.get("DATABASE_URL", "").strip()
         if not database_url:
             self.send_json(
-                {"ok": False, "error": "DATABASE_URL is not configured for event tracking."},
+                {
+                    "ok": False,
+                    "error": "DATABASE_URL is not configured for event tracking.",
+                },
                 HTTPStatus.SERVICE_UNAVAILABLE,
             )
             return
@@ -694,26 +749,47 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         try:
             saved = self.save_event(database_url, event)
         except Exception as exc:  # noqa: BLE001 - return a JSON error instead of dropping browser events silently.
-            self.send_json({"ok": False, "error": f"Event save failed: {exc}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            self.send_json(
+                {"ok": False, "error": f"Event save failed: {exc}"},
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+            )
             return
 
         self.send_json({"ok": True, **saved}, HTTPStatus.CREATED)
 
     def handle_fulfillment_status(self) -> None:
         all_records = self.read_fulfillment_records()
-        records = [record for record in all_records if not self.is_smoke_fulfillment_record(record)]
-        test_records = [record for record in all_records if self.is_smoke_fulfillment_record(record)]
+        records = [
+            record
+            for record in all_records
+            if not self.is_smoke_fulfillment_record(record)
+        ]
+        test_records = [
+            record for record in all_records if self.is_smoke_fulfillment_record(record)
+        ]
         total = len(records)
         delivered = sum(1 for record in records if record.get("status") == "delivered")
-        pending = sum(1 for record in records if str(record.get("status", "")).startswith("pending"))
-        manual = sum(1 for record in records if "manual" in str(record.get("status", "")))
+        pending = sum(
+            1
+            for record in records
+            if str(record.get("status", "")).startswith("pending")
+        )
+        manual = sum(
+            1 for record in records if "manual" in str(record.get("status", ""))
+        )
         revenue_cents = sum(
             int(record.get("amountTotal") or 0)
             for record in records
             if record.get("paymentStatus") in {"paid", "no_payment_required"}
         )
-        test_pending = sum(1 for record in test_records if str(record.get("status", "")).startswith("pending"))
-        test_manual = sum(1 for record in test_records if "manual" in str(record.get("status", "")))
+        test_pending = sum(
+            1
+            for record in test_records
+            if str(record.get("status", "")).startswith("pending")
+        )
+        test_manual = sum(
+            1 for record in test_records if "manual" in str(record.get("status", ""))
+        )
         test_revenue_cents = sum(
             int(record.get("amountTotal") or 0)
             for record in test_records
@@ -721,7 +797,9 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         )
 
         recent = [self.fulfillment_record_summary(record) for record in records[-10:]]
-        test_recent = [self.fulfillment_record_summary(record) for record in test_records[-10:]]
+        test_recent = [
+            self.fulfillment_record_summary(record) for record in test_records[-10:]
+        ]
 
         self.send_json(
             {
@@ -756,14 +834,21 @@ class LaunchHandler(SimpleHTTPRequestHandler):
 
         email = str(payload.get("email", "")).strip().lower()
         quantity = int(payload.get("quantity", 0) or 0)
-        tier = next((item for item in HQ_FLORIDA_PRICING if item["quantity"] == quantity), None)
+        tier = next(
+            (item for item in HQ_FLORIDA_PRICING if item["quantity"] == quantity), None
+        )
 
         if not EMAIL_RE.match(email):
-            self.send_json({"error": "Enter a valid delivery email."}, HTTPStatus.BAD_REQUEST)
+            self.send_json(
+                {"error": "Enter a valid delivery email."}, HTTPStatus.BAD_REQUEST
+            )
             return
 
         if tier is None:
-            self.send_json({"error": "Choose a valid HQ Florida lead package."}, HTTPStatus.BAD_REQUEST)
+            self.send_json(
+                {"error": "Choose a valid HQ Florida lead package."},
+                HTTPStatus.BAD_REQUEST,
+            )
             return
 
         record = {
@@ -851,7 +936,9 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             line_items = [{"price": resolved_price_id, "quantity": 1}]
             setup_price_id = catalog_item.get("setupPriceId")
             if setup_price_id:
-                resolved_setup_price_id = self.resolve_stripe_price_id(stripe, str(setup_price_id))
+                resolved_setup_price_id = self.resolve_stripe_price_id(
+                    stripe, str(setup_price_id)
+                )
                 line_items.append({"price": resolved_setup_price_id, "quantity": 1})
 
             session = stripe.checkout.Session.create(
@@ -866,13 +953,30 @@ class LaunchHandler(SimpleHTTPRequestHandler):
                 success_url=f"{public_base_url}/dashboard?checkout=success",
                 cancel_url=f"{public_base_url}/dashboard?checkout=cancel",
             )
-            self.send_json({"ok": True, "url": session.url, "catalogItem": catalog_item}, HTTPStatus.OK)
+            self.send_json(
+                {"ok": True, "url": session.url, "catalogItem": catalog_item},
+                HTTPStatus.OK,
+            )
         except LookupError as exc:
-            self.send_json({"error": str(exc), "catalogItem": catalog_item}, HTTPStatus.BAD_REQUEST)
+            self.send_json(
+                {"error": str(exc), "catalogItem": catalog_item}, HTTPStatus.BAD_REQUEST
+            )
         except ValueError as exc:
-            self.send_json({"error": str(exc), "setupNeeded": True, "missing": ["PUBLIC_BASE_URL"]}, HTTPStatus.SERVICE_UNAVAILABLE)
+            self.send_json(
+                {
+                    "error": str(exc),
+                    "setupNeeded": True,
+                    "missing": ["PUBLIC_BASE_URL"],
+                },
+                HTTPStatus.SERVICE_UNAVAILABLE,
+            )
         except Exception:  # noqa: BLE001 - return a safe payment error to the browser.
-            self.send_json({"error": "Stripe checkout failed. Check server logs and Stripe configuration."}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            self.send_json(
+                {
+                    "error": "Stripe checkout failed. Check server logs and Stripe configuration."
+                },
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+            )
 
     def resolve_stripe_price_id(self, stripe: Any, price_key: str) -> str:
         try:
@@ -899,7 +1003,10 @@ class LaunchHandler(SimpleHTTPRequestHandler):
                 missing.append("STRIPE_SECRET_KEY")
             if not webhook_secret:
                 missing.append("STRIPE_WEBHOOK_SECRET")
-            self.send_json({"error": "Stripe webhook is not configured.", "missing": missing}, HTTPStatus.SERVICE_UNAVAILABLE)
+            self.send_json(
+                {"error": "Stripe webhook is not configured.", "missing": missing},
+                HTTPStatus.SERVICE_UNAVAILABLE,
+            )
             return
 
         try:
@@ -915,7 +1022,9 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             self.configure_stripe(stripe, stripe_secret)
             event = stripe.Webhook.construct_event(payload, signature, webhook_secret)
         except Exception:
-            self.send_json({"error": "Invalid Stripe webhook signature."}, HTTPStatus.BAD_REQUEST)
+            self.send_json(
+                {"error": "Invalid Stripe webhook signature."}, HTTPStatus.BAD_REQUEST
+            )
             return
 
         event_type = self.object_value(event, "type", "")
@@ -925,7 +1034,9 @@ class LaunchHandler(SimpleHTTPRequestHandler):
 
         session = self.object_value(self.object_value(event, "data", {}), "object", {})
         record = self.fulfill_checkout_session(session)
-        self.send_json({"ok": True, "fulfillmentStatus": record["status"]}, HTTPStatus.OK)
+        self.send_json(
+            {"ok": True, "fulfillmentStatus": record["status"]}, HTTPStatus.OK
+        )
 
     def fulfill_checkout_session(self, session: Any) -> dict[str, Any]:
         session_id = str(self.object_value(session, "id", "") or "")
@@ -934,16 +1045,26 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             return existing
 
         metadata = self.object_to_dict(self.object_value(session, "metadata", {}) or {})
-        price_id = str(metadata.get("nexus_price_id") or self.object_value(session, "client_reference_id", "") or "")
+        price_id = str(
+            metadata.get("nexus_price_id")
+            or self.object_value(session, "client_reference_id", "")
+            or ""
+        )
         catalog_item = STRIPE_CATALOG.get(price_id, {})
         buyer_email = self.checkout_buyer_email(session)
-        payment_status = str(self.object_value(session, "payment_status", "") or "unknown")
+        payment_status = str(
+            self.object_value(session, "payment_status", "") or "unknown"
+        )
 
         record = {
             "sessionId": session_id,
             "priceId": price_id,
-            "catalogName": catalog_item.get("name") or metadata.get("nexus_catalog_name") or "Unknown Nexus purchase",
-            "category": catalog_item.get("category") or metadata.get("nexus_catalog_category") or "unknown",
+            "catalogName": catalog_item.get("name")
+            or metadata.get("nexus_catalog_name")
+            or "Unknown Nexus purchase",
+            "category": catalog_item.get("category")
+            or metadata.get("nexus_catalog_category")
+            or "unknown",
             "quantity": catalog_item.get("quantity"),
             "amountTotal": self.object_value(session, "amount_total"),
             "currency": self.object_value(session, "currency"),
@@ -981,7 +1102,9 @@ class LaunchHandler(SimpleHTTPRequestHandler):
 
     def checkout_buyer_email(self, session: Any) -> str:
         customer_details = self.object_value(session, "customer_details", {}) or {}
-        email = self.object_value(customer_details, "email", "") or self.object_value(session, "customer_email", "")
+        email = self.object_value(customer_details, "email", "") or self.object_value(
+            session, "customer_email", ""
+        )
         return str(email or "").strip().lower()
 
     def latest_fulfillment_record(self, session_id: str) -> dict[str, Any] | None:
@@ -1030,7 +1153,9 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             "deliveryResult": record.get("deliveryResult", ""),
             "buyerEmail": self.mask_email(str(record.get("buyerEmail", ""))),
             "capturedAt": record.get("capturedAt"),
-            "amount": self.format_amount(record.get("amountTotal"), record.get("currency")),
+            "amount": self.format_amount(
+                record.get("amountTotal"), record.get("currency")
+            ),
         }
 
     def append_fulfillment_record(self, record: dict[str, Any]) -> None:
@@ -1056,8 +1181,14 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             safe_email = escape(buyer_email)
             session_id = escape(str(record["sessionId"]))
             quantity = record.get("quantity")
-            quantity_line = f"<p><strong>Lead quantity:</strong> {int(quantity)}</p>" if quantity else ""
-            buyer_text_quantity = f"\nLead quantity: {int(quantity)}" if quantity else ""
+            quantity_line = (
+                f"<p><strong>Lead quantity:</strong> {int(quantity)}</p>"
+                if quantity
+                else ""
+            )
+            buyer_text_quantity = (
+                f"\nLead quantity: {int(quantity)}" if quantity else ""
+            )
 
             buyer_html = (
                 "<h1>Nexus order confirmed</h1>"
@@ -1138,7 +1269,9 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         )
         url = raw_url.strip().rstrip("/")
         if not url.startswith(("https://", "http://")):
-            raise ValueError("PUBLIC_BASE_URL or CLOUDFLARE_TUNNEL_URL must start with https:// or http://.")
+            raise ValueError(
+                "PUBLIC_BASE_URL or CLOUDFLARE_TUNNEL_URL must start with https:// or http://."
+            )
         return url
 
     def mask_email(self, email: str) -> str:
@@ -1195,7 +1328,9 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             raise ValueError("event_data must be a JSON object when provided.")
         event_data = dict(event_data)
 
-        visitor_id, external_visitor_id = self.uuid_or_external(payload.get("visitor_id"))
+        visitor_id, external_visitor_id = self.uuid_or_external(
+            payload.get("visitor_id")
+        )
         lead_id, external_lead_id = self.uuid_or_external(payload.get("lead_id"))
         if external_visitor_id:
             event_data["external_visitor_id"] = external_visitor_id
@@ -1279,7 +1414,10 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             )
             row = cursor.fetchone()
             if row:
-                cursor.execute("UPDATE visitors SET last_seen_at = NOW() WHERE id = %s RETURNING id", (row[0],))
+                cursor.execute(
+                    "UPDATE visitors SET last_seen_at = NOW() WHERE id = %s RETURNING id",
+                    (row[0],),
+                )
                 return cursor.fetchone()[0]
 
         cursor.execute(
@@ -1310,7 +1448,9 @@ class LaunchHandler(SimpleHTTPRequestHandler):
     def resolve_lead_id(self, cursor: Any, event: dict[str, Any]) -> uuid.UUID | None:
         if not event["lead_id"]:
             return None
-        cursor.execute("SELECT id FROM leads WHERE id = %s LIMIT 1", (event["lead_id"],))
+        cursor.execute(
+            "SELECT id FROM leads WHERE id = %s LIMIT 1", (event["lead_id"],)
+        )
         row = cursor.fetchone()
         if row:
             return row[0]
@@ -1499,12 +1639,23 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         score = 52
         reasons: list[str] = []
 
-        growth_terms = ("hiring", "growth", "expansion", "contract", "funding", "grant", "procurement")
+        growth_terms = (
+            "hiring",
+            "growth",
+            "expansion",
+            "contract",
+            "funding",
+            "grant",
+            "procurement",
+        )
         if any(term in signal.lower() for term in growth_terms):
             score += 24
             reasons.append("Strong buying or growth signal found after scrape.")
 
-        if any(term in market.lower() for term in ("gov", "field", "security", "operations", "saas")):
+        if any(
+            term in market.lower()
+            for term in ("gov", "field", "security", "operations", "saas")
+        ):
             score += 14
             reasons.append("Market aligns with Nexus target segments.")
 
@@ -1525,8 +1676,13 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             "score": score,
             "scoreBand": band,
             "confidence": confidence,
-            "reasons": reasons or ["Insufficient signals; route to review before outreach."],
-            "nextAction": "Create storefront draft" if score >= 80 else "Review enrichment" if score >= 60 else "Hold for more data",
+            "reasons": reasons
+            or ["Insufficient signals; route to review before outreach."],
+            "nextAction": "Create storefront draft"
+            if score >= 80
+            else "Review enrichment"
+            if score >= 60
+            else "Hold for more data",
             "storefrontSafeFields": {
                 "title": company,
                 "category": market or "Lead intelligence",
@@ -1587,20 +1743,44 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             "Exclude private credentials, private accounts, sensitive identifiers, and unverified personal data.",
         ]
         if report_type == "people":
-            focus = ["authorized identity context", "public affiliation signals", "risk notes", "source confidence"]
+            focus = [
+                "authorized identity context",
+                "public affiliation signals",
+                "risk notes",
+                "source confidence",
+            ]
         elif report_type == "business":
-            focus = ["business identity", "web footprint", "reputation signals", "opportunity context"]
+            focus = [
+                "business identity",
+                "web footprint",
+                "reputation signals",
+                "opportunity context",
+            ]
         elif report_type == "property":
-            focus = ["property context", "public ownership/entity trail", "local signals", "review flags"]
+            focus = [
+                "property context",
+                "public ownership/entity trail",
+                "local signals",
+                "review flags",
+            ]
         else:
-            focus = ["public web footprint", "brand consistency", "reputation signals", "risk summary"]
+            focus = [
+                "public web footprint",
+                "brand consistency",
+                "reputation signals",
+                "risk summary",
+            ]
 
         return {
             "reportId": record["reportId"],
             "title": f"{record['reportName']}: {subject}",
             "subject": subject,
             "status": "Safe preview generated",
-            "confidence": "High" if source_count >= 3 else "Medium" if source_count else "Review required",
+            "confidence": "High"
+            if source_count >= 3
+            else "Medium"
+            if source_count
+            else "Review required",
             "opportunityScore": score,
             "summary": (
                 f"Nexus generated an authorized public-source OSINT preview for {subject}. "
@@ -1669,7 +1849,12 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             "availableCount": HQ_FLORIDA_LEAD_COUNT,
             "status": "For Sale",
             "pricing": [
-                {"quantity": tier["quantity"], "price": tier["price"], "priceId": tier["priceId"], "currency": "USD"}
+                {
+                    "quantity": tier["quantity"],
+                    "price": tier["price"],
+                    "priceId": tier["priceId"],
+                    "currency": "USD",
+                }
                 for tier in HQ_FLORIDA_PRICING
             ],
             "delivery": "Delivered after purchase approval through configured Resend email workflow.",
@@ -1681,14 +1866,17 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         required = {
             "RESEND_API_KEY": os.environ.get("RESEND_API_KEY"),
             "RESEND_FROM or EMAIL_DOMAIN": sender,
-            "WAITLIST_NOTIFY_TO or RESEND_TO": os.environ.get("WAITLIST_NOTIFY_TO") or os.environ.get("RESEND_TO"),
+            "WAITLIST_NOTIFY_TO or RESEND_TO": os.environ.get("WAITLIST_NOTIFY_TO")
+            or os.environ.get("RESEND_TO"),
         }
         missing = [name for name, value in required.items() if not value]
         return {
             "configured": not missing,
             "missing": missing,
             "sender": sender,
-            "message": "Resend delivery is configured." if not missing else "Resend delivery needs production email secrets.",
+            "message": "Resend delivery is configured."
+            if not missing
+            else "Resend delivery needs production email secrets.",
         }
 
     def resend_sender(self) -> str:
@@ -1711,7 +1899,9 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             public_url_error = str(exc)
 
         required = {
-            "STRIPE_SECRET_KEY": self.valid_stripe_secret(os.environ.get("STRIPE_SECRET_KEY")),
+            "STRIPE_SECRET_KEY": self.valid_stripe_secret(
+                os.environ.get("STRIPE_SECRET_KEY")
+            ),
             "STRIPE_WEBHOOK_SECRET": bool(os.environ.get("STRIPE_WEBHOOK_SECRET")),
             "PUBLIC_BASE_URL": bool(public_base_url),
         }
@@ -1723,14 +1913,19 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             "publicBaseUrl": public_base_url,
             "publicBaseUrlError": public_url_error,
             "catalogCount": len(STRIPE_CATALOG),
-            "message": "Stripe checkout is configured." if not missing else "Stripe checkout needs production payment secrets.",
+            "message": "Stripe checkout is configured."
+            if not missing
+            else "Stripe checkout needs production payment secrets.",
         }
 
     def valid_stripe_secret(self, value: str | None) -> bool:
         if not value:
             return False
         lowered = value.lower()
-        if any(token in lowered for token in ("your_new", "paste", "rotated", "key_here", "xxxxxxxx")):
+        if any(
+            token in lowered
+            for token in ("your_new", "paste", "rotated", "key_here", "xxxxxxxx")
+        ):
             return False
         return value.startswith(("sk_live_", "sk_test_")) and len(value) > 80
 
@@ -1764,7 +1959,9 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         parsed = self.parse_datetime(value)
         if parsed is None:
             return False
-        return parsed.astimezone(timezone.utc).date() == datetime.now(timezone.utc).date()
+        return (
+            parsed.astimezone(timezone.utc).date() == datetime.now(timezone.utc).date()
+        )
 
     def is_within_days(self, value: str, days: int) -> bool:
         parsed = self.parse_datetime(value)

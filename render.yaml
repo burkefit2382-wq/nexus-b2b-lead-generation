@@ -1,0 +1,122 @@
+services:
+  # ---------------------------------------------------------------------------
+  # Backend – Nexus Tracking & Lead Generation API (FastAPI / Python)
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: nexus-b2b-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: >-
+      pip install -r requirements.txt &&
+      python -m py_compile server.py main.py &&
+      python db/migrate.py
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port 10000
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: TRACKING_ALLOWED_ORIGIN
+        value: "*"
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM
+        sync: false
+      - key: EMAIL_DOMAIN
+        value: mail.nexuscloud.sh
+      - key: R2_ACCESS_KEY
+        sync: false
+      - key: R2_SECRET_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_ENDPOINT_URL
+        sync: false
+
+  # ---------------------------------------------------------------------------
+  # Launch site – marketing / waitlist (Python / standalone server.py)
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: nexus-launch-site
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    healthCheckPath: /healthz
+    envVars:
+      - key: LAUNCH_HOST
+        value: "0.0.0.0"
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM
+        sync: false
+      - key: EMAIL_DOMAIN
+        value: mail.nexuscloud.sh
+      - key: WAITLIST_NOTIFY_TO
+        sync: false
+      - key: STRIPE_API_VERSION
+        value: "2026-06-24.dahlia"
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: PRICE_ID
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: R2_ACCESS_KEY
+        sync: false
+      - key: R2_SECRET_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_ENDPOINT_URL
+        sync: false
+
+  # ---------------------------------------------------------------------------
+  # Frontend – Vite / TypeScript static site
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: nexus-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    headers:
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=0, must-revalidate
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false
+
+  # ---------------------------------------------------------------------------
+  # OSINT Scraper – cron job (Tampa Bay lead worker)
+  # ---------------------------------------------------------------------------
+  - type: cron
+    name: nexus-osint-scraper
+    runtime: python
+    plan: starter
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: python workers/tampa_bay_lead_worker.py --delay-seconds 10
+    schedule: "0 */6 * * *"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: NEXUS_SCRAPER_USER_AGENT
+        value: "NexusLeadGen/1.0 buyer-safe OSINT quality scraper"
+      - key: NEXUS_SCRAPER_COUNTIES
+        value: "Pinellas,Hillsborough,Pasco,Hernando"
+      - key: NEXUS_SCRAPER_TARGETS
+        value: "real_estate,mortgage,insurance,home_services,professional_cleaning"

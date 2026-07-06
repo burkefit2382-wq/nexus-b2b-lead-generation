@@ -88,3 +88,30 @@ CREATE TABLE IF NOT EXISTS weekly_summaries (
   action_items JSONB,
   created_at TIMESTAMP DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS waitlist (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT NOT NULL,
+  name TEXT,
+  company TEXT,
+  plan TEXT,
+  referrer TEXT,
+  utm_source TEXT,
+  utm_medium TEXT,
+  utm_campaign TEXT,
+  status TEXT DEFAULT 'pending',
+  notified_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS waitlist_email_idx ON waitlist(email);
+CREATE INDEX IF NOT EXISTS waitlist_status_idx ON waitlist(status);
+CREATE INDEX IF NOT EXISTS waitlist_created_at_idx ON waitlist(created_at);
+
+CREATE TABLE IF NOT EXISTS migration_history (
+  id SERIAL PRIMARY KEY,
+  schema_version TEXT NOT NULL,
+  applied_at TIMESTAMP DEFAULT NOW(),
+  notes TEXT
+);
+

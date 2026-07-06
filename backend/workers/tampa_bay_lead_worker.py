@@ -31,15 +31,36 @@ STATE_PATH = OUT_DIR / "worker_state.json"
 LOG_PATH = OUT_DIR / "worker.log"
 
 OVERPASS_URL = os.environ.get("OVERPASS_URL", "https://overpass-api.de/api/interpreter")
-USER_AGENT = os.environ.get("NEXUS_SCRAPER_USER_AGENT", "NexusLeadGen/1.0 buyer-safe local lead collector")
+USER_AGENT = os.environ.get(
+    "NEXUS_SCRAPER_USER_AGENT", "NexusLeadGen/1.0 buyer-safe local lead collector"
+)
 
 COUNTIES = ("Pinellas County", "Hillsborough County", "Pasco County", "Hernando County")
 
 TARGETS = (
-    {"kind": "real_estate", "label": "Real estate office", "filters": ('["office"~"estate_agent|real_estate"]', '["shop"="estate_agent"]')},
-    {"kind": "mortgage", "label": "Mortgage / finance", "filters": ('["office"~"financial|finance|mortgage"]', '["amenity"="bank"]')},
-    {"kind": "insurance", "label": "Insurance office", "filters": ('["office"="insurance"]', '["shop"="insurance"]')},
-    {"kind": "home_services", "label": "Home services", "filters": ('["craft"~"roofer|plumber|electrician|hvac"]', '["shop"~"hardware|trade"]')},
+    {
+        "kind": "real_estate",
+        "label": "Real estate office",
+        "filters": ('["office"~"estate_agent|real_estate"]', '["shop"="estate_agent"]'),
+    },
+    {
+        "kind": "mortgage",
+        "label": "Mortgage / finance",
+        "filters": ('["office"~"financial|finance|mortgage"]', '["amenity"="bank"]'),
+    },
+    {
+        "kind": "insurance",
+        "label": "Insurance office",
+        "filters": ('["office"="insurance"]', '["shop"="insurance"]'),
+    },
+    {
+        "kind": "home_services",
+        "label": "Home services",
+        "filters": (
+            '["craft"~"roofer|plumber|electrician|hvac"]',
+            '["shop"~"hardware|trade"]',
+        ),
+    },
     {
         "kind": "professional_cleaning",
         "label": "Home and professional cleaning",
@@ -80,10 +101,30 @@ FIELDNAMES = (
 )
 
 FLORIDA_BOUNDS = {
-    "Pinellas County": {"lat_min": 27.55, "lat_max": 28.22, "lon_min": -82.95, "lon_max": -82.52},
-    "Hillsborough County": {"lat_min": 27.50, "lat_max": 28.25, "lon_min": -82.85, "lon_max": -82.05},
-    "Pasco County": {"lat_min": 28.15, "lat_max": 28.55, "lon_min": -82.90, "lon_max": -82.00},
-    "Hernando County": {"lat_min": 28.40, "lat_max": 28.75, "lon_min": -82.75, "lon_max": -82.00},
+    "Pinellas County": {
+        "lat_min": 27.55,
+        "lat_max": 28.22,
+        "lon_min": -82.95,
+        "lon_max": -82.52,
+    },
+    "Hillsborough County": {
+        "lat_min": 27.50,
+        "lat_max": 28.25,
+        "lon_min": -82.85,
+        "lon_max": -82.05,
+    },
+    "Pasco County": {
+        "lat_min": 28.15,
+        "lat_max": 28.55,
+        "lon_min": -82.90,
+        "lon_max": -82.00,
+    },
+    "Hernando County": {
+        "lat_min": 28.40,
+        "lat_max": 28.75,
+        "lon_min": -82.75,
+        "lon_max": -82.00,
+    },
 }
 
 FLORIDA_STATE_VALUES = {"", "FL", "Florida"}
@@ -152,7 +193,9 @@ def text_value(tags: dict[str, Any], *keys: str) -> str:
     return ""
 
 
-def normalize_element(element: dict[str, Any], county: str, target: dict[str, Any], collected_at: str) -> dict[str, Any] | None:
+def normalize_element(
+    element: dict[str, Any], county: str, target: dict[str, Any], collected_at: str
+) -> dict[str, Any] | None:
     tags = element.get("tags") or {}
     name = text_value(tags, "name", "operator", "brand")
     if not name:
@@ -171,7 +214,9 @@ def normalize_element(element: dict[str, Any], county: str, target: dict[str, An
     website = text_value(tags, "website", "contact:website", "url")
     phone = text_value(tags, "phone", "contact:phone")
     source_id = f"osm:{element.get('type')}:{element.get('id')}"
-    lead_hash = hashlib.sha256(f"{name}|{street}|{county}|{source_id}".lower().encode("utf-8")).hexdigest()[:16]
+    lead_hash = hashlib.sha256(
+        f"{name}|{street}|{county}|{source_id}".lower().encode("utf-8")
+    ).hexdigest()[:16]
     osint = osint_quality_check(tags, county, website, phone, street, lat, lon)
     score, notes = score_record(target["kind"], website, phone, street, lat, lon, osint)
     quality_band = quality_band_for(osint["score"])
@@ -204,7 +249,15 @@ def normalize_element(element: dict[str, Any], county: str, target: dict[str, An
     }
 
 
-def score_record(kind: str, website: str, phone: str, street: str, lat: Any, lon: Any, osint: dict[str, Any]) -> tuple[int, list[str]]:
+def score_record(
+    kind: str,
+    website: str,
+    phone: str,
+    street: str,
+    lat: Any,
+    lon: Any,
+    osint: dict[str, Any],
+) -> tuple[int, list[str]]:
     score = 55
     notes = ["Public business/location record"]
     if kind == "real_estate":
@@ -241,7 +294,15 @@ def score_record(kind: str, website: str, phone: str, street: str, lat: Any, lon
     return max(0, min(score, 100)), notes
 
 
-def osint_quality_check(tags: dict[str, Any], county: str, website: str, phone: str, street: str, lat: Any, lon: Any) -> dict[str, Any]:
+def osint_quality_check(
+    tags: dict[str, Any],
+    county: str,
+    website: str,
+    phone: str,
+    street: str,
+    lat: Any,
+    lon: Any,
+) -> dict[str, Any]:
     score = 50
     flags: list[str] = []
     sources = ["OpenStreetMap tags"]
@@ -291,7 +352,14 @@ def osint_quality_check(tags: dict[str, Any], county: str, website: str, phone: 
 
     social_sources = [
         key
-        for key in ("contact:facebook", "facebook", "contact:instagram", "instagram", "contact:linkedin", "linkedin")
+        for key in (
+            "contact:facebook",
+            "facebook",
+            "contact:instagram",
+            "instagram",
+            "contact:linkedin",
+            "linkedin",
+        )
         if tags.get(key)
     ]
     if social_sources:
@@ -299,8 +367,15 @@ def osint_quality_check(tags: dict[str, Any], county: str, website: str, phone: 
         sources.append("Public social profile tag")
 
     score = max(0, min(score, 100))
-    confidence = "High" if score >= 85 and not flags else "Medium" if score >= 65 else "Low"
-    return {"score": score, "confidence": confidence, "flags": flags, "sources": sorted(set(sources))}
+    confidence = (
+        "High" if score >= 85 and not flags else "Medium" if score >= 65 else "Low"
+    )
+    return {
+        "score": score,
+        "confidence": confidence,
+        "flags": flags,
+        "sources": sorted(set(sources)),
+    }
 
 
 def coordinates_in_county(county: str, lat: Any, lon: Any) -> bool:
@@ -321,11 +396,20 @@ def coordinates_in_county(county: str, lat: Any, lon: Any) -> bool:
 
 
 def has_business_domain(website: str) -> bool:
-    parsed = urllib.parse.urlparse(website if "://" in website else f"https://{website}")
+    parsed = urllib.parse.urlparse(
+        website if "://" in website else f"https://{website}"
+    )
     host = parsed.netloc.lower()
     if not host:
         return False
-    consumer_hosts = ("facebook.com", "instagram.com", "linkedin.com", "x.com", "twitter.com", "yelp.com")
+    consumer_hosts = (
+        "facebook.com",
+        "instagram.com",
+        "linkedin.com",
+        "x.com",
+        "twitter.com",
+        "yelp.com",
+    )
     return not any(host == item or host.endswith(f".{item}") for item in consumer_hosts)
 
 
@@ -366,7 +450,15 @@ def apply_osint_quality(record: dict[str, Any]) -> None:
     county = str(record.get("county") or "").strip()
     county_name = county if county.endswith("County") else f"{county} County"
     category = str(record.get("category") or "").lower()
-    kind = "real_estate" if "real estate" in category else "mortgage" if "mortgage" in category else "insurance" if "insurance" in category else "home_services"
+    kind = (
+        "real_estate"
+        if "real estate" in category
+        else "mortgage"
+        if "mortgage" in category
+        else "insurance"
+        if "insurance" in category
+        else "home_services"
+    )
     tags = {
         "name": record.get("name"),
         "addr:city": record.get("city"),
@@ -392,7 +484,14 @@ def apply_osint_quality(record: dict[str, Any]) -> None:
 
 def write_outputs(records: dict[str, dict[str, Any]], summary: dict[str, Any]) -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    ordered = sorted(records.values(), key=lambda item: (-int(item.get("score") or 0), item.get("county", ""), item.get("name", "")))
+    ordered = sorted(
+        records.values(),
+        key=lambda item: (
+            -int(item.get("score") or 0),
+            item.get("county", ""),
+            item.get("name", ""),
+        ),
+    )
     with JSONL_PATH.open("w", encoding="utf-8") as handle:
         for record in ordered:
             handle.write(json.dumps(record, sort_keys=True) + "\n")
@@ -408,8 +507,16 @@ def write_outputs(records: dict[str, dict[str, Any]], summary: dict[str, Any]) -
 def select_counties(raw_counties: str | None) -> tuple[str, ...]:
     if not raw_counties:
         return COUNTIES
-    requested = {item.strip().lower().replace(" county", "") for item in raw_counties.split(",") if item.strip()}
-    selected = tuple(county for county in COUNTIES if county.lower().replace(" county", "") in requested)
+    requested = {
+        item.strip().lower().replace(" county", "")
+        for item in raw_counties.split(",")
+        if item.strip()
+    }
+    selected = tuple(
+        county
+        for county in COUNTIES
+        if county.lower().replace(" county", "") in requested
+    )
     if not selected:
         raise ValueError(f"No matching counties for: {raw_counties}")
     return selected
@@ -418,15 +525,25 @@ def select_counties(raw_counties: str | None) -> tuple[str, ...]:
 def select_targets(raw_targets: str | None) -> tuple[dict[str, Any], ...]:
     if not raw_targets:
         return TARGETS
-    requested = {item.strip().lower() for item in raw_targets.split(",") if item.strip()}
-    selected = tuple(target for target in TARGETS if target["kind"].lower() in requested)
+    requested = {
+        item.strip().lower() for item in raw_targets.split(",") if item.strip()
+    }
+    selected = tuple(
+        target for target in TARGETS if target["kind"].lower() in requested
+    )
     if not selected:
         valid = ", ".join(target["kind"] for target in TARGETS)
-        raise ValueError(f"No matching targets for: {raw_targets}. Valid targets: {valid}")
+        raise ValueError(
+            f"No matching targets for: {raw_targets}. Valid targets: {valid}"
+        )
     return selected
 
 
-def run_once(delay_seconds: float = 3.0, counties: tuple[str, ...] = COUNTIES, targets: tuple[dict[str, Any], ...] = TARGETS) -> dict[str, Any]:
+def run_once(
+    delay_seconds: float = 3.0,
+    counties: tuple[str, ...] = COUNTIES,
+    targets: tuple[dict[str, Any], ...] = TARGETS,
+) -> dict[str, Any]:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     collected_at = utc_now()
     records = load_existing()
@@ -448,11 +565,27 @@ def run_once(delay_seconds: float = 3.0, counties: tuple[str, ...] = COUNTIES, t
                     if record["lead_id"] not in records:
                         added += 1
                     records[record["lead_id"]] = record
-                source_runs.append({"county": county, "target": target["kind"], "fetched": len(elements), "added": added})
-                log(f"{county} / {target['kind']}: fetched {len(elements)}, added {added}")
-            except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
+                source_runs.append(
+                    {
+                        "county": county,
+                        "target": target["kind"],
+                        "fetched": len(elements),
+                        "added": added,
+                    }
+                )
+                log(
+                    f"{county} / {target['kind']}: fetched {len(elements)}, added {added}"
+                )
+            except (
+                urllib.error.URLError,
+                TimeoutError,
+                json.JSONDecodeError,
+                OSError,
+            ) as exc:
                 message = f"{county} / {target['kind']} failed: {exc}"
-                errors.append({"county": county, "target": target["kind"], "error": str(exc)})
+                errors.append(
+                    {"county": county, "target": target["kind"], "error": str(exc)}
+                )
                 log(message)
             time.sleep(delay_seconds)
 
@@ -477,12 +610,24 @@ def run_once(delay_seconds: float = 3.0, counties: tuple[str, ...] = COUNTIES, t
     }
     write_outputs(records, summary)
     with STATE_PATH.open("w", encoding="utf-8") as handle:
-        json.dump({"last_run_at": collected_at, "last_summary": summary}, handle, indent=2, sort_keys=True)
-    log(f"Run complete: {len(records)} total records, {summary['new_records']} new records")
+        json.dump(
+            {"last_run_at": collected_at, "last_summary": summary},
+            handle,
+            indent=2,
+            sort_keys=True,
+        )
+    log(
+        f"Run complete: {len(records)} total records, {summary['new_records']} new records"
+    )
     return summary
 
 
-def run_loop(interval_minutes: int, delay_seconds: float, counties: tuple[str, ...], targets: tuple[dict[str, Any], ...]) -> None:
+def run_loop(
+    interval_minutes: int,
+    delay_seconds: float,
+    counties: tuple[str, ...],
+    targets: tuple[dict[str, Any], ...],
+) -> None:
     log(f"Worker loop starting with {interval_minutes} minute interval")
     while True:
         run_once(delay_seconds=delay_seconds, counties=counties, targets=targets)
@@ -513,13 +658,22 @@ def backfill_quality() -> dict[str, Any]:
     }
     write_outputs(records, summary)
     with STATE_PATH.open("w", encoding="utf-8") as handle:
-        json.dump({"last_run_at": summary["last_run_at"], "last_summary": summary}, handle, indent=2, sort_keys=True)
+        json.dump(
+            {"last_run_at": summary["last_run_at"], "last_summary": summary},
+            handle,
+            indent=2,
+            sort_keys=True,
+        )
     log(f"OSINT quality backfill complete: {len(records)} records")
     return summary
 
 
 def quality_summary(records: dict[str, dict[str, Any]]) -> dict[str, int]:
-    counts = {"approved_for_package": 0, "review_recommended": 0, "hold_for_manual_review": 0}
+    counts = {
+        "approved_for_package": 0,
+        "review_recommended": 0,
+        "hold_for_manual_review": 0,
+    }
     for record in records.values():
         status = str(record.get("review_status") or "")
         if status in counts:
@@ -528,13 +682,37 @@ def quality_summary(records: dict[str, dict[str, Any]]) -> dict[str, int]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Collect buyer-safe Tampa Bay real estate lead targets.")
-    parser.add_argument("--loop", action="store_true", help="Run forever on an interval.")
-    parser.add_argument("--backfill-quality", action="store_true", help="Backfill OSINT QA fields for existing records without scraping.")
-    parser.add_argument("--interval-minutes", type=int, default=int(os.environ.get("NEXUS_SCRAPER_INTERVAL_MINUTES", "360")))
-    parser.add_argument("--delay-seconds", type=float, default=float(os.environ.get("NEXUS_SCRAPER_DELAY_SECONDS", "15")))
-    parser.add_argument("--counties", default=os.environ.get("NEXUS_SCRAPER_COUNTIES"), help="Comma-separated counties, e.g. Pinellas,Hillsborough,Pasco.")
-    parser.add_argument("--targets", default=os.environ.get("NEXUS_SCRAPER_TARGETS"), help="Comma-separated target keys, e.g. professional_cleaning.")
+    parser = argparse.ArgumentParser(
+        description="Collect buyer-safe Tampa Bay real estate lead targets."
+    )
+    parser.add_argument(
+        "--loop", action="store_true", help="Run forever on an interval."
+    )
+    parser.add_argument(
+        "--backfill-quality",
+        action="store_true",
+        help="Backfill OSINT QA fields for existing records without scraping.",
+    )
+    parser.add_argument(
+        "--interval-minutes",
+        type=int,
+        default=int(os.environ.get("NEXUS_SCRAPER_INTERVAL_MINUTES", "360")),
+    )
+    parser.add_argument(
+        "--delay-seconds",
+        type=float,
+        default=float(os.environ.get("NEXUS_SCRAPER_DELAY_SECONDS", "15")),
+    )
+    parser.add_argument(
+        "--counties",
+        default=os.environ.get("NEXUS_SCRAPER_COUNTIES"),
+        help="Comma-separated counties, e.g. Pinellas,Hillsborough,Pasco.",
+    )
+    parser.add_argument(
+        "--targets",
+        default=os.environ.get("NEXUS_SCRAPER_TARGETS"),
+        help="Comma-separated target keys, e.g. professional_cleaning.",
+    )
     args = parser.parse_args()
     counties = select_counties(args.counties)
     targets = select_targets(args.targets)
@@ -543,9 +721,16 @@ def main() -> int:
         summary = backfill_quality()
         print(json.dumps(summary, indent=2, sort_keys=True))
     elif args.loop:
-        run_loop(interval_minutes=args.interval_minutes, delay_seconds=args.delay_seconds, counties=counties, targets=targets)
+        run_loop(
+            interval_minutes=args.interval_minutes,
+            delay_seconds=args.delay_seconds,
+            counties=counties,
+            targets=targets,
+        )
     else:
-        summary = run_once(delay_seconds=args.delay_seconds, counties=counties, targets=targets)
+        summary = run_once(
+            delay_seconds=args.delay_seconds, counties=counties, targets=targets
+        )
         print(json.dumps(summary, indent=2, sort_keys=True))
     return 0
 
