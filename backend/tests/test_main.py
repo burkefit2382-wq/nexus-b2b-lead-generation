@@ -4,8 +4,10 @@ from fastapi.testclient import TestClient
 
 try:
     from backend.app.main import app
+    from backend.app.services import config
 except ModuleNotFoundError:
     from app.main import app
+    from app.services import config
 
 client = TestClient(app)
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / 'db' / 'schema.sql'
@@ -41,6 +43,17 @@ def test_config_status_does_not_expose_secret(monkeypatch) -> None:
     assert 'password' not in response.text
     assert 'example.com' not in response.text
     assert 'test-secret-value' not in response.text
+
+
+def test_tracking_allowed_origins_supports_comma_list(monkeypatch) -> None:
+    monkeypatch.setenv(
+        'TRACKING_ALLOWED_ORIGIN',
+        'https://nexus-b2b-lead-generation.onrender.com, http://localhost:5173',
+    )
+    assert config.tracking_allowed_origins() == [
+        'https://nexus-b2b-lead-generation.onrender.com',
+        'http://localhost:5173',
+    ]
 
 
 def test_schema_includes_tracking_events_table() -> None:

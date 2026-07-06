@@ -19,6 +19,12 @@ def database_url() -> str:
     return os.environ.get("DATABASE_URL", "").strip()
 
 
+def tracking_allowed_origins() -> list[str]:
+    raw_value = os.environ.get("TRACKING_ALLOWED_ORIGIN", "*")
+    origins = [origin.strip() for origin in raw_value.split(",") if origin.strip()]
+    return origins or ["*"]
+
+
 def r2_configured() -> bool:
     return bool(
         os.environ.get("R2_ACCESS_KEY", "").strip()

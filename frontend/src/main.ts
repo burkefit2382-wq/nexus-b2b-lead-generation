@@ -1,8 +1,10 @@
 import './style.css'
 
 type Lead = {
+  id: string
   name: string
-  company: string
+  intent: string
+  location: string
   email: string
 }
 
@@ -20,7 +22,7 @@ if (app) {
         <p id="health">Checking backend...</p>
       </section>
       <section>
-        <h2>Sample Leads</h2>
+        <h2>Live Leads</h2>
         <ul id="leads"></ul>
       </section>
     </main>
@@ -40,7 +42,7 @@ const setLeads = (leads: Lead[]) => {
     return
   }
   leadList.innerHTML = leads
-    .map((lead) => `<li><strong>${lead.name}</strong> — ${lead.company} (${lead.email})</li>`)
+    .map((lead) => `<li><strong>${lead.name}</strong> - ${lead.intent || 'New lead'} in ${lead.location || 'Unknown'} (${lead.email})</li>`)
     .join('')
 }
 
@@ -51,10 +53,10 @@ const loadData = async () => {
     const healthData = await healthResponse.json() as { status: string }
     setHealth(`Backend status: ${healthData.status}`)
 
-    const leadsResponse = await fetch(`${apiBaseUrl}/api/leads/mock?limit=5`)
+    const leadsResponse = await fetch(`${apiBaseUrl}/leads/`)
     if (!leadsResponse.ok) throw new Error('Lead request failed')
-    const leadsData = await leadsResponse.json() as { leads: Lead[] }
-    setLeads(leadsData.leads)
+    const leadsData = await leadsResponse.json() as Lead[]
+    setLeads(leadsData.slice(0, 5))
   } catch (error) {
     setHealth('Backend unavailable. Start backend service to test full flow.')
     setLeads([])

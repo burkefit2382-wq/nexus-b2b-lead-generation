@@ -44,9 +44,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="NEXUS B2B Lead Generation API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[config.TRACKING_ALLOWED_ORIGIN],
+    allow_origins=config.tracking_allowed_origins(),
     allow_credentials=False,
-    allow_methods=["POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type"],
 )
 app.include_router(leads_router, prefix="/leads", tags=["Leads"])

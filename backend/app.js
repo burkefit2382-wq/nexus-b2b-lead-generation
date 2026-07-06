@@ -17,6 +17,7 @@ const testFulfillmentList = document.querySelector("#testFulfillmentList");
 const osintReportForm = document.querySelector("#osintReportForm");
 const osintReportNote = document.querySelector("#osintReportNote");
 const osintReportResults = document.querySelector("#osintReportResults");
+const nexusApiBaseUrl = (window.NEXUS_API_BASE_URL || "https://nexus-tracking-api.onrender.com").replace(/\/$/, "");
 
 window.addEventListener("hashchange", renderPage);
 window.addEventListener("load", () => {
@@ -76,14 +77,83 @@ async function submitWaitlistRequest(email) {
 
     form.reset();
     note.textContent = "Pilot request received. We will follow up with next steps.";
+    await createNexusLead({
+      name: email,
+      intent: "pilot access request",
+      location: "Web launch site",
+      email,
+      phone: "",
+      budget: "",
+      notes: "Captured from launch site pilot form.",
+    });
   } catch (error) {
     const requests = JSON.parse(localStorage.getItem("leadgenPilotRequests") || "[]");
     requests.push({ email, capturedAt: new Date().toISOString(), fallback: true });
     localStorage.setItem("leadgenPilotRequests", JSON.stringify(requests));
-    note.textContent = "Saved locally for this prototype. Start the launch server to enable /api/waitlist.";
+    try {
+      await createNexusLead({
+        name: email,
+        intent: "pilot access request",
+        location: "Web launch site",
+        email,
+        phone: "",
+        budget: "",
+        notes: "Captured locally after launch waitlist endpoint was unavailable.",
+      });
+      note.textContent = "Pilot request saved to the Nexus lead API.";
+    } catch (leadError) {
+      note.textContent = "Saved locally for this prototype. Start the launch server to enable /api/waitlist.";
+    }
   } finally {
     button.disabled = false;
   }
+}
+
+async function createNexusLead(lead) {
+  const response = await fetch(`${nexusApiBaseUrl}/leads/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(lead),
+  });
+  const body = await response.json();
+  if (!response.ok) {
+    throw new Error(body.detail || body.error || "Unable to create Nexus lead.");
+  }
+  trackNexusEvent("generate_lead", {
+    lead_id: body.id,
+    email: lead.email,
+    intent: lead.intent,
+  });
+  return body;
+}
+
+function trackNexusEvent(eventName, eventData = {}) {
+  fetch(`${nexusApiBaseUrl}/api/event`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      event_name: eventName,
+      client_id: getOrCreateClientId(),
+      lead_id: eventData.lead_id,
+      page_url: window.location.href,
+      referrer: document.referrer,
+      utm_source: new URLSearchParams(window.location.search).get("utm_source") || "",
+      utm_medium: new URLSearchParams(window.location.search).get("utm_medium") || "",
+      utm_campaign: new URLSearchParams(window.location.search).get("utm_campaign") || "",
+      event_data: eventData,
+    }),
+  }).catch(() => {});
+}
+
+function getOrCreateClientId() {
+  const key = "nexusClientId";
+  const existing = localStorage.getItem(key);
+  if (existing) {
+    return existing;
+  }
+  const value = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+  localStorage.setItem(key, value);
+  return value;
 }
 
 async function loadRevenueStatus() {
