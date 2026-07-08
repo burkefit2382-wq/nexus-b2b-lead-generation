@@ -1,0 +1,4 @@
+Set-Location 'C:\Users\Robert\.copilot\repos\copilot-worktrees\nexus-b2b-lead-generation\burkefit2382-wq-automatic-succotash'; git push
+To https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git
+   f4bd2db..bd96590  burkefit2382-wq-hubspot-crm-onboarding -> burkefit2382-wq-hubspot-crm-onboarding
+<shellId: 17 completed with exit code 0>
