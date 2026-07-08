@@ -39,6 +39,14 @@ services:
         sync: false
       - key: JWT_SECRET
         sync: false
+      - key: HUBSPOT_ACCESS_TOKEN
+        sync: false
+      - key: HUBSPOT_PRIVATE_APP_TOKEN
+        sync: false
+      - key: HUBSPOT_API_KEY
+        sync: false
+      - key: HUBSPOT_PORTAL_ID
+        sync: false
   - type: web
     name: nexus-tracking-api
     runtime: python
@@ -63,6 +71,14 @@ services:
         sync: false
       - key: TRACKING_ALLOWED_ORIGIN
         value: "*"
+      - key: HUBSPOT_ACCESS_TOKEN
+        sync: false
+      - key: HUBSPOT_PRIVATE_APP_TOKEN
+        sync: false
+      - key: HUBSPOT_API_KEY
+        sync: false
+      - key: HUBSPOT_PORTAL_ID
+        sync: false
   - type: cron
     name: nexus-osint-scraper-quality
     runtime: python
