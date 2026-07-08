@@ -91,6 +91,7 @@ RESEND_FROM=Nexus <sales@verified-domain.com>
 WAITLIST_NOTIFY_TO=ops@example.com
 LLAMA_CHAT_ENDPOINT=https://your-llama-compatible-endpoint
 LLAMA_CHAT_MODEL=llama3
+LLAMA_CHAT_API_KEY=optional_bearer_token
 HUBSPOT_ACCESS_TOKEN=your_hubspot_private_app_token
 ```
 

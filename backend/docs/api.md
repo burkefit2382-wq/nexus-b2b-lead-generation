@@ -54,9 +54,13 @@ Captures lead package request metadata and sends an internal notification when R
 
 Returns whether a HubSpot token is configured. Nexus checks `HUBSPOT_ACCESS_TOKEN`, `HUBSPOT_PRIVATE_APP_TOKEN`, then `HUBSPOT_API_KEY`.
 
+Alias: `GET /api/crm-status`
+
 `POST /api/hubspot-export`
 
 Exports one reviewed Nexus lead as a HubSpot CRM contact. If an email is provided, Nexus searches HubSpot by email and updates the existing contact; otherwise it creates a contact.
+
+Alias: `POST /api/crm-export`
 
 Request:
 
@@ -85,6 +89,12 @@ Creates a safe OSINT report request preview and appends the request to the opera
 
 ## AI Chat
 
+`GET /api/chat-status`
+
+Returns whether a server-side Llama 3 endpoint is configured. Nexus checks `LLAMA_CHAT_ENDPOINT`, `LLAMA3_CHAT_ENDPOINT`, then `OLLAMA_HOST`.
+
+Alias: `GET /api/llama-status`
+
 `POST /api/chat`
 
-Uses a configured Llama-compatible endpoint when `LLAMA_CHAT_ENDPOINT` is set. Falls back to safe local responses when no endpoint is configured.
+Uses a configured Llama-compatible endpoint when available. Supports Ollama-style `/api/chat` responses, OpenAI-compatible `choices[].message.content` responses, and a safe local fallback when no endpoint is configured.

@@ -365,8 +365,12 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             self.handle_lead_stats()
             return
 
-        if route == "/api/hubspot-status":
+        if route in {"/api/hubspot-status", "/api/crm-status"}:
             self.handle_hubspot_status()
+            return
+
+        if route in {"/api/chat-status", "/api/llama-status"}:
+            self.handle_chat_status()
             return
 
         query = urllib.parse.parse_qs(parsed.query)
@@ -432,7 +436,7 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             self.handle_lead_package_request()
             return
 
-        if route == "/api/hubspot-export":
+        if route in {"/api/hubspot-export", "/api/crm-export"}:
             self.handle_hubspot_export()
             return
 
@@ -509,6 +513,9 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             },
             HTTPStatus.OK,
         )
+
+    def handle_chat_status(self) -> None:
+        self.send_json({"ok": True, "chat": self.chat_status()}, HTTPStatus.OK)
 
     def handle_enrich_score(self) -> None:
         try:
@@ -1593,8 +1600,8 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             return f"failed: {exc}"
 
     def generate_chat_response(self, prompt: str) -> tuple[str, str]:
-        endpoint = os.environ.get("LLAMA_CHAT_ENDPOINT")
-        model = os.environ.get("LLAMA_CHAT_MODEL", "llama3")
+        endpoint = self.llama_chat_endpoint()
+        model = self.llama_chat_model()
 
         if endpoint:
             try:
@@ -1608,6 +1615,47 @@ class LaunchHandler(SimpleHTTPRequestHandler):
                 )
 
         return self.safe_chat_response(prompt), "safe_mode"
+
+    def chat_status(self) -> dict[str, Any]:
+        endpoint_name, endpoint = self.llama_endpoint_source()
+        api_key_name, api_key = self.llama_api_key_source()
+        return {
+            "configured": bool(endpoint),
+            "configuredBy": endpoint_name if endpoint else "",
+            "model": self.llama_chat_model(),
+            "authConfigured": bool(api_key),
+            "authConfiguredBy": api_key_name if api_key else "",
+            "missing": [] if endpoint else ["LLAMA_CHAT_ENDPOINT", "LLAMA3_CHAT_ENDPOINT", "OLLAMA_HOST"],
+            "mode": "llama_endpoint" if endpoint else "safe_mode",
+        }
+
+    def llama_chat_model(self) -> str:
+        return (
+            os.environ.get("LLAMA_CHAT_MODEL")
+            or os.environ.get("LLAMA3_CHAT_MODEL")
+            or os.environ.get("OLLAMA_MODEL")
+            or "llama3"
+        ).strip()
+
+    def llama_chat_endpoint(self) -> str:
+        return self.llama_endpoint_source()[1]
+
+    def llama_endpoint_source(self) -> tuple[str, str]:
+        for name in ("LLAMA_CHAT_ENDPOINT", "LLAMA3_CHAT_ENDPOINT"):
+            value = os.environ.get(name, "").strip()
+            if value:
+                return name, value
+        ollama_host = os.environ.get("OLLAMA_HOST", "").strip().rstrip("/")
+        if ollama_host:
+            return "OLLAMA_HOST", f"{ollama_host}/api/chat"
+        return "", ""
+
+    def llama_api_key_source(self) -> tuple[str, str]:
+        for name in ("LLAMA_CHAT_API_KEY", "LLAMA_API_KEY", "LLAMA3_API_KEY"):
+            value = os.environ.get(name, "").strip()
+            if value:
+                return name, value
+        return "", ""
 
     def call_llama_endpoint(self, endpoint: str, model: str, prompt: str) -> str:
         payload = {
@@ -1626,10 +1674,15 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             ],
         }
         body = json.dumps(payload).encode("utf-8")
+        headers = {"Content-Type": "application/json"}
+        _, api_key = self.llama_api_key_source()
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
         request = urllib.request.Request(
             endpoint,
             data=body,
-            headers={"Content-Type": "application/json"},
+            headers=headers,
             method="POST",
         )
         with urllib.request.urlopen(request, timeout=45) as response:
@@ -1638,6 +1691,15 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         if isinstance(data, dict):
             if isinstance(data.get("message"), dict) and data["message"].get("content"):
                 return str(data["message"]["content"]).strip()
+            choices = data.get("choices")
+            if isinstance(choices, list) and choices:
+                first = choices[0]
+                if isinstance(first, dict):
+                    message = first.get("message")
+                    if isinstance(message, dict) and message.get("content"):
+                        return str(message["content"]).strip()
+                    if first.get("text"):
+                        return str(first["text"]).strip()
             if data.get("response"):
                 return str(data["response"]).strip()
         raise RuntimeError("Llama endpoint returned an unsupported response format")

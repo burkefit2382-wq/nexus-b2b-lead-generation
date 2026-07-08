@@ -28,6 +28,7 @@ window.addEventListener("load", () => {
   loadRevenueStatus();
   loadFulfillmentStatus();
   loadHubspotStatus();
+  loadChatStatus();
 });
 renderPage();
 
@@ -262,6 +263,26 @@ async function loadHubspotStatus() {
       : `HubSpot needs: ${body.hubspot.missing.join(", ")}.`;
   } catch (error) {
     hubspotStatus.textContent = error.message || "HubSpot status unavailable.";
+  }
+}
+
+async function loadChatStatus() {
+  if (!chatNote) {
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/chat-status");
+    const body = await response.json();
+    if (!response.ok) {
+      throw new Error(body.error || "Unable to load chat status.");
+    }
+
+    chatNote.textContent = body.chat.configured
+      ? `Llama 3 backend connected with ${body.chat.model}.`
+      : `Safe mode active. Configure ${body.chat.missing.join(" or ")} for live Llama 3.`;
+  } catch (error) {
+    chatNote.textContent = "AI chat status unavailable.";
   }
 }
 
