@@ -41,7 +41,7 @@ def hubspot_token_source() -> tuple[str, str]:
 
 
 def hubspot_missing_token_names() -> list[str]:
-    return ["HUBSPOT_ACCESS_TOKEN", "HUBSPOT_PRIVATE_APP_TOKEN", "HUBSPOT_API_KEY"]
+    return ["HUBSPOT_ACCESS_TOKEN", "HUBSPOT_SERVICE_KEY", "HUBSPOT_PRIVATE_APP_TOKEN", "HUBSPOT_API_KEY"]
 
 
 def hubspot_contact_properties(lead: dict[str, Any]) -> dict[str, str]:
@@ -138,4 +138,3 @@ def hubspot_request(token: str, path: str, payload: dict[str, Any], method: str)
         ) from exc
     except urllib.error.URLError as exc:
         raise HubSpotExportError(f"HubSpot export failed: {exc.reason}") from exc
-

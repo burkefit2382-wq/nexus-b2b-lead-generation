@@ -1258,14 +1258,14 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         return self.hubspot_token_source()[1]
 
     def hubspot_token_source(self) -> tuple[str, str]:
-        for name in ("HUBSPOT_ACCESS_TOKEN", "HUBSPOT_PRIVATE_APP_TOKEN", "HUBSPOT_API_KEY"):
+        for name in ("HUBSPOT_ACCESS_TOKEN", "HUBSPOT_SERVICE_KEY", "HUBSPOT_PRIVATE_APP_TOKEN", "HUBSPOT_API_KEY"):
             value = os.environ.get(name, "").strip()
             if value:
                 return name, value
         return "", ""
 
     def hubspot_missing_token_names(self) -> list[str]:
-        return ["HUBSPOT_ACCESS_TOKEN", "HUBSPOT_PRIVATE_APP_TOKEN", "HUBSPOT_API_KEY"]
+        return ["HUBSPOT_ACCESS_TOKEN", "HUBSPOT_SERVICE_KEY", "HUBSPOT_PRIVATE_APP_TOKEN", "HUBSPOT_API_KEY"]
 
     def hubspot_contact_properties(self, lead: dict[str, Any]) -> dict[str, str]:
         email = str(lead.get("email") or lead.get("enriched_email") or "").strip().lower()

@@ -56,6 +56,7 @@ def test_config_status_reports_hubspot(monkeypatch) -> None:
 
 def test_hubspot_status_requires_token(monkeypatch) -> None:
     monkeypatch.delenv('HUBSPOT_ACCESS_TOKEN', raising=False)
+    monkeypatch.delenv('HUBSPOT_SERVICE_KEY', raising=False)
     monkeypatch.delenv('HUBSPOT_PRIVATE_APP_TOKEN', raising=False)
     monkeypatch.delenv('HUBSPOT_API_KEY', raising=False)
     response = client.get('/api/hubspot-status')
@@ -67,6 +68,7 @@ def test_hubspot_status_requires_token(monkeypatch) -> None:
 
 def test_hubspot_export_requires_token(monkeypatch) -> None:
     monkeypatch.delenv('HUBSPOT_ACCESS_TOKEN', raising=False)
+    monkeypatch.delenv('HUBSPOT_SERVICE_KEY', raising=False)
     monkeypatch.delenv('HUBSPOT_PRIVATE_APP_TOKEN', raising=False)
     monkeypatch.delenv('HUBSPOT_API_KEY', raising=False)
     response = client.post('/api/hubspot-export', json={'lead': {'email': 'demo@example.com', 'name': 'Demo Co'}})
@@ -89,6 +91,18 @@ def test_hubspot_export_accepts_valid_lead(monkeypatch) -> None:
     assert body['ok'] is True
     assert body['hubspot']['id'] == '12345'
     assert body['hubspot']['action'] == 'created'
+
+
+def test_hubspot_status_accepts_service_key_alias(monkeypatch) -> None:
+    monkeypatch.delenv('HUBSPOT_ACCESS_TOKEN', raising=False)
+    monkeypatch.setenv('HUBSPOT_SERVICE_KEY', 'test-service-key')
+    monkeypatch.delenv('HUBSPOT_PRIVATE_APP_TOKEN', raising=False)
+    monkeypatch.delenv('HUBSPOT_API_KEY', raising=False)
+    response = client.get('/api/hubspot-status')
+    assert response.status_code == 200
+    data = response.json()['hubspot']
+    assert data['configured'] is True
+    assert data['configuredBy'] == 'HUBSPOT_SERVICE_KEY'
 
 
 def test_tracking_allowed_origins_supports_comma_list(monkeypatch) -> None:

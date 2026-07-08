@@ -41,6 +41,8 @@ services:
         sync: false
       - key: HUBSPOT_ACCESS_TOKEN
         sync: false
+      - key: HUBSPOT_SERVICE_KEY
+        sync: false
       - key: HUBSPOT_PRIVATE_APP_TOKEN
         sync: false
       - key: HUBSPOT_API_KEY
@@ -72,6 +74,8 @@ services:
       - key: TRACKING_ALLOWED_ORIGIN
         value: "*"
       - key: HUBSPOT_ACCESS_TOKEN
+        sync: false
+      - key: HUBSPOT_SERVICE_KEY
         sync: false
       - key: HUBSPOT_PRIVATE_APP_TOKEN
         sync: false
