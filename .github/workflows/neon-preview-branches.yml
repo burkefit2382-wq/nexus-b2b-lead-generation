@@ -30,10 +30,6 @@ jobs:
     name: Create Neon Branch
     outputs:
       db_url: ${{ steps.create_neon_branch.outputs.db_url }}
-<<<<<<< HEAD
-=======
-      db_url_with_pooler: ${{ steps.create_neon_branch.outputs.db_url_with_pooler }}
->>>>>>> origin/main
       db_url_pooled: ${{ steps.create_neon_branch.outputs.db_url_pooled }}
     needs: setup
     if: |
@@ -70,11 +66,7 @@ jobs:
       - name: Run schema migration
         working-directory: backend
         env:
-<<<<<<< HEAD
           DATABASE_URL: ${{ steps.create_neon_branch.outputs.db_url_pooled }}
-=======
-          DATABASE_URL: ${{ steps.create_neon_branch.outputs.db_url_with_pooler || steps.create_neon_branch.outputs.db_url_pooled }}
->>>>>>> origin/main
         run: |
           python - <<'PY'
           import os
