@@ -152,10 +152,11 @@ npm run cf:deploy
 
 ### Custom domain (optional)
 
-The Worker ships with a `[[custom_domains]]` block in `wrangler.toml`. To activate it:
+`wrangler.toml` includes a commented custom-domain template. To activate it:
 
-1. Open `wrangler.toml` and replace `YOUR_CUSTOM_DOMAIN` with your domain (e.g. `app.example.com`).
-2. Ensure the domain's zone is already in your Cloudflare account.
-3. Run `npm run cf:deploy` — Wrangler will create the DNS record automatically.
+1. Uncomment the `[[custom_domains]]` and `hostname` lines.
+2. Set `hostname` to your domain (for example `app.example.com`).
+3. Ensure the domain's zone is already in your Cloudflare account.
+4. Run `npm run cf:deploy` — Wrangler will create the DNS record automatically.
 
 Without this step the Worker is reachable on its default `raspy-hat-15da.<your-subdomain>.workers.dev` URL.
