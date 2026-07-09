@@ -32,16 +32,27 @@ HUBSPOT_PORTAL_ID=...
 
 ### GitHub-triggered redeploys
 
-This repo includes `.github/workflows/render-backend-redeploy.yml` to validate the backend and trigger Render redeploy hooks after pushes to `main` or a manual workflow run.
+This repo includes `.github/workflows/render-backend-redeploy.yml` for branch-based promotion and manual promotion across environments:
+
+- `develop` -> Development deploy hooks
+- `staging` -> Staging deploy hooks
+- `main` -> Production deploy hooks
+- `workflow_dispatch` -> manual deploy to `dev`, `staging`, or `prod`
 
 Configure these GitHub repository secrets before relying on the workflow:
 
 ```text
-RENDER_LAUNCH_SITE_DEPLOY_HOOK=https://api.render.com/deploy/...
-RENDER_TRACKING_API_DEPLOY_HOOK=https://api.render.com/deploy/...
+RENDER_DEV_LAUNCH_SITE_DEPLOY_HOOK=https://api.render.com/deploy/...
+RENDER_DEV_TRACKING_API_DEPLOY_HOOK=https://api.render.com/deploy/...
+RENDER_STAGING_LAUNCH_SITE_DEPLOY_HOOK=https://api.render.com/deploy/...
+RENDER_STAGING_TRACKING_API_DEPLOY_HOOK=https://api.render.com/deploy/...
+RENDER_PROD_LAUNCH_SITE_DEPLOY_HOOK=https://api.render.com/deploy/...
+RENDER_PROD_TRACKING_API_DEPLOY_HOOK=https://api.render.com/deploy/...
 ```
 
-Create one deploy hook per Render service in the Render dashboard, then store each hook URL in the matching GitHub secret. The workflow runs backend compile checks and pytest first, then POSTs each configured hook so Render rebuilds only after validation passes.
+Create one deploy hook per Render service per environment, then store each hook URL in its matching GitHub secret. The workflow always runs backend compile checks and pytest first, then triggers the environment hooks.
+
+For safer promotion, add GitHub environment protection rules on `Development`, `Staging`, and `Production` (for example required reviewers before Production deploys).
 
 ## HubSpot CRM
 

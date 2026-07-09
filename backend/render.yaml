@@ -15,6 +15,22 @@ services:
         sync: false
       - key: EMAIL_DOMAIN
         value: "mail.nexuscloud.sh"
+      - key: LLAMA_CHAT_ENDPOINT
+        sync: false
+      - key: LLAMA_CHAT_MODEL
+        value: "llama3"
+      - key: LLAMA_CHAT_API_KEY
+        sync: false
+      - key: LLAMA3_CHAT_ENDPOINT
+        sync: false
+      - key: LLAMA3_CHAT_MODEL
+        sync: false
+      - key: LLAMA3_API_KEY
+        sync: false
+      - key: OLLAMA_HOST
+        sync: false
+      - key: OLLAMA_MODEL
+        sync: false
       - key: WAITLIST_NOTIFY_TO
         sync: false
       - key: PUBLIC_BASE_URL
