@@ -1,4 +1,7 @@
-from backend.workers.tampa_bay_lead_worker import normalize_element
+try:
+    from backend.workers.tampa_bay_lead_worker import normalize_element
+except ModuleNotFoundError:
+    from workers.tampa_bay_lead_worker import normalize_element
 
 
 REAL_ESTATE_TARGET = {"kind": "real_estate", "label": "Real estate office"}

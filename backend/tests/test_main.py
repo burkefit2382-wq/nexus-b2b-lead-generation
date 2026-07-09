@@ -4,8 +4,12 @@ from fastapi.testclient import TestClient
 
 try:
     from backend.app.main import app
+    from backend.app.services import config
+    from backend.app.services import hubspot as hubspot_service
 except ModuleNotFoundError:
     from app.main import app
+    from app.services import config
+    from app.services import hubspot as hubspot_service
 
 client = TestClient(app)
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / 'db' / 'schema.sql'
@@ -41,6 +45,75 @@ def test_config_status_does_not_expose_secret(monkeypatch) -> None:
     assert 'password' not in response.text
     assert 'example.com' not in response.text
     assert 'test-secret-value' not in response.text
+
+
+def test_config_status_reports_hubspot(monkeypatch) -> None:
+    monkeypatch.setenv('HUBSPOT_ACCESS_TOKEN', 'test-hubspot-token')
+    response = client.get('/api/config-status')
+    assert response.status_code == 200
+    assert response.json()['hubspotConfigured'] is True
+
+
+def test_hubspot_status_requires_token(monkeypatch) -> None:
+    monkeypatch.delenv('HUBSPOT_ACCESS_TOKEN', raising=False)
+    monkeypatch.delenv('HUBSPOT_SERVICE_KEY', raising=False)
+    monkeypatch.delenv('HUBSPOT_PRIVATE_APP_TOKEN', raising=False)
+    monkeypatch.delenv('HUBSPOT_API_KEY', raising=False)
+    response = client.get('/api/hubspot-status')
+    assert response.status_code == 200
+    data = response.json()
+    assert data['hubspot']['configured'] is False
+    assert 'HUBSPOT_ACCESS_TOKEN' in data['hubspot']['missing']
+
+
+def test_hubspot_export_requires_token(monkeypatch) -> None:
+    monkeypatch.delenv('HUBSPOT_ACCESS_TOKEN', raising=False)
+    monkeypatch.delenv('HUBSPOT_SERVICE_KEY', raising=False)
+    monkeypatch.delenv('HUBSPOT_PRIVATE_APP_TOKEN', raising=False)
+    monkeypatch.delenv('HUBSPOT_API_KEY', raising=False)
+    response = client.post('/api/hubspot-export', json={'lead': {'email': 'demo@example.com', 'name': 'Demo Co'}})
+    assert response.status_code == 503
+    assert response.json()['ok'] is False
+
+
+def test_hubspot_export_accepts_valid_lead(monkeypatch) -> None:
+    monkeypatch.setenv('HUBSPOT_ACCESS_TOKEN', 'test-token')
+
+    def fake_upsert(_: str, properties: dict[str, str]) -> dict[str, str]:
+        assert properties['email'] == 'demo@example.com'
+        assert properties['company'] == 'Demo Co'
+        return {'id': '12345', 'action': 'created'}
+
+    monkeypatch.setattr(hubspot_service, 'upsert_hubspot_contact', fake_upsert)
+    response = client.post('/api/hubspot-export', json={'lead': {'email': 'demo@example.com', 'name': 'Demo Co'}})
+    assert response.status_code == 200
+    body = response.json()
+    assert body['ok'] is True
+    assert body['hubspot']['id'] == '12345'
+    assert body['hubspot']['action'] == 'created'
+
+
+def test_hubspot_status_accepts_service_key_alias(monkeypatch) -> None:
+    monkeypatch.delenv('HUBSPOT_ACCESS_TOKEN', raising=False)
+    monkeypatch.setenv('HUBSPOT_SERVICE_KEY', 'test-service-key')
+    monkeypatch.delenv('HUBSPOT_PRIVATE_APP_TOKEN', raising=False)
+    monkeypatch.delenv('HUBSPOT_API_KEY', raising=False)
+    response = client.get('/api/hubspot-status')
+    assert response.status_code == 200
+    data = response.json()['hubspot']
+    assert data['configured'] is True
+    assert data['configuredBy'] == 'HUBSPOT_SERVICE_KEY'
+
+
+def test_tracking_allowed_origins_supports_comma_list(monkeypatch) -> None:
+    monkeypatch.setenv(
+        'TRACKING_ALLOWED_ORIGIN',
+        'https://nexus-b2b-lead-generation.onrender.com, http://localhost:5173',
+    )
+    assert config.tracking_allowed_origins() == [
+        'https://nexus-b2b-lead-generation.onrender.com',
+        'http://localhost:5173',
+    ]
 
 
 def test_schema_includes_tracking_events_table() -> None:

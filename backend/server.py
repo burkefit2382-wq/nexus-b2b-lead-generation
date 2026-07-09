@@ -48,6 +48,7 @@ WAITLIST_PATH = DATA_DIR / "waitlist_requests.jsonl"
 LEAD_PACKAGE_REQUESTS_PATH = DATA_DIR / "lead_package_requests.jsonl"
 FULFILLMENT_EVENTS_PATH = DATA_DIR / "fulfillment_events.jsonl"
 OSINT_REPORTS_PATH = DATA_DIR / "osint_report_requests.jsonl"
+HUBSPOT_EXPORTS_PATH = DATA_DIR / "hubspot_exports.jsonl"
 SCRAPER_DIR = DATA_DIR / "scrapers"
 SCRAPER_SUMMARY_PATH = SCRAPER_DIR / "latest_summary.json"
 SCRAPER_JSONL_PATH = SCRAPER_DIR / "tampa_bay_real_estate_leads.jsonl"
@@ -364,6 +365,14 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             self.handle_lead_stats()
             return
 
+        if route in {"/api/hubspot-status", "/api/crm-status"}:
+            self.handle_hubspot_status()
+            return
+
+        if route in {"/api/chat-status", "/api/llama-status"}:
+            self.handle_chat_status()
+            return
+
         query = urllib.parse.parse_qs(parsed.query)
         if parsed.path in {"", "/"} and query.get("page", [""])[0] == "dashboard":
             self.path = "/dashboard.html"
@@ -425,6 +434,10 @@ class LaunchHandler(SimpleHTTPRequestHandler):
 
         if route == "/api/lead-package-request":
             self.handle_lead_package_request()
+            return
+
+        if route in {"/api/hubspot-export", "/api/crm-export"}:
+            self.handle_hubspot_export()
             return
 
         if route == "/api/checkout":
@@ -500,6 +513,9 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             },
             HTTPStatus.OK,
         )
+
+    def handle_chat_status(self) -> None:
+        self.send_json({"ok": True, "chat": self.chat_status()}, HTTPStatus.OK)
 
     def handle_enrich_score(self) -> None:
         try:
@@ -671,6 +687,76 @@ class LaunchHandler(SimpleHTTPRequestHandler):
                 "lastRunAt": last_run_at or None,
                 "source": "scraper summary" if summary else "default",
                 "quality": summary.get("quality") or {},
+            },
+            HTTPStatus.OK,
+        )
+
+    def handle_hubspot_status(self) -> None:
+        self.send_json({"ok": True, "hubspot": self.hubspot_status()}, HTTPStatus.OK)
+
+    def handle_hubspot_export(self) -> None:
+        try:
+            payload = self.read_json_body(max_length=32768)
+        except ValueError as exc:
+            self.send_json({"ok": False, "error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+
+        token = self.hubspot_access_token()
+        if not token:
+            self.send_json(
+                {"ok": False, "error": "HubSpot is not configured.", "missing": self.hubspot_missing_token_names()},
+                HTTPStatus.SERVICE_UNAVAILABLE,
+            )
+            return
+
+        lead = payload.get("lead")
+        if not isinstance(lead, dict):
+            self.send_json({"ok": False, "error": "Request requires a lead object."}, HTTPStatus.BAD_REQUEST)
+            return
+
+        try:
+            properties = self.hubspot_contact_properties(lead)
+        except ValueError as exc:
+            self.send_json({"ok": False, "error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+
+        try:
+            result = self.upsert_hubspot_contact(token, properties)
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            self.send_json(
+                {
+                    "ok": False,
+                    "error": "HubSpot rejected the contact export.",
+                    "status": exc.code,
+                    "detail": detail[:1200],
+                },
+                HTTPStatus.BAD_GATEWAY,
+            )
+            return
+        except Exception as exc:  # noqa: BLE001 - return safe CRM error to browser.
+            self.send_json({"ok": False, "error": f"HubSpot export failed: {exc}"}, HTTPStatus.BAD_GATEWAY)
+            return
+
+        record = {
+            "capturedAt": datetime.now(timezone.utc).isoformat(),
+            "remoteAddress": self.client_address[0],
+            "action": result["action"],
+            "hubspotId": result["id"],
+            "email": properties.get("email", ""),
+            "company": properties.get("company", ""),
+            "source": "nexus_hubspot_export",
+        }
+        DATA_DIR.mkdir(exist_ok=True)
+        with HUBSPOT_EXPORTS_PATH.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, sort_keys=True) + "\n")
+
+        self.send_json(
+            {
+                "ok": True,
+                "message": f"HubSpot contact {result['action']}.",
+                "hubspot": {"id": result["id"], "action": result["action"]},
+                "properties": {key: value for key, value in properties.items() if key != "email"},
             },
             HTTPStatus.OK,
         )
@@ -1157,6 +1243,111 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         code = str(currency or "usd").upper()
         return f"${cents / 100:,.2f} {code}"
 
+    def hubspot_status(self) -> dict[str, Any]:
+        token_name, token = self.hubspot_token_source()
+        portal_id = os.environ.get("HUBSPOT_PORTAL_ID", "").strip()
+        return {
+            "configured": bool(token),
+            "configuredBy": token_name if token else "",
+            "portalIdConfigured": bool(portal_id),
+            "missing": [] if token else self.hubspot_missing_token_names(),
+            "endpoint": "https://api.hubapi.com/crm/v3/objects/contacts",
+        }
+
+    def hubspot_access_token(self) -> str:
+        return self.hubspot_token_source()[1]
+
+    def hubspot_token_source(self) -> tuple[str, str]:
+        for name in ("HUBSPOT_ACCESS_TOKEN", "HUBSPOT_SERVICE_KEY", "HUBSPOT_PRIVATE_APP_TOKEN", "HUBSPOT_API_KEY"):
+            value = os.environ.get(name, "").strip()
+            if value:
+                return name, value
+        return "", ""
+
+    def hubspot_missing_token_names(self) -> list[str]:
+        return ["HUBSPOT_ACCESS_TOKEN", "HUBSPOT_SERVICE_KEY", "HUBSPOT_PRIVATE_APP_TOKEN", "HUBSPOT_API_KEY"]
+
+    def hubspot_contact_properties(self, lead: dict[str, Any]) -> dict[str, str]:
+        email = str(lead.get("email") or lead.get("enriched_email") or "").strip().lower()
+        company = str(lead.get("company") or lead.get("name") or "").strip()
+        full_name = str(lead.get("contactName") or lead.get("contact_name") or "").strip()
+        first_name = str(lead.get("firstName") or lead.get("firstname") or "").strip()
+        last_name = str(lead.get("lastName") or lead.get("lastname") or "").strip()
+        if full_name and not first_name and not last_name:
+            parts = full_name.split()
+            first_name = parts[0]
+            last_name = " ".join(parts[1:]) if len(parts) > 1 else ""
+
+        phone = str(lead.get("phone") or lead.get("enriched_phone") or "").strip()
+        website = str(lead.get("website") or "").strip()
+        city = str(lead.get("city") or "").strip()
+        state = str(lead.get("state") or "").strip().upper()
+        postcode = str(lead.get("postcode") or lead.get("zip") or "").strip()
+        street = str(lead.get("street") or lead.get("address") or "").strip()
+
+        if not any((email, phone, website, company)):
+            raise ValueError("HubSpot export needs at least an email, phone, website, or company name.")
+        if email and not EMAIL_RE.match(email):
+            raise ValueError("HubSpot export email is invalid.")
+
+        properties = {
+            "email": email,
+            "firstname": first_name,
+            "lastname": last_name,
+            "phone": phone,
+            "company": company,
+            "website": website,
+            "city": city,
+            "state": state,
+            "zip": postcode,
+            "address": street,
+        }
+        return {key: value for key, value in properties.items() if value}
+
+    def upsert_hubspot_contact(self, token: str, properties: dict[str, str]) -> dict[str, str]:
+        existing_id = self.find_hubspot_contact_by_email(token, properties.get("email", ""))
+        if existing_id:
+            response = self.hubspot_request(token, f"/crm/v3/objects/contacts/{existing_id}", {"properties": properties}, "PATCH")
+            return {"id": str(response.get("id") or existing_id), "action": "updated"}
+
+        response = self.hubspot_request(token, "/crm/v3/objects/contacts", {"properties": properties}, "POST")
+        return {"id": str(response.get("id", "")), "action": "created"}
+
+    def find_hubspot_contact_by_email(self, token: str, email: str) -> str:
+        if not email:
+            return ""
+        payload = {
+            "filterGroups": [
+                {
+                    "filters": [
+                        {"propertyName": "email", "operator": "EQ", "value": email},
+                    ],
+                }
+            ],
+            "properties": ["email"],
+            "limit": 1,
+        }
+        response = self.hubspot_request(token, "/crm/v3/objects/contacts/search", payload, "POST")
+        results = response.get("results") if isinstance(response, dict) else []
+        if isinstance(results, list) and results:
+            return str(results[0].get("id") or "")
+        return ""
+
+    def hubspot_request(self, token: str, path: str, payload: dict[str, Any], method: str) -> dict[str, Any]:
+        body = json.dumps(payload).encode("utf-8")
+        request = urllib.request.Request(
+            f"https://api.hubapi.com{path}",
+            data=body,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+            method=method,
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            raw = response.read().decode("utf-8")
+        return json.loads(raw) if raw else {}
+
     def read_json_body(self, max_length: int = 8192) -> dict[str, Any]:
         raw_body = self.read_raw_body(max_length=max_length)
         raw = raw_body.decode("utf-8")
@@ -1409,8 +1600,8 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             return f"failed: {exc}"
 
     def generate_chat_response(self, prompt: str) -> tuple[str, str]:
-        endpoint = os.environ.get("LLAMA_CHAT_ENDPOINT")
-        model = os.environ.get("LLAMA_CHAT_MODEL", "llama3")
+        endpoint = self.llama_chat_endpoint()
+        model = self.llama_chat_model()
 
         if endpoint:
             try:
@@ -1424,6 +1615,47 @@ class LaunchHandler(SimpleHTTPRequestHandler):
                 )
 
         return self.safe_chat_response(prompt), "safe_mode"
+
+    def chat_status(self) -> dict[str, Any]:
+        endpoint_name, endpoint = self.llama_endpoint_source()
+        api_key_name, api_key = self.llama_api_key_source()
+        return {
+            "configured": bool(endpoint),
+            "configuredBy": endpoint_name if endpoint else "",
+            "model": self.llama_chat_model(),
+            "authConfigured": bool(api_key),
+            "authConfiguredBy": api_key_name if api_key else "",
+            "missing": [] if endpoint else ["LLAMA_CHAT_ENDPOINT", "LLAMA3_CHAT_ENDPOINT", "OLLAMA_HOST"],
+            "mode": "llama_endpoint" if endpoint else "safe_mode",
+        }
+
+    def llama_chat_model(self) -> str:
+        return (
+            os.environ.get("LLAMA_CHAT_MODEL")
+            or os.environ.get("LLAMA3_CHAT_MODEL")
+            or os.environ.get("OLLAMA_MODEL")
+            or "llama3"
+        ).strip()
+
+    def llama_chat_endpoint(self) -> str:
+        return self.llama_endpoint_source()[1]
+
+    def llama_endpoint_source(self) -> tuple[str, str]:
+        for name in ("LLAMA_CHAT_ENDPOINT", "LLAMA3_CHAT_ENDPOINT"):
+            value = os.environ.get(name, "").strip()
+            if value:
+                return name, value
+        ollama_host = os.environ.get("OLLAMA_HOST", "").strip().rstrip("/")
+        if ollama_host:
+            return "OLLAMA_HOST", f"{ollama_host}/api/chat"
+        return "", ""
+
+    def llama_api_key_source(self) -> tuple[str, str]:
+        for name in ("LLAMA_CHAT_API_KEY", "LLAMA_API_KEY", "LLAMA3_API_KEY"):
+            value = os.environ.get(name, "").strip()
+            if value:
+                return name, value
+        return "", ""
 
     def call_llama_endpoint(self, endpoint: str, model: str, prompt: str) -> str:
         payload = {
@@ -1442,10 +1674,15 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             ],
         }
         body = json.dumps(payload).encode("utf-8")
+        headers = {"Content-Type": "application/json"}
+        _, api_key = self.llama_api_key_source()
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
         request = urllib.request.Request(
             endpoint,
             data=body,
-            headers={"Content-Type": "application/json"},
+            headers=headers,
             method="POST",
         )
         with urllib.request.urlopen(request, timeout=45) as response:
@@ -1454,6 +1691,15 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         if isinstance(data, dict):
             if isinstance(data.get("message"), dict) and data["message"].get("content"):
                 return str(data["message"]["content"]).strip()
+            choices = data.get("choices")
+            if isinstance(choices, list) and choices:
+                first = choices[0]
+                if isinstance(first, dict):
+                    message = first.get("message")
+                    if isinstance(message, dict) and message.get("content"):
+                        return str(message["content"]).strip()
+                    if first.get("text"):
+                        return str(first["text"]).strip()
             if data.get("response"):
                 return str(data["response"]).strip()
         raise RuntimeError("Llama endpoint returned an unsupported response format")

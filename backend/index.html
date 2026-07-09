@@ -21,6 +21,7 @@
         <a href="#scrapers">Scrapers</a>
         <a href="#scoring">Scoring</a>
         <a href="#enrichment">Enrichment</a>
+        <a href="#crm">CRM</a>
         <a href="#lead-market">For Sale</a>
         <a href="#pi-suite">Pi Suite</a>
         <a href="#ai-chat">AI Chat</a>
@@ -464,6 +465,34 @@
               <span>Waiting</span>
               <strong>Ready for enrichment</strong>
               <p>Run the pipeline to generate a demo enrichment summary, score, confidence, and next action.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section crm" id="crm">
+        <div class="section-heading">
+          <p class="eyebrow">CRM export</p>
+          <h2>Push reviewed leads into HubSpot</h2>
+          <p>Export approved Nexus leads into HubSpot CRM as contacts after enrichment, scoring, and QA review.</p>
+        </div>
+        <div class="pipeline-layout">
+          <div class="sample-lead">
+            <strong>HubSpot connection</strong>
+            <p id="hubspotStatus">Checking HubSpot CRM status...</p>
+            <dl>
+              <div><dt>Mode</dt><dd>Server-side private app token</dd></div>
+              <div><dt>Object</dt><dd>CRM contact</dd></div>
+              <div><dt>Duplicate control</dt><dd>Search by email, then update or create</dd></div>
+              <div><dt>Required env</dt><dd>HUBSPOT_ACCESS_TOKEN</dd></div>
+            </dl>
+            <button type="button" id="hubspotExportDemo">Send demo contact to HubSpot</button>
+          </div>
+          <div class="pipeline-results" id="hubspotResults" aria-live="polite">
+            <div class="result-card">
+              <span>Waiting</span>
+              <strong>Ready for CRM export</strong>
+              <p>Configure a HubSpot private app token with contact write scope, then export reviewed leads from Nexus.</p>
             </div>
           </div>
         </div>

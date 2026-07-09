@@ -17,12 +17,18 @@ const testFulfillmentList = document.querySelector("#testFulfillmentList");
 const osintReportForm = document.querySelector("#osintReportForm");
 const osintReportNote = document.querySelector("#osintReportNote");
 const osintReportResults = document.querySelector("#osintReportResults");
+const hubspotStatus = document.querySelector("#hubspotStatus");
+const hubspotExportDemo = document.querySelector("#hubspotExportDemo");
+const hubspotResults = document.querySelector("#hubspotResults");
+const nexusApiBaseUrl = (window.NEXUS_API_BASE_URL || "https://nexus-tracking-api.onrender.com").replace(/\/$/, "");
 
 window.addEventListener("hashchange", renderPage);
 window.addEventListener("load", () => {
   renderPage();
   loadRevenueStatus();
   loadFulfillmentStatus();
+  loadHubspotStatus();
+  loadChatStatus();
 });
 renderPage();
 
@@ -76,14 +82,83 @@ async function submitWaitlistRequest(email) {
 
     form.reset();
     note.textContent = "Pilot request received. We will follow up with next steps.";
+    await createNexusLead({
+      name: email,
+      intent: "pilot access request",
+      location: "Web launch site",
+      email,
+      phone: "",
+      budget: "",
+      notes: "Captured from launch site pilot form.",
+    });
   } catch (error) {
     const requests = JSON.parse(localStorage.getItem("leadgenPilotRequests") || "[]");
     requests.push({ email, capturedAt: new Date().toISOString(), fallback: true });
     localStorage.setItem("leadgenPilotRequests", JSON.stringify(requests));
-    note.textContent = "Saved locally for this prototype. Start the launch server to enable /api/waitlist.";
+    try {
+      await createNexusLead({
+        name: email,
+        intent: "pilot access request",
+        location: "Web launch site",
+        email,
+        phone: "",
+        budget: "",
+        notes: "Captured locally after launch waitlist endpoint was unavailable.",
+      });
+      note.textContent = "Pilot request saved to the Nexus lead API.";
+    } catch (leadError) {
+      note.textContent = "Saved locally for this prototype. Start the launch server to enable /api/waitlist.";
+    }
   } finally {
     button.disabled = false;
   }
+}
+
+async function createNexusLead(lead) {
+  const response = await fetch(`${nexusApiBaseUrl}/leads/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(lead),
+  });
+  const body = await response.json();
+  if (!response.ok) {
+    throw new Error(body.detail || body.error || "Unable to create Nexus lead.");
+  }
+  trackNexusEvent("generate_lead", {
+    lead_id: body.id,
+    email: lead.email,
+    intent: lead.intent,
+  });
+  return body;
+}
+
+function trackNexusEvent(eventName, eventData = {}) {
+  fetch(`${nexusApiBaseUrl}/api/event`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      event_name: eventName,
+      client_id: getOrCreateClientId(),
+      lead_id: eventData.lead_id,
+      page_url: window.location.href,
+      referrer: document.referrer,
+      utm_source: new URLSearchParams(window.location.search).get("utm_source") || "",
+      utm_medium: new URLSearchParams(window.location.search).get("utm_medium") || "",
+      utm_campaign: new URLSearchParams(window.location.search).get("utm_campaign") || "",
+      event_data: eventData,
+    }),
+  }).catch(() => {});
+}
+
+function getOrCreateClientId() {
+  const key = "nexusClientId";
+  const existing = localStorage.getItem(key);
+  if (existing) {
+    return existing;
+  }
+  const value = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+  localStorage.setItem(key, value);
+  return value;
 }
 
 async function loadRevenueStatus() {
@@ -168,6 +243,46 @@ async function loadFulfillmentStatus() {
     renderTestFulfillment(body);
   } catch (error) {
     fulfillmentStatus.textContent = error.message || "Fulfillment status unavailable.";
+  }
+}
+
+async function loadHubspotStatus() {
+  if (!hubspotStatus) {
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/hubspot-status");
+    const body = await response.json();
+    if (!response.ok) {
+      throw new Error(body.error || "Unable to load HubSpot status.");
+    }
+
+    hubspotStatus.textContent = body.hubspot.configured
+      ? "HubSpot CRM is configured. Demo export is ready."
+      : `HubSpot needs: ${body.hubspot.missing.join(", ")}.`;
+  } catch (error) {
+    hubspotStatus.textContent = error.message || "HubSpot status unavailable.";
+  }
+}
+
+async function loadChatStatus() {
+  if (!chatNote) {
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/chat-status");
+    const body = await response.json();
+    if (!response.ok) {
+      throw new Error(body.error || "Unable to load chat status.");
+    }
+
+    chatNote.textContent = body.chat.configured
+      ? `Llama 3 backend connected with ${body.chat.model}.`
+      : `Safe mode active. Configure ${body.chat.missing.join(" or ")} for live Llama 3.`;
+  } catch (error) {
+    chatNote.textContent = "AI chat status unavailable.";
   }
 }
 
@@ -336,6 +451,45 @@ runEnrichment?.addEventListener("click", async () => {
     pipelineResults.innerHTML = resultCard("Error", "Pipeline unavailable", "Restart the launch server and try again.");
   } finally {
     runEnrichment.disabled = false;
+  }
+});
+
+hubspotExportDemo?.addEventListener("click", async () => {
+  hubspotExportDemo.disabled = true;
+  hubspotResults.innerHTML = resultCard("Exporting", "Sending demo contact to HubSpot", "Creating or updating a CRM contact by email.");
+
+  try {
+    const response = await fetch("/api/hubspot-export", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        lead: {
+          email: "demo.agent@example.com",
+          contactName: "Demo Agent",
+          company: "NEXUS Tampa Bay Pilot",
+          phone: "+1-727-555-0199",
+          website: "https://nexuscloud.sh",
+          city: "St Petersburg",
+          state: "FL",
+          postcode: "33709",
+          street: "St Pete, FL",
+        },
+      }),
+    });
+    const body = await response.json();
+    if (!response.ok) {
+      throw new Error(body.error || "HubSpot export failed.");
+    }
+
+    hubspotResults.innerHTML = [
+      resultCard("HubSpot", body.message, `Contact ID: ${body.hubspot.id}`),
+      resultCard("Action", body.hubspot.action, "Nexus logged the CRM export event server-side."),
+    ].join("");
+  } catch (error) {
+    hubspotResults.innerHTML = resultCard("Setup needed", "HubSpot export unavailable", error.message || "Check HUBSPOT_ACCESS_TOKEN.");
+  } finally {
+    hubspotExportDemo.disabled = false;
+    loadHubspotStatus();
   }
 });
 

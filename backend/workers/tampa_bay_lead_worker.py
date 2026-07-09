@@ -51,6 +51,17 @@ TARGETS = (
             '["service"~"cleaning|house_cleaning|commercial_cleaning|janitorial"]',
         ),
     },
+    {
+        "kind": "biopharma",
+        "label": "Biopharma / life sciences HQ candidate",
+        "filters": (
+            '["office"~"research|laboratory|company"]',
+            '["healthcare"~"laboratory|pharmacy"]',
+            '["amenity"~"research_institute|laboratory|pharmacy"]',
+            '["shop"~"pharmacy|medical_supply"]',
+            '["name"~"bio|biotech|pharma|therapeutics|life science|clinical|laborator",i]',
+        ),
+    },
 )
 
 FIELDNAMES = (
@@ -210,6 +221,9 @@ def score_record(kind: str, website: str, phone: str, street: str, lat: Any, lon
     if kind == "real_estate":
         score += 22
         notes.append("Direct real estate category")
+    elif kind == "biopharma":
+        score += 22
+        notes.append("Direct biopharma or life sciences public business category")
     elif kind in {"mortgage", "insurance"}:
         score += 15
         notes.append("Adjacent real estate service category")
@@ -366,7 +380,17 @@ def apply_osint_quality(record: dict[str, Any]) -> None:
     county = str(record.get("county") or "").strip()
     county_name = county if county.endswith("County") else f"{county} County"
     category = str(record.get("category") or "").lower()
-    kind = "real_estate" if "real estate" in category else "mortgage" if "mortgage" in category else "insurance" if "insurance" in category else "home_services"
+    kind = (
+        "real_estate"
+        if "real estate" in category
+        else "biopharma"
+        if "biopharma" in category or "life sciences" in category
+        else "mortgage"
+        if "mortgage" in category
+        else "insurance"
+        if "insurance" in category
+        else "home_services"
+    )
     tags = {
         "name": record.get("name"),
         "addr:city": record.get("city"),

@@ -583,6 +583,7 @@
       Lead Control Center | NEXUS | Render | Resend | HubSpot | mail.nexuscloud.sh
     </footer>
     <script>
+      const nexusApiBaseUrl = (window.NEXUS_API_BASE_URL || "https://nexus-tracking-api.onrender.com").replace(/\/$/, "");
       const fallbackMetrics = {
         "backend-health": "Healthy (200 /healthz)",
         "backend-last-check": "Just now",
@@ -604,10 +605,11 @@
       Object.entries(fallbackMetrics).forEach(([id, value]) => setText(id, value));
 
       Promise.allSettled([
-        fetch("/api/health").then((response) => response.json()),
-        fetch("/api/scraper-queue").then((response) => response.json()),
-        fetch("/api/lead-stats").then((response) => response.json()),
-      ]).then(([health, queue, stats]) => {
+        fetch(`${nexusApiBaseUrl}/api/health`).then((response) => response.json()),
+        fetch(`${nexusApiBaseUrl}/api/scraper-queue`).then((response) => response.json()),
+        fetch(`${nexusApiBaseUrl}/api/lead-stats`).then((response) => response.json()),
+        fetch(`${nexusApiBaseUrl}/leads/`).then((response) => response.json()),
+      ]).then(([health, queue, stats, leads]) => {
         if (health.status === "fulfilled" && health.value?.ok) {
           setText("backend-health", `${health.value.status || "healthy"} (200 /healthz)`);
           setText("backend-last-check", "Just now");
@@ -623,6 +625,10 @@
           setText("leads-today", stats.value.today);
           setText("leads-week", stats.value.week);
           setText("leads-total", stats.value.total);
+        }
+
+        if (leads.status === "fulfilled" && Array.isArray(leads.value)) {
+          setText("leads-total", leads.value.length);
         }
       });
     </script>

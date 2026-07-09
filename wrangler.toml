@@ -9,8 +9,7 @@ command = "npm --prefix frontend install && npm --prefix frontend run build"
 directory = "frontend/dist"
 binding = "ASSETS"
 
-# Custom domain — replace YOUR_CUSTOM_DOMAIN with your actual domain (e.g. app.example.com).
-# Cloudflare will automatically create and manage the DNS record for you.
-# Remove or comment this section out if you only need the default *.workers.dev URL.
-[[custom_domains]]
-hostname = "YOUR_CUSTOM_DOMAIN"
+# Optional custom domain template (disabled by default).
+# Uncomment and set your real hostname (e.g. app.example.com) to enable.
+# [[custom_domains]]
+# hostname = "app.example.com"

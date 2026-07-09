@@ -88,6 +88,7 @@ Deploy the contents of `launch_site/` as the site root. Use a Python-capable hos
    - `STRIPE_API_VERSION=2026-06-24.dahlia`
    - `STRIPE_SECRET_KEY`
    - `STRIPE_WEBHOOK_SECRET`
+   - `HUBSPOT_ACCESS_TOKEN` for CRM contact export, or `HUBSPOT_PRIVATE_APP_TOKEN` / `HUBSPOT_API_KEY` as fallback names
    - `PRICE_ID` only if you want a default fallback price when no button price is sent
 5. Health check path: `/healthz`.
 
@@ -105,6 +106,7 @@ Deploy the contents of `launch_site/` as the site root. Use a Python-capable hos
    - `STRIPE_API_VERSION=2026-06-24.dahlia`
    - `STRIPE_SECRET_KEY`
    - `STRIPE_WEBHOOK_SECRET`
+   - `HUBSPOT_ACCESS_TOKEN` for CRM contact export, or `HUBSPOT_PRIVATE_APP_TOKEN` / `HUBSPOT_API_KEY` as fallback names
    - `PRICE_ID` only if you want a default fallback price when no button price is sent
 4. Railway provides `PORT`; `server.py` reads it automatically.
 
@@ -194,7 +196,7 @@ $env:LLAMA_CHAT_MODEL = "llama3"
 python server.py
 ```
 
-For cloud hosting, set `LLAMA_CHAT_ENDPOINT` to your hosted Llama-compatible chat API. Do not put model API keys in browser code.
+For cloud hosting, set `LLAMA_CHAT_ENDPOINT` to your hosted Llama-compatible chat API. Optional bearer auth is read from `LLAMA_CHAT_API_KEY`, `LLAMA_API_KEY`, or `LLAMA3_API_KEY`. Nexus also accepts `LLAMA3_CHAT_ENDPOINT` and `OLLAMA_HOST` as endpoint aliases. Do not put model API keys in browser code.
 
 ## Stripe Checkout
 

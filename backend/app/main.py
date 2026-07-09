@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse
 
 from .api.leads import router as leads_router
 from .services import config
+from .services import hubspot as hubspot_service
 from .services.database import run_migrations
 
 
@@ -44,9 +45,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="NEXUS B2B Lead Generation API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[config.TRACKING_ALLOWED_ORIGIN],
+    allow_origins=config.tracking_allowed_origins(),
     allow_credentials=False,
-    allow_methods=["POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type"],
 )
 app.include_router(leads_router, prefix="/leads", tags=["Leads"])
@@ -70,13 +71,57 @@ def api_health() -> dict[str, Any]:
 
 @app.get("/api/config-status")
 def config_status() -> dict[str, bool | str]:
+    status = hubspot_service.hubspot_status()
     return {
         "ok": True,
         "databaseUrlConfigured": bool(config.database_url()),
         "r2Configured": config.r2_configured(),
         "resendConfigured": config.resend_configured(),
         "jwtConfigured": config.jwt_configured(),
+        "hubspotConfigured": bool(status["configured"]),
         "checkedAt": utc_now(),
+    }
+
+
+@app.get("/api/hubspot-status")
+def api_hubspot_status() -> dict[str, Any]:
+    return {"ok": True, "hubspot": hubspot_service.hubspot_status()}
+
+
+@app.post("/api/hubspot-export")
+def api_hubspot_export(payload: dict[str, Any], response: Response) -> dict[str, Any]:
+    token = hubspot_service.hubspot_access_token()
+    if not token:
+        response.status_code = 503
+        return {"ok": False, "error": "HubSpot is not configured.", "missing": hubspot_service.hubspot_missing_token_names()}
+
+    lead = payload.get("lead")
+    if not isinstance(lead, dict):
+        response.status_code = 400
+        return {"ok": False, "error": "Request requires a lead object."}
+
+    try:
+        properties = hubspot_service.hubspot_contact_properties(lead)
+    except ValueError as exc:
+        response.status_code = 400
+        return {"ok": False, "error": str(exc)}
+
+    try:
+        result = hubspot_service.upsert_hubspot_contact(token, properties)
+    except hubspot_service.HubSpotExportError as exc:
+        response.status_code = 502
+        return {
+            "ok": False,
+            "error": str(exc),
+            "status": exc.status,
+            "detail": exc.detail,
+        }
+
+    return {
+        "ok": True,
+        "message": f"HubSpot contact {result['action']}.",
+        "hubspot": {"id": result["id"], "action": result["action"]},
+        "properties": {key: value for key, value in properties.items() if key != "email"},
     }
 
 

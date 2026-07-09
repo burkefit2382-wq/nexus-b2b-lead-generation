@@ -25,7 +25,57 @@ RESEND_FROM=Nexus <sales@nexuscloud.sh>
 WAITLIST_NOTIFY_TO=...
 LLAMA_CHAT_ENDPOINT=...
 LLAMA_CHAT_MODEL=llama3
+LLAMA_CHAT_API_KEY=...
+HUBSPOT_ACCESS_TOKEN=...
+HUBSPOT_PORTAL_ID=...
 ```
+
+### GitHub-triggered redeploys
+
+This repo includes `.github/workflows/render-backend-redeploy.yml` for branch-based promotion and manual promotion across environments:
+
+- `develop` -> Development deploy hooks
+- `staging` -> Staging deploy hooks
+- `main` -> Production deploy hooks
+- `workflow_dispatch` -> manual deploy to `dev`, `staging`, or `prod`
+
+Configure these GitHub repository secrets before relying on the workflow:
+
+```text
+RENDER_DEV_LAUNCH_SITE_DEPLOY_HOOK=https://api.render.com/deploy/...
+RENDER_DEV_TRACKING_API_DEPLOY_HOOK=https://api.render.com/deploy/...
+RENDER_STAGING_LAUNCH_SITE_DEPLOY_HOOK=https://api.render.com/deploy/...
+RENDER_STAGING_TRACKING_API_DEPLOY_HOOK=https://api.render.com/deploy/...
+RENDER_PROD_LAUNCH_SITE_DEPLOY_HOOK=https://api.render.com/deploy/...
+RENDER_PROD_TRACKING_API_DEPLOY_HOOK=https://api.render.com/deploy/...
+```
+
+Create one deploy hook per Render service per environment, then store each hook URL in its matching GitHub secret. The workflow always runs backend compile checks and pytest first, then triggers the environment hooks.
+
+For safer promotion, add GitHub environment protection rules on `Development`, `Staging`, and `Production` (for example required reviewers before Production deploys).
+
+## HubSpot CRM
+
+Create a HubSpot private app token with contact read/write scopes. Set the token in Render using `HUBSPOT_ACCESS_TOKEN`. Nexus also accepts `HUBSPOT_SERVICE_KEY`, `HUBSPOT_PRIVATE_APP_TOKEN`, or `HUBSPOT_API_KEY` as fallback names, which helps when Render already has those environment variables from setup notes. Set `HUBSPOT_PORTAL_ID` for dashboard visibility.
+
+Nexus sends the token only from the server using a Bearer Authorization header. Contact export is active through `/api/hubspot-export`; inbound HubSpot webhooks require a separate webhook route before they can receive HubSpot events.
+
+## Llama 3 Chat
+
+Set `LLAMA_CHAT_ENDPOINT` to a hosted Llama-compatible chat endpoint, or set `OLLAMA_HOST` for an Ollama server and Nexus will call `/api/chat` automatically. Optional bearer auth can be supplied with `LLAMA_CHAT_API_KEY`.
+
+Accepted fallback names:
+
+```text
+LLAMA3_CHAT_ENDPOINT
+LLAMA3_CHAT_MODEL
+LLAMA_API_KEY
+LLAMA3_API_KEY
+OLLAMA_HOST
+OLLAMA_MODEL
+```
+
+The browser never receives the Llama API key. The frontend calls `/api/chat`; the backend calls the model endpoint.
 
 ## Cloudflare Tunnel
 
@@ -64,4 +114,3 @@ checkout.session.completed
 ```
 
 Store the webhook signing secret as `STRIPE_WEBHOOK_SECRET`.
-
