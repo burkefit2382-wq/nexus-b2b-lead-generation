@@ -15,6 +15,22 @@ services:
         sync: false
       - key: EMAIL_DOMAIN
         value: "mail.nexuscloud.sh"
+      - key: LLAMA_CHAT_ENDPOINT
+        sync: false
+      - key: LLAMA_CHAT_MODEL
+        value: "llama3"
+      - key: LLAMA_CHAT_API_KEY
+        sync: false
+      - key: LLAMA3_CHAT_ENDPOINT
+        sync: false
+      - key: LLAMA3_CHAT_MODEL
+        sync: false
+      - key: LLAMA3_API_KEY
+        sync: false
+      - key: OLLAMA_HOST
+        sync: false
+      - key: OLLAMA_MODEL
+        sync: false
       - key: WAITLIST_NOTIFY_TO
         sync: false
       - key: PUBLIC_BASE_URL
@@ -38,6 +54,16 @@ services:
       - key: R2_ENDPOINT_URL
         sync: false
       - key: JWT_SECRET
+        sync: false
+      - key: HUBSPOT_ACCESS_TOKEN
+        sync: false
+      - key: HUBSPOT_SERVICE_KEY
+        sync: false
+      - key: HUBSPOT_PRIVATE_APP_TOKEN
+        sync: false
+      - key: HUBSPOT_API_KEY
+        sync: false
+      - key: HUBSPOT_PORTAL_ID
         sync: false
   - type: web
     name: nexus-tracking-api
@@ -63,6 +89,16 @@ services:
         sync: false
       - key: TRACKING_ALLOWED_ORIGIN
         value: "*"
+      - key: HUBSPOT_ACCESS_TOKEN
+        sync: false
+      - key: HUBSPOT_SERVICE_KEY
+        sync: false
+      - key: HUBSPOT_PRIVATE_APP_TOKEN
+        sync: false
+      - key: HUBSPOT_API_KEY
+        sync: false
+      - key: HUBSPOT_PORTAL_ID
+        sync: false
   - type: cron
     name: nexus-osint-scraper-quality
     runtime: python

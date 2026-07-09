@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..core.db import get_db
 from ..models.lead import Lead
 from ..schemas.lead import LeadCreate, LeadOut
+from ..services.hubspot import HubSpotExportError, hubspot_access_token, hubspot_contact_properties, upsert_hubspot_contact
 
 
 router = APIRouter()
@@ -13,6 +14,17 @@ router = APIRouter()
 def create_lead(payload: LeadCreate, db: Session = Depends(get_db)) -> Lead:
     lead = Lead(**payload.model_dump())
     db.add(lead)
+    token = hubspot_access_token()
+    if token:
+        try:
+            properties = hubspot_contact_properties(payload.model_dump())
+            upsert_hubspot_contact(token, properties)
+        except ValueError as exc:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except HubSpotExportError as exc:
+            db.rollback()
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
     db.commit()
     db.refresh(lead)
     return lead

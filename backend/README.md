@@ -95,6 +95,8 @@ LLAMA_CHAT_API_KEY=optional_bearer_token
 HUBSPOT_ACCESS_TOKEN=your_hubspot_private_app_token
 ```
 
+Fallback aliases are also accepted: `HUBSPOT_SERVICE_KEY`, `HUBSPOT_PRIVATE_APP_TOKEN`, or `HUBSPOT_API_KEY`.
+
 ## Monetization Catalog
 
 Primary live checkout lookup keys:
