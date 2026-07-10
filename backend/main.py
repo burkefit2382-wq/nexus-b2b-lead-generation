@@ -2,7 +2,10 @@ import os
 
 import uvicorn
 
-from app.main import app
+try:
+    from app.main import app
+except ModuleNotFoundError:
+    from backend.app.main import app
 
 __all__ = ["app"]
 
