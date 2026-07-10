@@ -93,6 +93,8 @@ LLAMA_CHAT_ENDPOINT=https://your-llama-compatible-endpoint
 LLAMA_CHAT_MODEL=llama3
 LLAMA_CHAT_API_KEY=optional_bearer_token
 HUBSPOT_ACCESS_TOKEN=your_hubspot_private_app_token
+HUBSPOT_SERVICE_KEY=your_hubspot_service_key
+HUBSPOT_PORTAL_ID=246668830
 ```
 
 Fallback aliases are also accepted: `HUBSPOT_SERVICE_KEY`, `HUBSPOT_PRIVATE_APP_TOKEN`, or `HUBSPOT_API_KEY`.

@@ -27,7 +27,8 @@ LLAMA_CHAT_ENDPOINT=...
 LLAMA_CHAT_MODEL=llama3
 LLAMA_CHAT_API_KEY=...
 HUBSPOT_ACCESS_TOKEN=...
-HUBSPOT_PORTAL_ID=...
+HUBSPOT_SERVICE_KEY=...
+HUBSPOT_PORTAL_ID=246668830
 ```
 
 ### GitHub-triggered redeploys
@@ -56,7 +57,7 @@ For safer promotion, add GitHub environment protection rules on `Development`, `
 
 ## HubSpot CRM
 
-Create a HubSpot private app token with contact read/write scopes. Set the token in Render using `HUBSPOT_ACCESS_TOKEN`. Nexus also accepts `HUBSPOT_SERVICE_KEY`, `HUBSPOT_PRIVATE_APP_TOKEN`, or `HUBSPOT_API_KEY` as fallback names, which helps when Render already has those environment variables from setup notes. Set `HUBSPOT_PORTAL_ID` for dashboard visibility.
+Create a HubSpot private app or service key and grant contact read/write scopes. Set the token in Render using `HUBSPOT_ACCESS_TOKEN` or `HUBSPOT_SERVICE_KEY`. Nexus also accepts `HUBSPOT_PRIVATE_APP_TOKEN` or `HUBSPOT_API_KEY` as fallback names, which helps when Render already has those environment variables from setup notes. Set `HUBSPOT_PORTAL_ID=246668830` for dashboard visibility and the HubSpot embed script.
 
 Nexus sends the token only from the server using a Bearer Authorization header. Contact export is active through `/api/hubspot-export`; inbound HubSpot webhooks require a separate webhook route before they can receive HubSpot events.
 

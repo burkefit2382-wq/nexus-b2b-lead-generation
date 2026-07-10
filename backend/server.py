@@ -49,6 +49,7 @@ LEAD_PACKAGE_REQUESTS_PATH = DATA_DIR / "lead_package_requests.jsonl"
 FULFILLMENT_EVENTS_PATH = DATA_DIR / "fulfillment_events.jsonl"
 OSINT_REPORTS_PATH = DATA_DIR / "osint_report_requests.jsonl"
 HUBSPOT_EXPORTS_PATH = DATA_DIR / "hubspot_exports.jsonl"
+HUBSPOT_DEFAULT_PORTAL_ID = "246668830"
 SCRAPER_DIR = DATA_DIR / "scrapers"
 SCRAPER_SUMMARY_PATH = SCRAPER_DIR / "latest_summary.json"
 SCRAPER_JSONL_PATH = SCRAPER_DIR / "tampa_bay_real_estate_leads.jsonl"
@@ -1245,11 +1246,13 @@ class LaunchHandler(SimpleHTTPRequestHandler):
 
     def hubspot_status(self) -> dict[str, Any]:
         token_name, token = self.hubspot_token_source()
-        portal_id = os.environ.get("HUBSPOT_PORTAL_ID", "").strip()
+        portal_id = self.hubspot_portal_id()
         return {
             "configured": bool(token),
             "configuredBy": token_name if token else "",
             "portalIdConfigured": bool(portal_id),
+            "portalId": portal_id,
+            "embedScriptUrl": f"https://js-na2.hs-scripts.com/{portal_id}.js" if portal_id else "",
             "missing": [] if token else self.hubspot_missing_token_names(),
             "endpoint": "https://api.hubapi.com/crm/v3/objects/contacts",
         }
@@ -1266,6 +1269,9 @@ class LaunchHandler(SimpleHTTPRequestHandler):
 
     def hubspot_missing_token_names(self) -> list[str]:
         return ["HUBSPOT_ACCESS_TOKEN", "HUBSPOT_SERVICE_KEY", "HUBSPOT_PRIVATE_APP_TOKEN", "HUBSPOT_API_KEY"]
+
+    def hubspot_portal_id(self) -> str:
+        return os.environ.get("HUBSPOT_PORTAL_ID", "").strip() or HUBSPOT_DEFAULT_PORTAL_ID
 
     def hubspot_contact_properties(self, lead: dict[str, Any]) -> dict[str, str]:
         email = str(lead.get("email") or lead.get("enriched_email") or "").strip().lower()
