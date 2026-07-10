@@ -115,13 +115,14 @@ price_scan_pack_10_149
 price_scan_pack_50_499
 ```
 
-See [docs/api.md](docs/api.md) for the full API surface and [docs/deployment.md](docs/deployment.md) for launch operations.
+See [docs/api.md](docs/api.md) for the full API surface, [docs/deployment.md](docs/deployment.md) for launch operations, [docs/lead-benchmarking.md](docs/lead-benchmarking.md) for Apollo-vs-Nexus lead quality benchmarking, and [docs/enterprise-validation-suite.md](docs/enterprise-validation-suite.md) for load, security, and SLA validation gates.
 
 ## Quality Gates
 
 ```powershell
 python -m py_compile server.py main.py
 python -m pytest
+python scripts\enterprise_validation_suite.py
 ```
 
 The GitHub Actions workflow runs Python compile checks and pytest on every push and pull request.
