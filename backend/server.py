@@ -934,12 +934,17 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         try:
             public_base_url = self.public_base_url()
             self.configure_stripe(stripe, stripe_secret)
-            resolved_price_id = self.resolve_stripe_price_id(stripe, price_id)
-            line_items = [{"price": resolved_price_id, "quantity": 1}]
+            line_items = [self.checkout_line_item(stripe, price_id, catalog_item)]
             setup_price_id = catalog_item.get("setupPriceId")
             if setup_price_id:
-                resolved_setup_price_id = self.resolve_stripe_price_id(stripe, str(setup_price_id))
-                line_items.append({"price": resolved_setup_price_id, "quantity": 1})
+                setup_key = str(setup_price_id)
+                setup_item = STRIPE_CATALOG.get(setup_key) or {
+                    "name": f"{catalog_item['name']} setup",
+                    "price": "$1,500",
+                    "mode": "payment",
+                    "category": str(catalog_item["category"]),
+                }
+                line_items.append(self.checkout_line_item(stripe, setup_key, setup_item))
 
             session = stripe.checkout.Session.create(
                 mode=catalog_item["mode"],
@@ -976,6 +981,42 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         raise LookupError(
             f"Stripe price is not configured for {price_key}. Create a Stripe Price with this lookup key or update the catalog with the real price ID."
         )
+
+    def checkout_line_item(self, stripe: Any, price_key: str, catalog_item: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return {"price": self.resolve_stripe_price_id(stripe, price_key), "quantity": 1}
+        except LookupError:
+            return {"price_data": self.catalog_price_data(price_key, catalog_item), "quantity": 1}
+
+    def catalog_price_data(self, price_key: str, catalog_item: dict[str, Any]) -> dict[str, Any]:
+        mode = str(catalog_item.get("mode") or "payment")
+        price_data: dict[str, Any] = {
+            "currency": "usd",
+            "unit_amount": self.catalog_unit_amount(catalog_item, mode),
+            "product_data": {
+                "name": str(catalog_item["name"]),
+                "metadata": {
+                    "nexus_price_id": price_key,
+                    "nexus_catalog_category": str(catalog_item["category"]),
+                },
+            },
+        }
+        if mode == "subscription":
+            price_data["recurring"] = {"interval": "month"}
+        return price_data
+
+    def catalog_unit_amount(self, catalog_item: dict[str, Any], mode: str) -> int:
+        price_text = str(catalog_item.get("price") or "")
+        matches = re.findall(r"\$([\d,]+(?:\.\d{1,2})?)(/mo)?", price_text)
+        if not matches:
+            raise LookupError(f"Catalog item {catalog_item.get('name', 'unknown')} is missing a usable price.")
+
+        selected = matches[0]
+        if mode == "subscription":
+            selected = next((match for match in reversed(matches) if match[1] == "/mo"), matches[-1])
+
+        amount = float(selected[0].replace(",", ""))
+        return int(round(amount * 100))
 
     def handle_stripe_webhook(self) -> None:
         webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET")
