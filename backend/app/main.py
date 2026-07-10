@@ -58,6 +58,11 @@ def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/healthz")
+def healthz() -> dict[str, Any]:
+    return {"ok": True, "service": "nexus-b2b-lead-generation-api"}
+
+
 @app.get("/api/health")
 def api_health() -> dict[str, Any]:
     return {
@@ -84,11 +89,13 @@ def config_status() -> dict[str, bool | str]:
 
 
 @app.get("/api/hubspot-status")
+@app.get("/api/crm-status")
 def api_hubspot_status() -> dict[str, Any]:
     return {"ok": True, "hubspot": hubspot_service.hubspot_status()}
 
 
 @app.post("/api/hubspot-export")
+@app.post("/api/crm-export")
 def api_hubspot_export(payload: dict[str, Any], response: Response) -> dict[str, Any]:
     token = hubspot_service.hubspot_access_token()
     if not token:
