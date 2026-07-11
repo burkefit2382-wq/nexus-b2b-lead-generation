@@ -17,6 +17,22 @@ NEXUS is a production-ready SaaS command center for turning local market signals
 - Stripe webhook fulfillment logging and buyer/internal Resend emails
 - Static routing for Cloudflare, Render, Railway, Vercel-style, and Azure Static Web Apps style hosts
 
+## Canonical deployment path
+
+The primary supported production path is **Cloudflare in front of Render**. Azure, Railway, and Vercel files remain available for legacy/testing flows, but they are not the main enterprise deployment target.
+
+Core runbooks:
+
+- [docs/architecture-overview.md](docs/architecture-overview.md)
+- [docs/deployment-runbook.md](docs/deployment-runbook.md)
+- [docs/resend-integration.md](docs/resend-integration.md)
+- [docs/stripe-integration.md](docs/stripe-integration.md)
+- [docs/hubspot-integration.md](docs/hubspot-integration.md)
+- [docs/incident-response-runbook.md](docs/incident-response-runbook.md)
+- [docs/secrets-management.md](docs/secrets-management.md)
+- [docs/enterprise-validation-suite.md](docs/enterprise-validation-suite.md)
+- [docs/lead-benchmarking.md](docs/lead-benchmarking.md)
+
 ## Live Product Surface
 
 | Area | URL |
@@ -86,18 +102,20 @@ LAUNCH_HOST=0.0.0.0
 PUBLIC_BASE_URL=https://nexuscloud.sh
 STRIPE_SECRET_KEY=sk_live_or_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_API_VERSION=2026-06-24.dahlia
+PRICE_ID=price_...
 RESEND_API_KEY=re_...
 RESEND_FROM=Nexus <sales@verified-domain.com>
+EMAIL_DOMAIN=mail.example.com
 WAITLIST_NOTIFY_TO=ops@example.com
 LLAMA_CHAT_ENDPOINT=https://your-llama-compatible-endpoint
 LLAMA_CHAT_MODEL=llama3
 LLAMA_CHAT_API_KEY=optional_bearer_token
-HUBSPOT_ACCESS_TOKEN=your_hubspot_private_app_token
-HUBSPOT_SERVICE_KEY=your_hubspot_service_key
+HUBSPOT_PRIVATE_APP_TOKEN=your_hubspot_private_app_token
 HUBSPOT_PORTAL_ID=246668830
 ```
 
-Fallback aliases are also accepted: `HUBSPOT_SERVICE_KEY`, `HUBSPOT_PRIVATE_APP_TOKEN`, or `HUBSPOT_API_KEY`.
+Fallback aliases are also accepted for existing environments: `HUBSPOT_ACCESS_TOKEN`, `HUBSPOT_SERVICE_KEY`, or `HUBSPOT_API_KEY`.
 
 ## Monetization Catalog
 
@@ -117,13 +135,14 @@ price_scan_pack_10_149
 price_scan_pack_50_499
 ```
 
-See [docs/api.md](docs/api.md) for the full API surface and [docs/deployment.md](docs/deployment.md) for launch operations.
+See [docs/api.md](docs/api.md) for the full API surface, [docs/deployment-runbook.md](docs/deployment-runbook.md) for launch operations, and [docs/stripe-integration.md](docs/stripe-integration.md) / [docs/resend-integration.md](docs/resend-integration.md) / [docs/hubspot-integration.md](docs/hubspot-integration.md) for provider-specific setup.
 
 ## Quality Gates
 
 ```powershell
 python -m py_compile server.py main.py
 python -m pytest
+python scripts/enterprise_validation_suite.py
 ```
 
 The GitHub Actions workflow runs Python compile checks and pytest on every push and pull request.

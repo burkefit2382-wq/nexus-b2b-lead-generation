@@ -34,6 +34,9 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Build frontend bundle
+        run: npm --prefix frontend run build
+
   deploy:
     needs: test
     runs-on: ubuntu-latest
@@ -52,6 +55,15 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
+      - name: Validate Cloudflare deploy secrets
+        run: |
+          missing=()
+          [[ -n "${CLOUDFLARE_API_TOKEN}" ]] || missing+=("CLOUDFLARE_API_TOKEN")
+          [[ -n "${CLOUDFLARE_ACCOUNT_ID}" ]] || missing+=("CLOUDFLARE_ACCOUNT_ID")
+          if ((${#missing[@]})); then
+            echo "::error::Missing Cloudflare deploy secret(s): ${missing[*]}. Configure GitHub Actions secrets before running Cloudflare deploy."
+            exit 1
+          fi
+
       - name: Deploy to Cloudflare Workers
-        if: ${{ env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != '' }}
         run: npm run cf:deploy

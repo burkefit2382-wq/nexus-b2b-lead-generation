@@ -10,8 +10,12 @@ internal notification email.
 from __future__ import annotations
 
 import json
+import hashlib
+import logging
 import os
 import re
+import socket
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -72,6 +76,8 @@ HQ_FLORIDA_PRICING = (
     {"quantity": 50, "price": 1000, "priceId": "price_tb_leads_50_1000"},
 )
 STRIPE_API_VERSION = os.environ.get("STRIPE_API_VERSION", "2026-06-24.dahlia")
+EXTERNAL_DEPENDENCY_TIMEOUT_SECONDS = 1.5
+logger = logging.getLogger(__name__)
 STRIPE_CATALOG = {
     "price_tb_leads_10_350": {
         "name": "Tampa Bay 10-Lead Sprint",
@@ -341,7 +347,7 @@ class LaunchHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:
         if self.path.rstrip("/") == "/healthz":
-            self.send_json({"ok": True, "service": "leadgen-launch-site"}, HTTPStatus.OK)
+            self.send_health_response()
             return
 
         parsed = urllib.parse.urlparse(self.path)
@@ -641,16 +647,76 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         )
 
     def handle_api_health(self) -> None:
-        self.send_json(
-            {
-                "ok": True,
-                "status": "healthy",
-                "service": "leadgen-launch-site",
-                "healthz": "/healthz",
-                "checkedAt": datetime.now(timezone.utc).isoformat(),
-            },
-            HTTPStatus.OK,
-        )
+        self.send_health_response(include_healthz=True)
+
+    def send_health_response(self, include_healthz: bool = False) -> None:
+        dependencies = self.launch_dependency_health()
+        optional_failures = [name for name, status in dependencies.items() if not status["healthy"]]
+        status = "degraded" if optional_failures else "healthy"
+        payload = {
+            "ok": True,
+            "status": status,
+            "service": "leadgen-launch-site",
+            "checkedAt": datetime.now(timezone.utc).isoformat(),
+            "dependencies": dependencies,
+        }
+        if include_healthz:
+            payload["healthz"] = "/healthz"
+        self.send_json(payload, HTTPStatus.OK)
+
+    def launch_dependency_health(self) -> dict[str, dict[str, Any]]:
+        return {
+            "resend": self.external_dependency_status(
+                configured=self.resend_status()["configured"],
+                host="api.resend.com",
+                label="Resend",
+            ),
+            "stripe": self.external_dependency_status(
+                configured=self.stripe_status()["configured"],
+                host="api.stripe.com",
+                label="Stripe",
+            ),
+            "hubspot": self.external_dependency_status(
+                configured=self.hubspot_status()["configured"],
+                host="api.hubapi.com",
+                label="HubSpot",
+            ),
+        }
+
+    def external_dependency_status(self, *, configured: bool, host: str, label: str) -> dict[str, Any]:
+        if not configured:
+            return {
+                "name": label,
+                "configured": False,
+                "healthy": False,
+                "required": False,
+                "detail": f"{label} is not configured.",
+            }
+        healthy, detail = self.probe_tcp_endpoint(host, 443)
+        return {
+            "name": label,
+            "configured": True,
+            "healthy": healthy,
+            "required": False,
+            "detail": detail,
+        }
+
+    def probe_tcp_endpoint(self, host: str, port: int) -> tuple[bool, str]:
+        if os.environ.get("HEALTHCHECK_SKIP_NETWORK_PROBES", "").strip().lower() in {"1", "true", "yes"}:
+            return True, f"Skipped live probe for {host}:{port}."
+        timeout = self.healthcheck_timeout_seconds()
+        try:
+            with socket.create_connection((host, port), timeout=timeout):
+                return True, f"Connected to {host}:{port}."
+        except OSError:
+            return False, f"Connection failed to {host}:{port}."
+
+    def healthcheck_timeout_seconds(self) -> float:
+        raw_value = os.environ.get("HEALTHCHECK_TIMEOUT_SECONDS", str(EXTERNAL_DEPENDENCY_TIMEOUT_SECONDS)).strip()
+        try:
+            return max(0.1, min(float(raw_value), 10.0))
+        except ValueError:
+            return EXTERNAL_DEPENDENCY_TIMEOUT_SECONDS
 
     def handle_scraper_queue(self) -> None:
         summary = self.load_json_file(SCRAPER_SUMMARY_PATH)
@@ -946,6 +1012,7 @@ class LaunchHandler(SimpleHTTPRequestHandler):
                 }
                 line_items.append(self.checkout_line_item(stripe, setup_key, setup_item))
 
+            idempotency_key = self.checkout_idempotency_key(price_id)
             session = stripe.checkout.Session.create(
                 mode=catalog_item["mode"],
                 line_items=line_items,
@@ -957,6 +1024,7 @@ class LaunchHandler(SimpleHTTPRequestHandler):
                 },
                 success_url=f"{public_base_url}/dashboard?checkout=success",
                 cancel_url=f"{public_base_url}/dashboard?checkout=cancel",
+                idempotency_key=idempotency_key,
             )
             self.send_json({"ok": True, "url": session.url, "catalogItem": catalog_item}, HTTPStatus.OK)
         except LookupError as exc:
@@ -965,6 +1033,15 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             self.send_json({"error": str(exc), "setupNeeded": True, "missing": ["PUBLIC_BASE_URL"]}, HTTPStatus.SERVICE_UNAVAILABLE)
         except Exception:  # noqa: BLE001 - return a safe payment error to the browser.
             self.send_json({"error": "Stripe checkout failed. Check server logs and Stripe configuration."}, HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    def checkout_idempotency_key(self, price_id: str) -> str:
+        forwarded = self.headers.get("Idempotency-Key", "").strip()
+        if forwarded:
+            return forwarded[:255]
+        fingerprint = hashlib.sha256(
+            f"{self.client_address[0]}|{price_id}|{self.public_base_url()}".encode("utf-8")
+        ).hexdigest()
+        return f"launch-checkout-{fingerprint}"
 
     def resolve_stripe_price_id(self, stripe: Any, price_key: str) -> str:
         try:
@@ -1166,6 +1243,47 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         with FULFILLMENT_EVENTS_PATH.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(record, sort_keys=True) + "\n")
 
+    def send_resend_email(self, message: dict[str, Any], *, context: str) -> str:
+        import resend
+
+        resend.api_key = os.environ["RESEND_API_KEY"]
+        max_attempts = self.resend_max_attempts()
+        last_error: Exception | None = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                resend.Emails.send(message)
+                return "sent"
+            except Exception as exc:  # noqa: BLE001 - caller decides whether delivery failure is fatal.
+                last_error = exc
+                if attempt < max_attempts:
+                    logger.warning(
+                        "Resend delivery retry %s/%s for %s after %s",
+                        attempt,
+                        max_attempts,
+                        context,
+                        type(exc).__name__,
+                    )
+                    time.sleep(self.resend_retry_delay_seconds(attempt))
+                    continue
+                logger.warning(
+                    "Resend delivery failed for %s after %s attempts: %s",
+                    context,
+                    max_attempts,
+                    type(exc).__name__,
+                )
+        error_name = type(last_error).__name__ if last_error else "UnknownError"
+        return f"failed: {error_name}"
+
+    def resend_max_attempts(self) -> int:
+        raw_value = os.environ.get("RESEND_MAX_RETRIES", "3").strip()
+        try:
+            return max(1, min(int(raw_value), 5))
+        except ValueError:
+            return 3
+
+    def resend_retry_delay_seconds(self, attempt: int) -> float:
+        return min(0.5 * (2 ** (attempt - 1)), 8.0)
+
     def try_send_fulfillment_email(self, record: dict[str, Any]) -> str:
         if not self.resend_status()["configured"]:
             return "skipped: Resend delivery not configured"
@@ -1173,12 +1291,9 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         try:
             from html import escape
 
-            import resend
-
             sender = self.resend_sender()
             notify_to = os.environ.get("WAITLIST_NOTIFY_TO") or os.environ["RESEND_TO"]
             buyer_email = str(record["buyerEmail"])
-            resend.api_key = os.environ["RESEND_API_KEY"]
 
             safe_name = escape(str(record["catalogName"]))
             safe_email = escape(buyer_email)
@@ -1203,18 +1318,21 @@ class LaunchHandler(SimpleHTTPRequestHandler):
                 "Your delivery has been logged. If this is a lead bundle, connect the reviewed lead inventory for automatic raw lead-file delivery."
             )
 
-            resend.Emails.send(
+            buyer_delivery = self.send_resend_email(
                 {
                     "from": sender,
                     "to": [buyer_email],
                     "subject": f"Nexus order confirmed: {record['catalogName']}",
                     "html": buyer_html,
                     "text": buyer_text,
-                }
+                },
+                context="stripe-fulfillment-buyer",
             )
+            if buyer_delivery != "sent":
+                return buyer_delivery
 
             if notify_to != buyer_email:
-                resend.Emails.send(
+                ops_delivery = self.send_resend_email(
                     {
                         "from": sender,
                         "to": [notify_to],
@@ -1233,11 +1351,14 @@ class LaunchHandler(SimpleHTTPRequestHandler):
                             f"{buyer_text_quantity}\n"
                             f"Stripe session: {record['sessionId']}"
                         ),
-                    }
+                    },
+                    context="stripe-fulfillment-ops",
                 )
+                if ops_delivery != "sent":
+                    return ops_delivery
             return "sent"
         except Exception as exc:  # noqa: BLE001 - Stripe should not keep retrying for email provider outages.
-            return f"failed: {exc}"
+            return f"failed: {type(exc).__name__}"
 
     def object_value(self, value: Any, key: str, default: Any = None) -> Any:
         if isinstance(value, dict):
@@ -1291,25 +1412,33 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         return {
             "configured": bool(token),
             "configuredBy": token_name if token else "",
+            "canonicalTokenName": "HUBSPOT_PRIVATE_APP_TOKEN",
             "portalIdConfigured": bool(portal_id),
             "portalId": portal_id,
             "embedScriptUrl": f"https://js-na2.hs-scripts.com/{portal_id}.js" if portal_id else "",
             "missing": [] if token else self.hubspot_missing_token_names(),
             "endpoint": "https://api.hubapi.com/crm/v3/objects/contacts",
+            "message": (
+                "HubSpot private app token is configured."
+                if token_name == "HUBSPOT_PRIVATE_APP_TOKEN"
+                else "HubSpot is configured through a legacy token name; migrate to HUBSPOT_PRIVATE_APP_TOKEN."
+                if token
+                else "HubSpot is not configured."
+            ),
         }
 
     def hubspot_access_token(self) -> str:
         return self.hubspot_token_source()[1]
 
     def hubspot_token_source(self) -> tuple[str, str]:
-        for name in ("HUBSPOT_ACCESS_TOKEN", "HUBSPOT_SERVICE_KEY", "HUBSPOT_PRIVATE_APP_TOKEN", "HUBSPOT_API_KEY"):
+        for name in ("HUBSPOT_PRIVATE_APP_TOKEN", "HUBSPOT_ACCESS_TOKEN", "HUBSPOT_SERVICE_KEY", "HUBSPOT_API_KEY"):
             value = os.environ.get(name, "").strip()
             if value:
                 return name, value
         return "", ""
 
     def hubspot_missing_token_names(self) -> list[str]:
-        return ["HUBSPOT_ACCESS_TOKEN", "HUBSPOT_SERVICE_KEY", "HUBSPOT_PRIVATE_APP_TOKEN", "HUBSPOT_API_KEY"]
+        return ["HUBSPOT_PRIVATE_APP_TOKEN", "HUBSPOT_ACCESS_TOKEN", "HUBSPOT_SERVICE_KEY", "HUBSPOT_API_KEY"]
 
     def hubspot_portal_id(self) -> str:
         return os.environ.get("HUBSPOT_PORTAL_ID", "").strip() or HUBSPOT_DEFAULT_PORTAL_ID
@@ -1386,14 +1515,58 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             f"https://api.hubapi.com{path}",
             data=body,
             headers={
-                "Authorization": f"Bearer {token}",
+                "Authorization": "Bearer " + token,
                 "Content-Type": "application/json",
+                "User-Agent": "NexusLeadGen/1.0 HubSpot CRM sync",
             },
             method=method,
         )
-        with urllib.request.urlopen(request, timeout=30) as response:
-            raw = response.read().decode("utf-8")
-        return json.loads(raw) if raw else {}
+        max_attempts = self.hubspot_max_attempts()
+        for attempt in range(1, max_attempts + 1):
+            try:
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    raw = response.read().decode("utf-8")
+                return json.loads(raw) if raw else {}
+            except urllib.error.HTTPError as exc:
+                if (exc.code == 429 or 500 <= exc.code <= 599) and attempt < max_attempts:
+                    logger.warning(
+                        "HubSpot request retrying after HTTP %s on attempt %s/%s for %s",
+                        exc.code,
+                        attempt,
+                        max_attempts,
+                        path,
+                    )
+                    time.sleep(self.hubspot_retry_delay_seconds(attempt, exc.headers.get("Retry-After")))
+                    continue
+                raise
+            except urllib.error.URLError as exc:
+                if attempt < max_attempts:
+                    logger.warning(
+                        "HubSpot request retrying after network failure on attempt %s/%s for %s: %s",
+                        attempt,
+                        max_attempts,
+                        path,
+                        exc.reason,
+                    )
+                    time.sleep(self.hubspot_retry_delay_seconds(attempt))
+                    continue
+                raise
+        raise urllib.error.URLError("HubSpot export failed after exhausting retries.")
+
+    def hubspot_max_attempts(self) -> int:
+        raw_value = os.environ.get("HUBSPOT_MAX_RETRIES", "3").strip()
+        try:
+            return max(1, min(int(raw_value), 6))
+        except ValueError:
+            return 3
+
+    def hubspot_retry_delay_seconds(self, attempt: int, retry_after: str | None = None) -> float:
+        if retry_after:
+            try:
+                return max(0.5, min(float(retry_after), 30.0))
+            except ValueError:
+                pass
+        return min(0.5 * (2 ** (attempt - 1)), 8.0)
 
     def read_json_body(self, max_length: int = 8192) -> dict[str, Any]:
         raw_body = self.read_raw_body(max_length=max_length)
@@ -1575,16 +1748,13 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         try:
             from html import escape
 
-            import resend
-
             sender = self.resend_sender()
             notify_to = os.environ.get("WAITLIST_NOTIFY_TO") or os.environ["RESEND_TO"]
-            resend.api_key = os.environ["RESEND_API_KEY"]
 
             safe_email = escape(record["email"])
             safe_company = escape(record.get("company", "") or "Not provided")
 
-            resend.Emails.send(
+            return self.send_resend_email(
                 {
                     "from": sender,
                     "to": [notify_to],
@@ -1601,11 +1771,11 @@ class LaunchHandler(SimpleHTTPRequestHandler):
                         f"Company: {record.get('company', '') or 'Not provided'}\n"
                         "Source: launch_site"
                     ),
-                }
+                },
+                context="pilot-waitlist",
             )
-            return "sent"
         except Exception as exc:  # noqa: BLE001 - local server should not fail submission if email fails.
-            return f"failed: {exc}"
+            return f"failed: {type(exc).__name__}"
 
     def try_send_lead_package_notification(self, record: dict[str, Any]) -> str:
         if not self.resend_status()["configured"]:
@@ -1614,16 +1784,13 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         try:
             from html import escape
 
-            import resend
-
             sender = self.resend_sender()
             notify_to = os.environ.get("WAITLIST_NOTIFY_TO") or os.environ["RESEND_TO"]
-            resend.api_key = os.environ["RESEND_API_KEY"]
 
             safe_email = escape(record["email"])
             quantity = int(record["quantity"])
             price = int(record["price"])
-            resend.Emails.send(
+            return self.send_resend_email(
                 {
                     "from": sender,
                     "to": [notify_to],
@@ -1640,11 +1807,11 @@ class LaunchHandler(SimpleHTTPRequestHandler):
                         f"Package: {quantity} HQ Florida leads\n"
                         f"Price: ${price} USD"
                     ),
-                }
+                },
+                context="lead-package-request",
             )
-            return "sent"
         except Exception as exc:  # noqa: BLE001 - request storage should still succeed if email fails.
-            return f"failed: {exc}"
+            return f"failed: {type(exc).__name__}"
 
     def generate_chat_response(self, prompt: str) -> tuple[str, str]:
         endpoint = self.llama_chat_endpoint()
@@ -1918,11 +2085,8 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         try:
             from html import escape
 
-            import resend
-
             sender = self.resend_sender()
             notify_to = os.environ.get("WAITLIST_NOTIFY_TO") or os.environ["RESEND_TO"]
-            resend.api_key = os.environ["RESEND_API_KEY"]
 
             report = record["report"]
             html = (
@@ -1941,18 +2105,18 @@ class LaunchHandler(SimpleHTTPRequestHandler):
                 f"Status: {report['status']}\n"
                 f"Next action: {report['nextAction']}"
             )
-            resend.Emails.send(
+            return self.send_resend_email(
                 {
                     "from": sender,
                     "to": [notify_to],
                     "subject": f"Nexus OSINT queued: {record['reportName']}",
                     "html": html,
                     "text": text,
-                }
+                },
+                context="osint-report-queue",
             )
-            return "sent"
         except Exception as exc:  # noqa: BLE001 - report queue should still persist if email fails.
-            return f"failed: {exc}"
+            return f"failed: {type(exc).__name__}"
 
     def hq_florida_market(self) -> dict[str, Any]:
         return {

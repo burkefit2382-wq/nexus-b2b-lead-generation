@@ -2,7 +2,7 @@
 
 ## Launch Checklist
 
-- Confirm `/healthz` returns `ok`.
+- Confirm `/healthz` and `/health` return `healthy` or `degraded` with the expected dependency details.
 - Confirm `PUBLIC_BASE_URL` is set to the public domain.
 - Confirm Stripe Checkout returns a hosted URL for each visible buy button.
 - Confirm retired/cheap catalog IDs return `400`.
@@ -34,4 +34,3 @@ Track:
 4. Disable impacted checkout or API route if needed.
 5. Notify affected customers if required.
 6. Document root cause and corrective action.
-

@@ -52,7 +52,7 @@ Captures lead package request metadata and sends an internal notification when R
 
 `GET /api/hubspot-status`
 
-Returns whether a HubSpot token is configured. Nexus checks `HUBSPOT_ACCESS_TOKEN`, `HUBSPOT_SERVICE_KEY`, `HUBSPOT_PRIVATE_APP_TOKEN`, then `HUBSPOT_API_KEY`. The response also includes the public HubSpot portal ID and embed script URL.
+Returns whether a HubSpot token is configured. Nexus prefers `HUBSPOT_PRIVATE_APP_TOKEN` and falls back to `HUBSPOT_ACCESS_TOKEN`, `HUBSPOT_SERVICE_KEY`, then `HUBSPOT_API_KEY`. The response also includes the public HubSpot portal ID and embed script URL.
 
 Alias: `GET /api/crm-status`
 

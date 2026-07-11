@@ -2,6 +2,10 @@ name = "raspy-hat-15da"
 compatibility_date = "2024-09-23"
 main = "worker.js"
 
+# Keep this Worker name aligned with the production service in the target
+# Cloudflare account. A mismatched account/service pairing will cause
+# `wrangler deploy` to fail with Cloudflare API routing errors.
+
 [build]
 command = "npm --prefix frontend install && npm --prefix frontend run build"
 
