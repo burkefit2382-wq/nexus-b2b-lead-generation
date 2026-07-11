@@ -708,8 +708,8 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         try:
             with socket.create_connection((host, port), timeout=timeout):
                 return True, f"Connected to {host}:{port}."
-        except OSError as exc:
-            return False, f"Connection failed to {host}:{port}: {exc}"
+        except OSError:
+            return False, f"Connection failed to {host}:{port}."
 
     def healthcheck_timeout_seconds(self) -> float:
         raw_value = os.environ.get("HEALTHCHECK_TIMEOUT_SECONDS", str(EXTERNAL_DEPENDENCY_TIMEOUT_SECONDS)).strip()

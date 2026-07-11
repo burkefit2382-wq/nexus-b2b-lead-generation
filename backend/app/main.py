@@ -347,8 +347,8 @@ def probe_tcp_endpoint(host: str, port: int) -> tuple[bool, str]:
     try:
         with socket.create_connection((host, port), timeout=timeout):
             return True, f"Connected to {host}:{port}."
-    except OSError as exc:
-        return False, f"Connection failed to {host}:{port}: {exc}"
+    except OSError:
+        return False, f"Connection failed to {host}:{port}."
 
 
 def dependency_timeout_seconds() -> float:

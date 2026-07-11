@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-11T23:10:48.401053+00:00",
+  "generated_at": "2026-07-11T23:13:07.288809+00:00",
   "load_results": [
     {
       "endpoint": "/health",
@@ -7,10 +7,10 @@
       "success": 250,
       "failure": 0,
       "success_rate": 100.0,
-      "p50_ms": 241.78,
-      "p95_ms": 415.52,
-      "max_ms": 421.51,
-      "mean_ms": 238.17,
+      "p50_ms": 248.43,
+      "p95_ms": 406.08,
+      "max_ms": 422.31,
+      "mean_ms": 235.78,
       "sample_failures": []
     },
     {
@@ -19,10 +19,10 @@
       "success": 250,
       "failure": 0,
       "success_rate": 100.0,
-      "p50_ms": 241.45,
-      "p95_ms": 410.47,
-      "max_ms": 414.5,
-      "mean_ms": 237.04,
+      "p50_ms": 246.76,
+      "p95_ms": 411.68,
+      "max_ms": 414.55,
+      "mean_ms": 240.53,
       "sample_failures": []
     }
   ],
@@ -31,7 +31,7 @@
     "probes": 40,
     "successes": 40,
     "availability_pct": 100.0,
-    "p95_ms": 1.73,
+    "p95_ms": 1.77,
     "sample_failures": []
   },
   "security_checks": [
@@ -65,7 +65,7 @@
     {
       "name": "/health p95 <= 500.00ms",
       "passed": true,
-      "details": "actual=415.52ms"
+      "details": "actual=406.08ms"
     },
     {
       "name": "/api/health success rate >= 99.00%",
@@ -75,7 +75,7 @@
     {
       "name": "/api/health p95 <= 500.00ms",
       "passed": true,
-      "details": "actual=410.47ms"
+      "details": "actual=411.68ms"
     },
     {
       "name": "Availability >= 99.90%",
