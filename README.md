@@ -160,3 +160,11 @@ npm run cf:deploy
 4. Run `npm run cf:deploy` — Wrangler will create the DNS record automatically.
 
 Without this step the Worker is reachable on its default `raspy-hat-15da.<your-subdomain>.workers.dev` URL.
+
+### Cloudflare 1033 quick fix
+
+If you see **Error 1033**, the hostname is usually pointing to a missing/invalid Cloudflare tunnel target.
+
+1. Test your Worker on the default `workers.dev` URL first (`npm run cf:deploy` output).
+2. If `workers.dev` works but your custom hostname fails, remove stale tunnel/DNS records for that hostname in Cloudflare.
+3. Re-deploy after setting `[[custom_domains]]` only for a hostname in a zone you own in this account.

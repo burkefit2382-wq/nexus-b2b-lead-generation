@@ -45,10 +45,12 @@ cloudflared tunnel --url http://127.0.0.1:4173
 Copy the `https://...trycloudflare.com` URL from Cloudflare into `PUBLIC_BASE_URL` before starting checkout tests. In Stripe, create a webhook endpoint at:
 
 ```text
-https://your-tunnel.trycloudflare.com/api/stripe-webhook
+https://your-tunnel.trycloudflare.com/api/membership/webhook
 ```
 
 Enable `checkout.session.completed`.
+
+If you get **Cloudflare Error 1033**, your trycloudflare hostname is stale or no longer attached to a running tunnel. Start a fresh tunnel and use the new URL.
 
 ## Emergent Route Fallback
 

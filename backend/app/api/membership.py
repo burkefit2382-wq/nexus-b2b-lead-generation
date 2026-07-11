@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+from typing import Any
 
 import stripe
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from ..core.db import get_db
@@ -83,7 +84,7 @@ def membership_status(email: str, db: Session = Depends(get_db)) -> Membership:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _handle_checkout_completed(db: Session, session_obj: dict) -> None:
+def _handle_checkout_completed(db: Session, session_obj: dict[str, Any]) -> None:
     email = session_obj.get("customer_email") or (session_obj.get("customer_details") or {}).get("email")
     if not email:
         logger.warning("checkout.session.completed missing email — skipping.")
@@ -117,7 +118,7 @@ def _handle_checkout_completed(db: Session, session_obj: dict) -> None:
     logger.info("Membership activated for %s", email)
 
 
-def _handle_subscription_change(db: Session, sub_obj: dict) -> None:
+def _handle_subscription_change(db: Session, sub_obj: dict[str, Any]) -> None:
     subscription_id = sub_obj.get("id")
     status = sub_obj.get("status", "inactive")
     period_end = sub_obj.get("current_period_end")
