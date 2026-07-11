@@ -341,6 +341,8 @@ def dependency_status(label: str, configured: bool, healthy: bool, required: boo
 
 
 def probe_tcp_endpoint(host: str, port: int) -> tuple[bool, str]:
+    if os.environ.get("HEALTHCHECK_SKIP_NETWORK_PROBES", "").strip().lower() in {"1", "true", "yes"}:
+        return True, f"Skipped live probe for {host}:{port}."
     timeout = dependency_timeout_seconds()
     try:
         with socket.create_connection((host, port), timeout=timeout):

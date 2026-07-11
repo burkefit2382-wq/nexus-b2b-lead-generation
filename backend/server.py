@@ -702,6 +702,8 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         }
 
     def probe_tcp_endpoint(self, host: str, port: int) -> tuple[bool, str]:
+        if os.environ.get("HEALTHCHECK_SKIP_NETWORK_PROBES", "").strip().lower() in {"1", "true", "yes"}:
+            return True, f"Skipped live probe for {host}:{port}."
         timeout = self.healthcheck_timeout_seconds()
         try:
             with socket.create_connection((host, port), timeout=timeout):

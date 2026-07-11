@@ -1,0 +1,86 @@
+{
+  "generated_at": "2026-07-11T23:10:48.401053+00:00",
+  "load_results": [
+    {
+      "endpoint": "/health",
+      "total": 250,
+      "success": 250,
+      "failure": 0,
+      "success_rate": 100.0,
+      "p50_ms": 241.78,
+      "p95_ms": 415.52,
+      "max_ms": 421.51,
+      "mean_ms": 238.17,
+      "sample_failures": []
+    },
+    {
+      "endpoint": "/api/health",
+      "total": 250,
+      "success": 250,
+      "failure": 0,
+      "success_rate": 100.0,
+      "p50_ms": 241.45,
+      "p95_ms": 410.47,
+      "max_ms": 414.5,
+      "mean_ms": 237.04,
+      "sample_failures": []
+    }
+  ],
+  "availability": {
+    "endpoint": "/health",
+    "probes": 40,
+    "successes": 40,
+    "availability_pct": 100.0,
+    "p95_ms": 1.73,
+    "sample_failures": []
+  },
+  "security_checks": [
+    {
+      "name": "Reject unknown event names",
+      "passed": true,
+      "details": "status=400"
+    },
+    {
+      "name": "Block HubSpot export without credentials",
+      "passed": true,
+      "details": "status=503"
+    },
+    {
+      "name": "Redact secret config values",
+      "passed": true,
+      "details": "status=200"
+    },
+    {
+      "name": "Do not expose HubSpot token in status response",
+      "passed": true,
+      "details": "status=200"
+    }
+  ],
+  "sla_checks": [
+    {
+      "name": "/health success rate >= 99.00%",
+      "passed": true,
+      "details": "actual=100.00%"
+    },
+    {
+      "name": "/health p95 <= 500.00ms",
+      "passed": true,
+      "details": "actual=415.52ms"
+    },
+    {
+      "name": "/api/health success rate >= 99.00%",
+      "passed": true,
+      "details": "actual=100.00%"
+    },
+    {
+      "name": "/api/health p95 <= 500.00ms",
+      "passed": true,
+      "details": "actual=410.47ms"
+    },
+    {
+      "name": "Availability >= 99.90%",
+      "passed": true,
+      "details": "actual=100.00%"
+    }
+  ]
+}

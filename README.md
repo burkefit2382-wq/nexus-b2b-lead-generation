@@ -2,6 +2,27 @@
 
 This repository now includes a runnable MVP structure for local testing and CI validation.
 
+## Canonical production deployment
+
+The primary supported enterprise deployment path is **Cloudflare in front of Render**:
+
+- Cloudflare handles DNS, proxying, CDN/static asset delivery, and WAF controls
+- Render hosts the backend services
+- Neon provides Postgres
+- Resend, Stripe, and HubSpot are the supported external integrations
+
+See:
+
+- [`backend/docs/architecture-overview.md`](backend/docs/architecture-overview.md)
+- [`backend/docs/deployment-runbook.md`](backend/docs/deployment-runbook.md)
+- [`backend/docs/resend-integration.md`](backend/docs/resend-integration.md)
+- [`backend/docs/stripe-integration.md`](backend/docs/stripe-integration.md)
+- [`backend/docs/hubspot-integration.md`](backend/docs/hubspot-integration.md)
+- [`backend/docs/incident-response-runbook.md`](backend/docs/incident-response-runbook.md)
+- [`backend/docs/secrets-management.md`](backend/docs/secrets-management.md)
+
+> Azure workflows and infrastructure files remain in-repo for legacy/testing scenarios, but they are not the primary supported production path.
+
 ## Codebase structure
 
 - `/backend/app/main.py` — FastAPI app with:
