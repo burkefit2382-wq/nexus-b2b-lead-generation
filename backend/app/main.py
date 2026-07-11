@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
 from .api.leads import router as leads_router
+from .api.membership import router as membership_router
 from .services import config
 from .services import hubspot as hubspot_service
 from .services.database import run_migrations
@@ -51,6 +52,7 @@ app.add_middleware(
     allow_headers=["Content-Type"],
 )
 app.include_router(leads_router, prefix="/leads", tags=["Leads"])
+app.include_router(membership_router, prefix="/api/membership", tags=["Membership"])
 
 
 @app.get("/health")
@@ -84,6 +86,7 @@ def config_status() -> dict[str, bool | str]:
         "resendConfigured": config.resend_configured(),
         "jwtConfigured": config.jwt_configured(),
         "hubspotConfigured": bool(status["configured"]),
+        "stripeConfigured": config.stripe_configured(),
         "checkedAt": utc_now(),
     }
 

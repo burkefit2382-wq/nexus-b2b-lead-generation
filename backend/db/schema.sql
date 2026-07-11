@@ -74,6 +74,22 @@ CREATE INDEX IF NOT EXISTS tracking_events_event_name_idx ON tracking_events(eve
 CREATE INDEX IF NOT EXISTS tracking_events_user_id_idx ON tracking_events(user_id);
 CREATE INDEX IF NOT EXISTS tracking_events_created_at_idx ON tracking_events(created_at);
 
+CREATE TABLE IF NOT EXISTS memberships (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT NOT NULL UNIQUE,
+  stripe_customer_id TEXT,
+  stripe_subscription_id TEXT,
+  price_id TEXT,
+  status TEXT NOT NULL DEFAULT 'inactive',
+  current_period_end TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS memberships_email_idx ON memberships(email);
+CREATE INDEX IF NOT EXISTS memberships_stripe_customer_id_idx ON memberships(stripe_customer_id);
+CREATE INDEX IF NOT EXISTS memberships_status_idx ON memberships(status);
+
 CREATE TABLE IF NOT EXISTS weekly_summaries (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   week_start DATE,
