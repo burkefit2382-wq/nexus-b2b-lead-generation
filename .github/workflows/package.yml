@@ -1,0 +1,52 @@
+name: Package Deploy Artifacts
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: nexus-saas/.nvmrc
+          cache: npm
+          cache-dependency-path: nexus-saas/package-lock.json
+
+      - name: Build Devvit app
+        working-directory: nexus-saas
+        run: |
+          npm ci
+          npm run type-check
+          npm run build
+
+      - name: Package launch site
+        run: |
+          mkdir -p deploy_artifacts
+          cd launch_site
+          zip -r ../deploy_artifacts/leadgen-virtual-hub-launch-site.zip \
+            _headers _redirects .env.example app.js assets dashboard.html index.html railway.json README_DEPLOY.md \
+            render.yaml requirements.txt server.py staticwebapp.config.json styles.css vercel.json Dockerfile Procfile .dockerignore
+
+      - name: Package Devvit app
+        run: |
+          mkdir -p deploy_artifacts
+          zip -r deploy_artifacts/nexus-saas-devvit-build.zip \
+            nexus-saas/dist nexus-saas/public nexus-saas/src nexus-saas/tools \
+            nexus-saas/.gitignore nexus-saas/.npmrc nexus-saas/.nvmrc \
+            nexus-saas/devvit.json nexus-saas/LICENSE nexus-saas/package-lock.json \
+            nexus-saas/package.json nexus-saas/README.md nexus-saas/tsconfig.json
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-artifacts
+          path: deploy_artifacts/*.zip

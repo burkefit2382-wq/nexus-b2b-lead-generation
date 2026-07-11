@@ -1,0 +1,673 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LeadGen Virtual Hub</title>
+    <meta name="description" content="Lead intelligence workspace for import, OSINT enrichment, AI enrichment, scoring, storefront publishing, and prioritized outreach.">
+    <link rel="stylesheet" href="styles.css?v=20260630-osint-build">
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="LeadGen Virtual Hub home">
+        <span class="brand-mark"></span>
+        <span>LeadGen Virtual Hub</span>
+      </a>
+      <nav aria-label="Main navigation">
+        <a href="#workflow">Workflow</a>
+        <a href="#comparison">Compare</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#onsite">Onsite</a>
+        <a href="#scrapers">Scrapers</a>
+        <a href="#scoring">Scoring</a>
+        <a href="#enrichment">Enrichment</a>
+        <a href="#crm">CRM</a>
+        <a href="#lead-market">For Sale</a>
+        <a href="#pi-suite">Pi Suite</a>
+        <a href="#ai-chat">AI Chat</a>
+        <a href="#trust">Trust</a>
+        <a href="#storefront">Storefront</a>
+        <a href="#pilot">Pilot</a>
+        <a href="/lead-control-center">Control</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-label="LeadGen Virtual Hub launch">
+        <div class="hero-shade"></div>
+        <div class="hero-content">
+          <p class="eyebrow">Private pilot opening</p>
+          <h1>LeadGen Virtual Hub</h1>
+          <p class="hero-copy">
+            Import leads, enrich them with OSINT and AI, score priority, and publish approved opportunities to your storefront.
+          </p>
+          <div class="hero-offer" aria-label="Paid lead generation workflow">
+            <span>Launch offer</span>
+            <strong>Tampa Bay Real Estate Lead Packages</strong>
+            <p>Target Pinellas, Hillsborough, Pasco, and Hernando with AI-enriched, locally scored lead packages built for agent outreach.</p>
+            <div class="hero-offer-actions">
+              <button type="button" class="checkout-button hero-checkout" data-price-id="price_tb_leads_10_350">10 leads - $350</button>
+              <button type="button" class="checkout-button hero-checkout secondary" data-price-id="price_tb_leads_25_700">25 leads - $700</button>
+              <button type="button" class="checkout-button hero-checkout secondary" data-price-id="price_tb_leads_50_1000">50 leads - $1,000</button>
+            </div>
+          </div>
+          <form class="pilot-form" id="pilotForm">
+            <label for="email">Request pilot access</label>
+            <div class="form-row">
+              <input id="email" name="email" type="email" autocomplete="email" placeholder="you@company.com" required>
+              <button type="submit">Join pilot</button>
+            </div>
+            <p class="form-note" id="formNote">Controlled pilot only. Security and compliance evidence is being assembled before public launch.</p>
+          </form>
+        </div>
+      </section>
+
+      <section class="strip" aria-label="Launch focus">
+        <div>
+          <strong>First launch audience</strong>
+          <span>Trusted testers and paid pilot candidates</span>
+        </div>
+        <div>
+          <strong>Primary outcome</strong>
+          <span>Reach an enriched, scored, storefront-ready lead list in one session</span>
+        </div>
+        <div>
+          <strong>Launch posture</strong>
+          <span>Evidence-based pilot before public release</span>
+        </div>
+      </section>
+
+      <section class="section" id="workflow">
+        <div class="section-heading">
+          <p class="eyebrow">Workflow</p>
+          <h2>From raw list to reviewed storefront-ready leads</h2>
+        </div>
+        <div class="workflow-grid">
+          <article class="feature-card">
+            <span class="step">01</span>
+            <h3>Import</h3>
+            <p>Bring in CSV or spreadsheet lead lists, validate fields, and surface row-level issues before work begins.</p>
+          </article>
+          <article class="feature-card">
+            <span class="step">02</span>
+            <h3>Enrich</h3>
+            <p>Run OSINT and AI enrichment to fill in context, signals, summaries, and qualification details.</p>
+          </article>
+          <article class="feature-card">
+            <span class="step">03</span>
+            <h3>Score</h3>
+            <p>Apply consistent lead scoring so high-priority records stand out and questionable results can be reviewed.</p>
+          </article>
+          <article class="feature-card">
+            <span class="step">04</span>
+            <h3>Act</h3>
+            <p>Filter, assign, export, and track the best opportunities with audit-ready operational evidence.</p>
+          </article>
+          <article class="feature-card">
+            <span class="step">05</span>
+            <h3>Publish</h3>
+            <p>Create sanitized storefront listing drafts or auto-publish approved leads based on safe rules.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section comparison" id="comparison">
+        <div class="section-heading">
+          <p class="eyebrow">Comparison chart</p>
+          <h2>Why Nexus beats a spreadsheet plus manual research</h2>
+          <p>Nexus turns raw lists into priced, reviewed lead packages with evidence, scoring, buyer workflow, and delivery controls in one workspace.</p>
+        </div>
+        <div class="comparison-table" role="table" aria-label="Nexus comparison chart">
+          <div class="comparison-row comparison-head" role="row">
+            <span role="columnheader">Capability</span>
+            <span role="columnheader">Manual lead work</span>
+            <span role="columnheader">Generic scraper</span>
+            <span role="columnheader">Nexus</span>
+          </div>
+          <div class="comparison-row" role="row">
+            <span role="cell">Always-on collection</span>
+            <span role="cell">Manual batches</span>
+            <span role="cell">Usually raw output only</span>
+            <span role="cell"><strong>24/7 scraper queue with review gates</strong></span>
+          </div>
+          <div class="comparison-row" role="row">
+            <span role="cell">AI enrichment</span>
+            <span role="cell">Slow research notes</span>
+            <span role="cell">Limited context</span>
+            <span role="cell"><strong>Summary, signals, score, and next action</strong></span>
+          </div>
+          <div class="comparison-row" role="row">
+            <span role="cell">Sale-ready packaging</span>
+            <span role="cell">Not built in</span>
+            <span role="cell">Not built in</span>
+            <span role="cell"><strong>HQ Florida packages priced for buyers</strong></span>
+          </div>
+          <div class="comparison-row" role="row">
+            <span role="cell">Privacy posture</span>
+            <span role="cell">Depends on operator</span>
+            <span role="cell">Often unclear</span>
+            <span role="cell"><strong>Private contact fields excluded by default</strong></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section pricing" id="pricing">
+        <div class="section-heading">
+          <p class="eyebrow">Pricing</p>
+          <h2>Dominate your market with verified, exclusive real estate leads</h2>
+          <p>Stop buying recycled leads. Start receiving verified, enriched, exclusive buyer and seller leads delivered through Nexus.</p>
+        </div>
+        <div class="pricing-grid">
+          <article class="price-card">
+            <span class="badge">Starter</span>
+            <h3>Starter</h3>
+            <p class="listing-price">$350/mo</p>
+            <p>Perfect for agents who want a focused premium lead drop every month.</p>
+            <ul>
+              <li>10 premium Tampa Bay leads monthly</li>
+              <li>10 AI enrichment scans</li>
+              <li>Weekly refresh</li>
+              <li>Lead scoring and opportunity notes</li>
+              <li>Email-ready outreach angles</li>
+              <li>CRM export</li>
+              <li>No territory exclusivity</li>
+            </ul>
+            <button type="button" class="checkout-button" data-price-id="price_starter_350">Start Starter - $350/mo</button>
+          </article>
+          <article class="price-card featured">
+            <span class="badge">Pro</span>
+            <h3>Pro</h3>
+            <p class="listing-price">$700/mo</p>
+            <p>Built for agents ready to work a full Tampa Bay growth sprint.</p>
+            <ul>
+              <li>25 premium Tampa Bay leads monthly</li>
+              <li>25 OSINT and enrichment scans</li>
+              <li>Daily refresh</li>
+              <li>Advanced lead scoring</li>
+              <li>AI buyer intent prediction</li>
+              <li>ZIP-code exclusivity, 1 to 3 ZIPs</li>
+              <li>CRM sync and automation workflows</li>
+            </ul>
+            <button type="button" class="checkout-button" data-price-id="price_pro_700">Upgrade to Pro - $700/mo</button>
+          </article>
+          <article class="price-card">
+            <span class="badge">Elite</span>
+            <h3>Elite</h3>
+            <p class="listing-price">$1,000/mo</p>
+            <p>For agents and agencies who want consistent premium lead supply.</p>
+            <ul>
+              <li>50 premium Tampa Bay leads monthly</li>
+              <li>50 OSINT and enrichment scans</li>
+              <li>Daily refresh</li>
+              <li>AI buyer intent and financial signals</li>
+              <li>City or county territory exclusivity</li>
+              <li>Custom scraping</li>
+              <li>Dedicated support and priority delivery</li>
+            </ul>
+            <button type="button" class="checkout-button" data-price-id="price_elite_1000">Become Elite - $1,000/mo</button>
+          </article>
+          <article class="price-card">
+            <span class="badge">DFY</span>
+            <h3>DFY Lead Machine</h3>
+            <p class="listing-price">$1,500 setup + $997/mo</p>
+            <p>Your fully automated real estate lead system.</p>
+            <ul>
+              <li>1,000+ verified leads monthly</li>
+              <li>Custom scraping and enrichment</li>
+              <li>Automated follow-up sequences</li>
+              <li>Weekly OSINT intelligence reports</li>
+              <li>Full territory lock</li>
+              <li>Dedicated account manager</li>
+              <li>Custom AI workflows</li>
+            </ul>
+            <button type="button" class="checkout-button" data-price-id="price_dfy_997">Build My Lead Machine</button>
+          </article>
+        </div>
+        <p class="form-note checkout-note" id="checkoutNote">Stripe checkout needs production price IDs and STRIPE_SECRET_KEY before paid checkout can complete.</p>
+      </section>
+
+      <section class="section marketplace" id="marketplace">
+        <div class="section-heading">
+          <p class="eyebrow">Storefront products</p>
+          <h2>Buy verified real estate leads and intelligence instantly</h2>
+          <p>No contracts. No shared leads. Just verified, enriched, exclusive data products packaged for action.</p>
+        </div>
+        <div class="product-section">
+          <h3>Premium Tampa Bay Lead Sprints</h3>
+          <div class="market-grid">
+            <article class="lead-listing"><span class="badge">HQ Leads</span><h3>Tampa Bay 10-Lead Sprint</h3><p>Ten reviewed, enriched Tampa Bay real estate leads for a focused outreach push.</p><p class="listing-price">$350</p><p>Coverage: Pinellas, Hillsborough, Pasco, and Hernando.</p><button type="button" class="checkout-button" data-price-id="price_tb_leads_10_350">Buy 10 leads - $350</button></article>
+            <article class="lead-listing"><span class="badge">Growth</span><h3>Tampa Bay 25-Lead Growth Sprint</h3><p>Twenty-five AI-enriched leads for a stronger local campaign and follow-up sequence.</p><p class="listing-price">$700</p><p>Best for teams ready to work a full territory sprint.</p><button type="button" class="checkout-button" data-price-id="price_tb_leads_25_700">Buy 25 leads - $700</button></article>
+            <article class="lead-listing"><span class="badge">Domination</span><h3>Tampa Bay 50-Lead Domination Sprint</h3><p>Fifty premium Tampa Bay leads with scoring, enrichment, and sales-ready context.</p><p class="listing-price">$1,000</p><p>Built for serious outbound, agency fulfillment, and county-level campaigns.</p><button type="button" class="checkout-button" data-price-id="price_tb_leads_50_1000">Buy 50 leads - $1,000</button></article>
+          </div>
+        </div>
+        <div class="product-section">
+          <h3>Recurring Revenue Subscriptions</h3>
+          <div class="market-grid">
+            <article class="lead-listing"><span class="badge">Subscription</span><h3>Lead Drops Subscription</h3><p>Weekly or monthly verified lead drops delivered automatically.</p><p class="listing-price">$99-$499/mo</p><p>Best for teams that want fresh lead flow without re-ordering every week.</p><button type="button" class="checkout-button" data-price-id="price_lead_drops_99">Start at $99/mo</button></article>
+            <article class="lead-listing"><span class="badge">Exclusive</span><h3>Territory Exclusivity Subscription</h3><p>One client per county with protected local lead access.</p><p class="listing-price">$499-$1,500/mo</p><p>Lock down Pinellas, Hillsborough, Pasco, or Hernando before a competitor does.</p><button type="button" class="checkout-button" data-price-id="price_territory_exclusive_499">Reserve from $499/mo</button></article>
+            <article class="lead-listing"><span class="badge">Monitoring</span><h3>OSINT Monitoring Subscription</h3><p>Automated alerts on people, businesses, properties, and market signals.</p><p class="listing-price">$49-$199/mo</p><p>Track changes and new opportunities instead of checking manually.</p><button type="button" class="checkout-button" data-price-id="price_osint_monitoring_49">Monitor from $49/mo</button></article>
+            <article class="lead-listing"><span class="badge">Intel</span><h3>Business Intelligence Subscription</h3><p>Monthly reports, enriched data, and local market intelligence.</p><p class="listing-price">$99-$299/mo</p><p>Get recurring insights your sales team can act on every month.</p><button type="button" class="checkout-button" data-price-id="price_business_intel_99">Start at $99/mo</button></article>
+            <article class="lead-listing"><span class="badge">Agency</span><h3>White-Label LeadGen for Agencies</h3><p>Agencies buy Nexus lead flow and resell under their own brand.</p><p class="listing-price">$1,000-$5,000/mo</p><p>Built for agencies that want recurring lead inventory without building scraper, enrichment, and scoring infrastructure.</p><button type="button" class="checkout-button" data-price-id="price_white_label_agency_1000">Start agency plan - $1,000/mo</button></article>
+          </div>
+        </div>
+        <div class="product-section">
+          <h3>API Access</h3>
+          <div class="market-grid">
+            <article class="lead-listing"><span class="badge">License</span><h3>Nexus API Access License</h3><p>Private API license for lead data, enrichment outputs, and buyer-safe intelligence feeds.</p><p class="listing-price">$2,000-$10,000 per license</p><p>Start with the entry license, then scale volume, endpoints, and territory rules by contract.</p><button type="button" class="checkout-button" data-price-id="price_api_license_2000">Buy license - $2,000</button></article>
+            <article class="lead-listing"><span class="badge">API</span><h3>Nexus API Ongoing Access</h3><p>Monthly API access for recurring lead drops, enrichment data, scoring, and business intelligence feeds.</p><p class="listing-price">$500-$1,500/mo</p><p>Use this for active integrations, recurring data access, and ongoing territory intelligence.</p><button type="button" class="checkout-button" data-price-id="price_api_access_500">Start API access - $500/mo</button></article>
+          </div>
+        </div>
+        <div class="product-section">
+          <h3>OSINT Products</h3>
+          <div class="market-grid">
+            <article class="lead-listing"><span class="badge">OSINT</span><h3>Authorized People OSINT Report</h3><p>Public-source due diligence for authorized business, safety, or verification use.</p><p class="listing-price">$25</p><p>Buyer-safe report only. No private access, stalking, or sensitive-data collection.</p><button type="button" class="checkout-button" data-price-id="price_people_osint_report_25">Buy report - $25</button></article>
+            <article class="lead-listing"><span class="badge">OSINT</span><h3>Business OSINT Report</h3><p>Business identity, footprint, risk signals, source notes, and opportunity context.</p><p class="listing-price">$49</p><button type="button" class="checkout-button" data-price-id="price_business_osint_report_49">Buy report - $49</button></article>
+            <article class="lead-listing"><span class="badge">OSINT</span><h3>Property OSINT Report</h3><p>Property context, public signals, ownership/entity trail, and local opportunity notes.</p><p class="listing-price">$75</p><button type="button" class="checkout-button" data-price-id="price_property_osint_report_75">Buy report - $75</button></article>
+            <article class="lead-listing"><span class="badge">OSINT</span><h3>Digital Footprint Report</h3><p>Public web footprint, business presence, reputation signals, and risk summary.</p><p class="listing-price">$99</p><button type="button" class="checkout-button" data-price-id="price_digital_footprint_report_99">Buy report - $99</button></article>
+            <article class="lead-listing"><span class="badge">Unlimited</span><h3>Unlimited OSINT Reports</h3><p>Recurring access for automated people, business, property, and footprint reports.</p><p class="listing-price">$199-$499/mo</p><button type="button" class="checkout-button" data-price-id="price_unlimited_osint_reports_199">Start at $199/mo</button></article>
+            <article class="lead-listing"><span class="badge">OSINT</span><h3>Real Estate OSINT Report</h3><p>Identity, property history, financial signals, and risk scoring.</p><p class="listing-price">$75</p><button type="button" class="checkout-button" data-price-id="price_osint_basic">Buy now</button></article>
+            <article class="lead-listing"><span class="badge">OSINT</span><h3>Deep OSINT Investigation</h3><p>Full background, social footprint, business ties, public records, and fraud indicators.</p><p class="listing-price">$150</p><button type="button" class="checkout-button" data-price-id="price_osint_deep">Buy now</button></article>
+            <article class="lead-listing"><span class="badge">OSINT</span><h3>Homeowner Identity Report</h3><p>Verify sellers before you engage with ownership signals and risk scoring.</p><p class="listing-price">$99</p><button type="button" class="checkout-button" data-price-id="price_osint_homeowner">Buy now</button></article>
+          </div>
+        </div>
+        <div class="product-section">
+          <h3>Pay-Per-Scan Billing</h3>
+          <div class="market-grid">
+            <article class="lead-listing"><span class="badge">Lookup</span><h3>OSINT + AI Enrichment Scan</h3><p>Run one authorized lookup through the OSINT intake and AI enrichment workflow.</p><p class="listing-price">$19/scan</p><p>Best for testing one business, property, domain, or authorized profile.</p><button type="button" class="checkout-button" data-price-id="price_scan_single_19">Buy 1 scan - $19</button></article>
+            <article class="lead-listing"><span class="badge">Credits</span><h3>10 Scan Credits</h3><p>Prepay for ten authorized OSINT and enrichment lookups.</p><p class="listing-price">$149</p><p>Use credits for repeated business, property, digital footprint, or lead enrichment checks.</p><button type="button" class="checkout-button" data-price-id="price_scan_pack_10_149">Buy 10 scans - $149</button></article>
+            <article class="lead-listing"><span class="badge">Scale</span><h3>50 Scan Credits</h3><p>Bulk lookup credits for agencies, analysts, and recurring lead-intelligence work.</p><p class="listing-price">$499</p><p>Best for weekly prospect research, agency fulfillment, and sales intelligence workflows.</p><button type="button" class="checkout-button" data-price-id="price_scan_pack_50_499">Buy 50 scans - $499</button></article>
+          </div>
+        </div>
+        <div class="product-section osint-workbench" id="osint-workbench">
+          <h3>Authorized OSINT Report Workbench</h3>
+          <div class="pipeline-layout">
+            <form class="sample-lead osint-form" id="osintReportForm">
+              <strong>Queue report details</strong>
+              <label for="osintReportType">Report type</label>
+              <select id="osintReportType" name="reportType" required>
+                <option value="business">Business OSINT Report</option>
+                <option value="property">Property OSINT Report</option>
+                <option value="digital">Digital Footprint Report</option>
+                <option value="people">Authorized People OSINT Report</option>
+              </select>
+              <label for="osintSubject">Subject</label>
+              <input id="osintSubject" name="subject" type="text" placeholder="Business, property, domain, or authorized person" maxlength="160" required>
+              <label for="osintRequesterEmail">Requester email</label>
+              <input id="osintRequesterEmail" name="requesterEmail" type="email" placeholder="buyer@company.com" required>
+              <label for="osintUseCase">Authorized purpose</label>
+              <input id="osintUseCase" name="useCase" type="text" placeholder="Due diligence, verification, risk review..." required>
+              <label for="osintPublicUrls">Public URLs or source notes</label>
+              <textarea id="osintPublicUrls" name="publicUrls" rows="4" placeholder="One public URL or source note per line"></textarea>
+              <label for="osintScopeNotes">Scope notes</label>
+              <textarea id="osintScopeNotes" name="scopeNotes" rows="3" placeholder="What should the analyst verify?"></textarea>
+              <label class="check-row" for="osintAuthorized">
+                <input id="osintAuthorized" name="authorized" type="checkbox" required>
+                <span>I confirm this is authorized public-source research. No covert tracking, credential access, or number-only location lookup.</span>
+              </label>
+              <button type="submit">Generate safe preview</button>
+              <p class="chat-note" id="osintReportNote">Reports are queued for review before customer delivery.</p>
+            </form>
+            <div class="pipeline-results" id="osintReportResults" aria-live="polite">
+              <div class="result-card">
+                <span>Ready</span>
+                <strong>OSINT intake online</strong>
+                <p>Submit authorized report details to generate a safe preview and queue fulfillment review.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="product-section">
+          <h3>Lead Intelligence Reports</h3>
+          <div class="market-grid">
+            <article class="lead-listing"><span class="badge">Premium</span><h3>Lead Intelligence Report</h3><p>Lead details, contact context, property/business info, AI scoring, risk analysis, and opportunity score.</p><p class="listing-price">$50-$150/report</p><p>Start with a single premium report for one prospect, account, property, or business lead.</p><button type="button" class="checkout-button" data-price-id="price_lead_intel_report_99">Buy report - $99</button></article>
+            <article class="lead-listing"><span class="badge">Unlimited</span><h3>Unlimited Lead Intelligence Reports</h3><p>Monthly access for repeated lead intelligence reports, scoring, and enrichment workflows.</p><p class="listing-price">$499/mo</p><p>Best for teams that need intelligence reports every week.</p><button type="button" class="checkout-button" data-price-id="price_unlimited_lead_intel_499">Start unlimited - $499/mo</button></article>
+          </div>
+        </div>
+        <div class="product-section">
+          <h3>Lead Verification + Enrichment Subscriptions</h3>
+          <div class="market-grid">
+            <article class="lead-listing"><span class="badge">Starter</span><h3>Verification Starter Plan</h3><p>Monthly verification and enrichment for small teams testing lead quality.</p><p class="listing-price">$99/mo</p><p>Best for founders, agents, and solo operators with recurring lists.</p><button type="button" class="checkout-button" data-price-id="price_lead_verify_plan_99">Start starter - $99/mo</button></article>
+            <article class="lead-listing"><span class="badge">Growth</span><h3>Verification Growth Plan</h3><p>Higher-volume cleaning, dedupe, enrichment, and AI scoring for active campaigns.</p><p class="listing-price">$299/mo</p><p>Built for teams buying or scraping new lists every week.</p><button type="button" class="checkout-button" data-price-id="price_lead_verify_plan_299">Start growth - $299/mo</button></article>
+            <article class="lead-listing"><span class="badge">Agency</span><h3>Verification Agency Plan</h3><p>Recurring verification and enrichment workflow for agencies serving multiple clients.</p><p class="listing-price">$499/mo</p><p>Agencies can send lists, get enriched files back, and resell clean data under their brand.</p><button type="button" class="checkout-button" data-price-id="price_lead_verify_plan_499">Start agency - $499/mo</button></article>
+          </div>
+        </div>
+        <div class="product-section">
+          <h3>AI Sales Intelligence</h3>
+          <div class="market-grid">
+            <article class="lead-listing"><span class="badge">AI</span><h3>AI Outreach Intelligence Starter</h3><p>AI-generated outreach scripts, hooks, subject lines, and follow-up angles matched to your lead list.</p><p class="listing-price">$199/mo</p><p>Best for teams that need better messaging before scaling ad spend or cold outreach.</p><button type="button" class="checkout-button" data-price-id="price_ai_outreach_199">Start AI outreach - $199/mo</button></article>
+            <article class="lead-listing"><span class="badge">Profiles</span><h3>AI Prospect Profiles Growth</h3><p>AI-generated prospect profiles with pain points, buying triggers, likely objections, and sales angles.</p><p class="listing-price">$499/mo</p><p>Turn raw prospects into sales-ready profiles your reps can act on immediately.</p><button type="button" class="checkout-button" data-price-id="price_ai_profiles_499">Start profiles - $499/mo</button></article>
+            <article class="lead-listing"><span class="badge">Command</span><h3>AI Business Intelligence Command</h3><p>Monthly business intelligence, opportunity scoring, account briefs, outreach scripts, and campaign strategy.</p><p class="listing-price">$999/mo</p><p>Built for agencies and sales teams that want Nexus to become their intelligence layer.</p><button type="button" class="checkout-button" data-price-id="price_ai_business_intel_999">Start command - $999/mo</button></article>
+          </div>
+        </div>
+        <div class="product-section">
+          <h3>AI Intelligence Reports</h3>
+          <div class="market-grid">
+            <article class="lead-listing"><span class="badge">Intel</span><h3>Real Estate Market Intelligence Report</h3><p>Market trends, buyer intent, seller activity, and opportunity zones.</p><p class="listing-price">$149</p><button type="button" class="checkout-button" data-price-id="price_intel_market">Buy now</button></article>
+            <article class="lead-listing"><span class="badge">Intel</span><h3>Neighborhood Buyer Intent Report</h3><p>Hyper-local buyer activity with local intent scoring.</p><p class="listing-price">$99</p><button type="button" class="checkout-button" data-price-id="price_intel_neighborhood">Buy now</button></article>
+            <article class="lead-listing"><span class="badge">Intel</span><h3>Competitor Agent Activity Report</h3><p>Track top agents, listing volume, and activity signals in your area.</p><p class="listing-price">$79</p><button type="button" class="checkout-button" data-price-id="price_intel_competitor">Buy now</button></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section storefront" id="storefront">
+        <div class="section-heading">
+          <p class="eyebrow">Storefront automation</p>
+          <h2>Turn generated leads into publishable listings</h2>
+          <p>Leads can become storefront-ready cards with private contact details, internal notes, and sensitive fields excluded by default.</p>
+        </div>
+        <div class="pilot-panel">
+          <div>
+            <strong>Draft first</strong>
+            <p>Generated leads become reviewable storefront drafts with title, category, region, summary, score band, and CTA.</p>
+          </div>
+          <div>
+            <strong>Auto-publish rules</strong>
+            <p>Only publish when the lead passes score, consent, privacy, and field-safety checks.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section onsite" id="onsite">
+        <div class="section-heading">
+          <p class="eyebrow">Onsite command menu</p>
+          <h2>Field tools for room checks and consent-based location</h2>
+          <p>Use onsite tools for defensive privacy sweeps, field notes, incident evidence, and opt-in location check-ins.</p>
+        </div>
+        <div class="onsite-grid">
+          <article class="tool-card">
+            <strong>Room privacy sweep</strong>
+            <p>Run a visual/RF checklist for hotel rooms, offices, rentals, and meeting spaces. Mark findings as benign, suspicious, or needs review.</p>
+            <span>Defensive use only</span>
+          </article>
+          <article class="tool-card">
+            <strong>Evidence notes</strong>
+            <p>Capture room, timestamp, checklist results, photos, and escalation status for authorized inspections.</p>
+            <span>Audit-ready records</span>
+          </article>
+          <article class="tool-card">
+            <strong>Consent location check-in</strong>
+            <p>Send a secure check-in link so a person can explicitly share their live location with permission and expiration.</p>
+            <span>No number-only tracking</span>
+          </article>
+        </div>
+      </section>
+
+      <section class="section scrapers" id="scrapers">
+        <div class="section-heading">
+          <p class="eyebrow">24/7 scraper operations</p>
+          <h2>Always-on collection with controls</h2>
+          <p>Monitor allowed lead sources, ingestion jobs, enrichment queues, source health, and scraper safety from one command view.</p>
+        </div>
+        <div class="ops-grid">
+          <article class="ops-card">
+            <span class="ops-value">24/7</span>
+            <strong>Collector uptime</strong>
+            <p>Scheduled collectors run continuously with health checks, retry limits, and owner alerts.</p>
+          </article>
+          <article class="ops-card">
+            <span class="ops-value">Allowlist</span>
+            <strong>Approved sources</strong>
+            <p>Scrapers run only against documented sources with terms, rate limits, and provenance notes.</p>
+          </article>
+          <article class="ops-card">
+            <span class="ops-value">Queue</span>
+            <strong>Ingestion pipeline</strong>
+            <p>New records move through validation, dedupe, enrichment, scoring, and storefront draft creation.</p>
+          </article>
+          <article class="ops-card">
+            <span class="ops-value">Kill</span>
+            <strong>Emergency stop</strong>
+            <p>Pause collectors quickly when a source changes, errors spike, or compliance review is needed.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section scoring-explainer" id="scoring">
+        <div class="section-heading">
+          <p class="eyebrow">Lead scoring explanation</p>
+          <h2>Every lead gets a reasoned score before it goes up for sale</h2>
+          <p>The score is not a black box. Nexus records the signals that moved the lead up or down, then shows the buyer-ready fields separately from private internal data.</p>
+        </div>
+        <div class="score-layout">
+          <div class="score-meter" aria-label="Example lead score">
+            <span>96</span>
+            <strong>High priority</strong>
+            <p>Example score for a lead with strong growth signals, target-market fit, and an approved source trail.</p>
+          </div>
+          <div class="score-rules">
+            <div><strong>Signal strength</strong><span>Hiring, funding, contract activity, procurement signals, expansion, or public growth indicators.</span></div>
+            <div><strong>Market fit</strong><span>Fit against target categories such as Florida HQ businesses, GovTech, field operations, security, or SaaS.</span></div>
+            <div><strong>Source confidence</strong><span>Approved source allowlist, provenance notes, dedupe state, and freshness.</span></div>
+            <div><strong>Review state</strong><span>Private fields stay internal until the package is approved for buyer delivery.</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section enrichment" id="enrichment">
+        <div class="section-heading">
+          <p class="eyebrow">After scrape pipeline</p>
+          <h2>AI enrichment and lead scoring</h2>
+          <p>Turn scraped records into validated, enriched, scored, storefront-ready leads with explainable outputs.</p>
+        </div>
+        <div class="pipeline-layout">
+          <div class="sample-lead">
+            <strong>Sample scraped lead</strong>
+            <dl>
+              <div><dt>Company</dt><dd>Northstar Labs</dd></div>
+              <div><dt>Signal</dt><dd>Hiring growth and new contract activity</dd></div>
+              <div><dt>Market</dt><dd>GovTech / field operations</dd></div>
+              <div><dt>Source</dt><dd>Approved source allowlist</dd></div>
+            </dl>
+            <button type="button" id="runEnrichment">Run AI pipeline</button>
+          </div>
+          <div class="pipeline-results" id="pipelineResults" aria-live="polite">
+            <div class="result-card">
+              <span>Waiting</span>
+              <strong>Ready for enrichment</strong>
+              <p>Run the pipeline to generate a demo enrichment summary, score, confidence, and next action.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section crm" id="crm">
+        <div class="section-heading">
+          <p class="eyebrow">CRM export</p>
+          <h2>Push reviewed leads into HubSpot</h2>
+          <p>Export approved Nexus leads into HubSpot CRM as contacts after enrichment, scoring, and QA review.</p>
+        </div>
+        <div class="pipeline-layout">
+          <div class="sample-lead">
+            <strong>HubSpot connection</strong>
+            <p id="hubspotStatus">Checking HubSpot CRM status...</p>
+            <dl>
+              <div><dt>Mode</dt><dd>Server-side private app token</dd></div>
+              <div><dt>Object</dt><dd>CRM contact</dd></div>
+              <div><dt>Duplicate control</dt><dd>Search by email, then update or create</dd></div>
+              <div><dt>Required env</dt><dd>HUBSPOT_ACCESS_TOKEN</dd></div>
+            </dl>
+            <button type="button" id="hubspotExportDemo">Send demo contact to HubSpot</button>
+          </div>
+          <div class="pipeline-results" id="hubspotResults" aria-live="polite">
+            <div class="result-card">
+              <span>Waiting</span>
+              <strong>Ready for CRM export</strong>
+              <p>Configure a HubSpot private app token with contact write scope, then export reviewed leads from Nexus.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section lead-market" id="lead-market">
+        <div class="section-heading">
+          <p class="eyebrow">Lead storefront</p>
+          <h2>HQ Florida leads are for sale</h2>
+          <p>137 HQ Florida leads are staged as reviewed, AI-enriched, storefront-safe packages with private contact data excluded from the public page.</p>
+        </div>
+        <div class="market-toolbar">
+          <button type="button" id="generateSaleLead">Refresh HQ lead packages</button>
+          <span id="revenueStatus">Checking Resend delivery status...</span>
+        </div>
+        <div class="market-grid" id="leadMarketGrid" aria-live="polite">
+          <article class="lead-listing">
+            <span class="badge">For Sale</span>
+            <h3>Tampa Bay 10-Lead Sprint</h3>
+            <p>Starter premium sprint for buyers who want a focused reviewed Tampa Bay lead batch.</p>
+            <div class="listing-meta">
+              <strong>10 leads</strong>
+              <strong>137 available</strong>
+            </div>
+            <p class="listing-price">$350 USD</p>
+            <p><strong>Included:</strong> AI enrichment summary, lead score and reasons, source type, suggested next action, storefront-safe company profile.</p>
+            <p><strong>Excluded:</strong> raw phone/email, internal notes, sensitive identifiers, unreviewed personal data.</p>
+            <button type="button" class="checkout-button" data-price-id="price_tb_leads_10_350">Buy 10 leads - $350</button>
+          </article>
+          <article class="lead-listing">
+            <span class="badge">For Sale</span>
+            <h3>Tampa Bay 25-Lead Growth Sprint</h3>
+            <p>Growth package for a broader reviewed Tampa Bay lead batch.</p>
+            <div class="listing-meta">
+              <strong>25 leads</strong>
+              <strong>137 available</strong>
+            </div>
+            <p class="listing-price">$700 USD</p>
+            <p><strong>Included:</strong> AI enrichment summary, lead score and reasons, source type, suggested next action, storefront-safe company profile.</p>
+            <p><strong>Excluded:</strong> raw phone/email, internal notes, sensitive identifiers, unreviewed personal data.</p>
+            <button type="button" class="checkout-button" data-price-id="price_tb_leads_25_700">Buy 25 leads - $700</button>
+          </article>
+          <article class="lead-listing">
+            <span class="badge">For Sale</span>
+            <h3>Tampa Bay 50-Lead Domination Sprint</h3>
+            <p>Premium package for a larger reviewed Tampa Bay lead batch.</p>
+            <div class="listing-meta">
+              <strong>50 leads</strong>
+              <strong>137 available</strong>
+            </div>
+            <p class="listing-price">$1,000 USD</p>
+            <p><strong>Included:</strong> AI enrichment summary, lead score and reasons, source type, suggested next action, storefront-safe company profile.</p>
+            <p><strong>Excluded:</strong> raw phone/email, internal notes, sensitive identifiers, unreviewed personal data.</p>
+            <button type="button" class="checkout-button" data-price-id="price_tb_leads_50_1000">Buy 50 leads - $1,000</button>
+          </article>
+        </div>
+      </section>
+
+      <section class="section pi-suite" id="pi-suite">
+        <div class="section-heading">
+          <p class="eyebrow">Pi suite</p>
+          <h2>Edge field nodes for onsite operations</h2>
+          <p>Use lightweight Raspberry Pi-style nodes for onsite checks, scraper watch tasks, local evidence capture, and command-center status reporting.</p>
+        </div>
+        <div class="ops-grid">
+          <article class="ops-card">
+            <span class="ops-value">Node</span>
+            <strong>Field collector</strong>
+            <p>Register onsite Pi nodes for room checklists, approved sensors, local logs, and secure sync back to Nexus.</p>
+          </article>
+          <article class="ops-card">
+            <span class="ops-value">Edge</span>
+            <strong>Offline buffer</strong>
+            <p>Queue notes and findings locally when connectivity drops, then sync when the node reconnects.</p>
+          </article>
+          <article class="ops-card">
+            <span class="ops-value">Watch</span>
+            <strong>Source monitor</strong>
+            <p>Run lightweight uptime and scraper-health checks from distributed locations.</p>
+          </article>
+          <article class="ops-card">
+            <span class="ops-value">Secure</span>
+            <strong>Device controls</strong>
+            <p>Require node identity, signed updates, access logs, and remote disable for lost or retired hardware.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section ai-chat" id="ai-chat">
+        <div class="section-heading">
+          <p class="eyebrow">Nexus Llama 3 AI</p>
+          <h2>Ask the command-center assistant</h2>
+          <p>Use the chatbot to summarize leads, explain scraper status, draft storefront listings, and guide onsite workflows.</p>
+        </div>
+        <div class="chat-shell">
+          <div class="chat-log" id="chatLog" aria-live="polite">
+            <div class="chat-message assistant">
+              <strong>Nexus Llama 3</strong>
+              <p>Command assistant online. Ask about leads, scrapers, storefront drafts, or onsite checks.</p>
+            </div>
+          </div>
+          <form class="chat-form" id="chatForm">
+            <label for="chatPrompt">Message Nexus AI</label>
+            <div class="form-row">
+              <input id="chatPrompt" name="prompt" type="text" placeholder="Summarize today's scraper status..." autocomplete="off" required>
+              <button type="submit">Ask</button>
+            </div>
+            <p class="chat-note" id="chatNote">Uses local safe mode until a Llama 3 endpoint is configured.</p>
+          </form>
+        </div>
+      </section>
+
+      <section class="section sales-pitch" id="sales-pitch">
+        <div class="section-heading">
+          <p class="eyebrow">Sales pitch</p>
+          <h2>Buy leads that already passed the first layer of intelligence work</h2>
+          <p>Nexus is for teams that do not want another raw CSV. You get curated HQ Florida lead packages with AI enrichment, score reasoning, source notes, and a clear next action.</p>
+        </div>
+        <div class="pitch-grid">
+          <div>
+            <strong>For buyers</strong>
+            <p>Start with 10 premium leads for $350, validate quality fast, then scale to 25 or 50 lead packages when the market signal is right.</p>
+          </div>
+          <div>
+            <strong>For operators</strong>
+            <p>Run the scraper, enrich the output, score the buyer fit, publish storefront-safe packages, and capture purchase requests from one command center.</p>
+          </div>
+          <div>
+            <strong>For trust</strong>
+            <p>Public listings show only sanitized lead intelligence. Raw contact data and internal notes stay out of the storefront until delivery is approved.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section split" id="trust">
+        <div>
+          <p class="eyebrow">Trust readiness</p>
+          <h2>Built for a careful launch</h2>
+          <p>
+            The pilot is organized around functional QA, security testing, access control, audit logging, performance checks, and reliability evidence.
+          </p>
+        </div>
+        <div class="trust-list">
+          <div><strong>Access control</strong><span>RBAC and tenant isolation are launch gates.</span></div>
+          <div><strong>Security review</strong><span>Dependency, secret, API, and browser testing are required before public launch.</span></div>
+          <div><strong>AI handling</strong><span>AI enrichment is treated as decision support with reviewable outputs.</span></div>
+          <div><strong>Evidence packet</strong><span>NIST, FedRAMP, CISA, and CMMC/CUI references guide the readiness file.</span></div>
+        </div>
+      </section>
+
+      <section class="section pilot" id="pilot">
+        <div class="section-heading">
+          <p class="eyebrow">Pilot access</p>
+          <h2>Validate the workflow with real tasks</h2>
+          <p>Early testers will import a dataset, run enrichment, review scores, generate storefront drafts, and tell us exactly where the product earns trust or loses it.</p>
+        </div>
+        <div class="pilot-panel">
+          <div>
+            <strong>Best-fit pilot users</strong>
+            <p>Sales operators, business development teams, analysts, agencies, and security-conscious buyers reviewing lead intelligence workflows.</p>
+          </div>
+          <div>
+            <strong>Launch rule</strong>
+            <p>No public release until critical workflows, security gates, support ownership, and billing decisions are verified.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <span>LeadGen Virtual Hub</span>
+      <span>Private pilot readiness draft</span>
+    </footer>
+
+    <script type="text/javascript" id="hs-script-loader" async defer src="https://js-na2.hs-scripts.com/246668830.js"></script>
+    <script src="app.js?v=20260709-hubspot-backend"></script>
+  </body>
+</html>

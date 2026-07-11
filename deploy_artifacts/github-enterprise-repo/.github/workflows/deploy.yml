@@ -1,0 +1,36 @@
+name: Production Deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-launch-site:
+    name: Deploy launch site
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate launch site
+        working-directory: launch_site
+        run: |
+          python -m pip install -r requirements.txt
+          python -m py_compile server.py
+
+      - name: Trigger Render deploy hook
+        if: ${{ env.RENDER_DEPLOY_HOOK != '' }}
+        run: curl -fsSL -X POST "$RENDER_DEPLOY_HOOK"
+
+      - name: Missing deploy hook
+        if: ${{ env.RENDER_DEPLOY_HOOK == '' }}
+        run: |
+          echo "Set RENDER_DEPLOY_HOOK in the production environment to enable one-click deploys."
+          exit 1

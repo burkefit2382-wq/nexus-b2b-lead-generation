@@ -1,0 +1,47 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nexuscloud-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      APP_MODULE: ${APP_MODULE:-app.main:app}
+      WORKER_ENABLED: ${WORKER_ENABLED:-false}
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nexuscloud-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      WORKER_ENABLED: "true"
+    command: ["sh", "-c", "${WORKER_COMMAND:-python -m app.worker}"]
+    profiles:
+      - worker
+    depends_on:
+      backend:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

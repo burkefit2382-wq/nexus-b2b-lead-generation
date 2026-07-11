@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  launch-site:
+    name: Launch site smoke tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: launch_site
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Compile server
+        run: python -m py_compile server.py
+
+      - name: Start server
+        run: |
+          LAUNCH_HOST=127.0.0.1 LAUNCH_PORT=4173 python server.py &
+          echo $! > server.pid
+          sleep 2
+
+      - name: Smoke test endpoints
+        run: |
+          python - <<'PY'
+          import json
+          import urllib.request
+
+          def read(url, payload=None):
+              if payload is None:
+                  with urllib.request.urlopen(url, timeout=10) as response:
+                      return response.status, response.read().decode()
+              body = json.dumps(payload).encode()
+              request = urllib.request.Request(
+                  url,
+                  data=body,
+                  headers={"Content-Type": "application/json"},
+                  method="POST",
+              )
+              with urllib.request.urlopen(request, timeout=10) as response:
+                  return response.status, response.read().decode()
+
+          checks = [
+              read("http://127.0.0.1:4173/"),
+              read("http://127.0.0.1:4173/healthz"),
+              read("http://127.0.0.1:4173/api/enrich-score", {"lead": {"company": "Northstar Labs", "signal": "Hiring growth", "market": "GovTech", "source": "Approved source allowlist"}}),
+              read("http://127.0.0.1:4173/api/sale-listing", {"lead": {"company": "Northstar Labs", "signal": "Hiring growth", "market": "GovTech", "source": "Approved source allowlist"}}),
+              read("http://127.0.0.1:4173/api/chat", {"prompt": "Scraper status"}),
+          ]
+          assert all(status == 200 for status, _ in checks), checks
+          assert "LeadGen Virtual Hub" in checks[0][1]
+          assert '"scoreBand": "High"' in checks[2][1]
+          assert '"price"' in checks[3][1]
+          PY
+
+  devvit:
+    name: Nexus Devvit build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: nexus-saas
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: nexus-saas/.nvmrc
+          cache: npm
+          cache-dependency-path: nexus-saas/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Build
+        run: npm run build
+

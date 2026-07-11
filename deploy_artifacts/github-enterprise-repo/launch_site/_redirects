@@ -1,0 +1,8 @@
+/ /index.html 200
+/index.html /index.html 200
+/styles.css /styles.css 200
+/app.js /app.js 200
+/dashboard /dashboard.html 200
+/dashboard/ /dashboard.html 200
+/dashboard.html /dashboard.html 200
+/* /index.html 200

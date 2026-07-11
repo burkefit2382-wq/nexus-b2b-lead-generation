@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Nexus Dashboard</title>
+    <meta name="description" content="Nexus command dashboard for scraper output, AI enrichment, scoring, storefront lead listings, Pi Suite, and AI chat.">
+    <link rel="stylesheet" href="styles.css?v=20260628-dashboard">
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Nexus home">
+        <span class="brand-mark"></span>
+        <span>Nexus Dashboard</span>
+      </a>
+      <nav aria-label="Dashboard navigation">
+        <a href="/index.html#scrapers">Scrapers</a>
+        <a href="/index.html#enrichment">Enrichment</a>
+        <a href="/index.html#lead-market">Lead Market</a>
+        <a href="/index.html#ai-chat">AI Chat</a>
+        <a href="/pilot/index.html">Pilot</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-label="Nexus dashboard">
+        <div class="hero-shade"></div>
+        <div class="hero-content">
+          <p class="eyebrow">Command center</p>
+          <h1>Nexus LeadGen Dashboard</h1>
+          <p class="hero-copy">
+            Monitor the live scraper-to-enrichment workflow, review AI-scored lead packages, and jump into the sale page or Nexus assistant.
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="/index.html#lead-market">Open Lead Market</a>
+            <a class="button secondary" href="/index.html#ai-chat">Ask Nexus AI</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="strip" aria-label="Dashboard status">
+        <div>
+          <strong>24/7 scrapers</strong>
+          <span>Ready for allowlisted sources</span>
+        </div>
+        <div>
+          <strong>AI enrichment</strong>
+          <span>Scoring and sale draft endpoints online</span>
+        </div>
+        <div>
+          <strong>Tunnel target</strong>
+          <span>http://127.0.0.1:4173</span>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-heading">
+          <p class="eyebrow">Testing dashboard layout</p>
+          <h2>Launch gates for the current SaaS build</h2>
+          <p>Use this dashboard to track whether the live system is ready for paid fulfillment, not just public demo traffic.</p>
+        </div>
+        <div class="testing-board">
+          <article>
+            <span class="badge">Pass</span>
+            <h3>Functional</h3>
+            <p>Public pages, dashboard route, revenue status, sale listing, and buyer request APIs return HTTP 200.</p>
+          </article>
+          <article>
+            <span class="badge warning">Open</span>
+            <h3>Security</h3>
+            <p>Headers and static routing are set. Full auth, RBAC, rate limiting, and payment abuse testing remain launch gates.</p>
+          </article>
+          <article>
+            <span class="badge warning">Open</span>
+            <h3>Performance</h3>
+            <p>Light smoke tests pass. Load testing for 50 to 200 users and scraper stress tests still need a staging run.</p>
+          </article>
+          <article>
+            <span class="badge">Pass</span>
+            <h3>Reliability</h3>
+            <p>Cloudflare Tunnel and local health checks are active. Durable hosting should replace local process dependency for paid production.</p>
+          </article>
+          <article>
+            <span class="badge warning">Open</span>
+            <h3>Compliance</h3>
+            <p>Policy drafts and evidence logs exist. Final privacy, retention, incident response, and audit review are still required.</p>
+          </article>
+          <article>
+            <span class="badge">Pass</span>
+            <h3>UX</h3>
+            <p>Main command center, dashboard, lead market, scoring explanation, comparison chart, and sales pitch are visible.</p>
+          </article>
+          <article>
+            <span class="badge">Live</span>
+            <h3>Pilot</h3>
+            <p>HQ Florida packages are public, and buyer intent capture is active for 10, 25, and 50 lead tiers.</p>
+          </article>
+          <article>
+            <span class="badge warning">Blocked</span>
+            <h3>Fulfillment</h3>
+            <p>Resend, Stripe, durable storage, and GitHub remote push are required before calling this paid-production complete.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section fulfillment-section" id="fulfillment">
+        <div class="section-heading">
+          <p class="eyebrow">Automatic fulfillment</p>
+          <h2>Paid order delivery queue</h2>
+          <p id="fulfillmentStatus">Checking Stripe webhook and Resend delivery status...</p>
+        </div>
+        <div class="fulfillment-summary" id="fulfillmentSummary">
+          <article><strong>0</strong><span>Total orders</span></article>
+          <article><strong>0</strong><span>Delivered</span></article>
+          <article><strong>0</strong><span>Pending</span></article>
+          <article><strong>$0.00 USD</strong><span>Logged revenue</span></article>
+        </div>
+        <div class="fulfillment-list" id="fulfillmentList" aria-live="polite">
+          <article>
+            <span class="badge warning">Waiting</span>
+            <h3>No paid webhook events loaded yet</h3>
+            <p>Completed Stripe checkouts will appear here after the webhook receives them.</p>
+          </article>
+        </div>
+      </section>
+    </main>
+    <script src="app.js?v=20260629-fulfillment"></script>
+  </body>
+</html>

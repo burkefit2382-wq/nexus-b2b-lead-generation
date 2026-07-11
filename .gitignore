@@ -1,0 +1,36 @@
+# Secrets and local runtime state
+.env
+.env.*
+*.env
+!.env.example
+!.env.*.example
+data/
+output/
+outputs/
+tmp/
+*.log
+applet_access_history*.json
+Running Python Installation Scripts
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+venv311/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Build/deploy outputs
+dist/
+deploy_artifacts/*.zip
+deploy_artifacts/render-repo-work/
+nexus-saas/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
