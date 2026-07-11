@@ -1,13 +1,17 @@
 import json
+import logging
+import os
+import socket
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from .api.leads import router as leads_router
 from .api.membership import router as membership_router
@@ -35,6 +39,11 @@ ALLOWED_EVENT_NAMES = {
     "closed_deal",
     "bad_lead",
 }
+EXTERNAL_DEPENDENCY_TIMEOUT_SECONDS = 1.5
+RATE_LIMIT_WINDOW_SECONDS = 60
+RATE_LIMIT_MAX_REQUESTS = 120
+_rate_limit_buckets: dict[tuple[str, str], list[float]] = {}
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -55,25 +64,49 @@ app.include_router(leads_router, prefix="/leads", tags=["Leads"])
 app.include_router(membership_router, prefix="/api/membership", tags=["Membership"])
 
 
+@app.middleware("http")
+async def rate_limit_public_requests(request: Request, call_next):
+    request_id = request.headers.get("x-request-id", "").strip() or str(uuid.uuid4())
+    request.state.request_id = request_id
+    limit = rate_limit_max_requests()
+    window = rate_limit_window_seconds()
+    remaining = limit
+    reset_seconds = window
+
+    if is_rate_limited_endpoint(request):
+        allowed, remaining, reset_seconds = allow_request(request, limit, window)
+        if not allowed:
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "ok": False,
+                    "error": "Rate limit exceeded. Retry after the current window resets.",
+                    "requestId": request_id,
+                },
+                headers=rate_limit_headers(limit, remaining, reset_seconds, request_id),
+            )
+
+    response = await call_next(request)
+    for header, value in rate_limit_headers(limit, remaining, reset_seconds, request_id).items():
+        response.headers.setdefault(header, value)
+    return response
+
+
 @app.get("/health")
-def healthcheck() -> dict[str, str]:
-    return {"status": "ok"}
+def healthcheck(response: Response) -> dict[str, Any]:
+    return write_health_response("nexus-b2b-lead-generation-api", response)
 
 
 @app.get("/healthz")
-def healthz() -> dict[str, Any]:
-    return {"ok": True, "service": "nexus-b2b-lead-generation-api"}
+def healthz(response: Response) -> dict[str, Any]:
+    return write_health_response("nexus-b2b-lead-generation-api", response)
 
 
 @app.get("/api/health")
-def api_health() -> dict[str, Any]:
-    return {
-        "ok": True,
-        "status": "healthy",
-        "service": "nexus-b2b-lead-generation-api",
-        "healthz": "/healthz",
-        "checkedAt": utc_now(),
-    }
+def api_health(response: Response) -> dict[str, Any]:
+    payload = write_health_response("nexus-b2b-lead-generation-api", response)
+    payload["healthz"] = "/healthz"
+    return payload
 
 
 @app.get("/api/config-status")
@@ -217,6 +250,164 @@ def get_mock_leads(limit: int = 5) -> dict[str, list[dict[str, str]]]:
         for index in range(1, safe_limit + 1)
     ]
     return {"leads": leads}
+
+
+def write_health_response(service_name: str, response: Response) -> dict[str, Any]:
+    dependencies = collect_dependency_health()
+    required_failures = [name for name, status in dependencies.items() if status["required"] and not status["healthy"]]
+    optional_failures = [name for name, status in dependencies.items() if not status["required"] and not status["healthy"]]
+    status = "healthy"
+    if required_failures:
+        status = "unhealthy"
+        response.status_code = 503
+    elif optional_failures:
+        status = "degraded"
+
+    return {
+        "ok": not required_failures,
+        "status": status,
+        "service": service_name,
+        "checkedAt": utc_now(),
+        "dependencies": dependencies,
+    }
+
+
+def collect_dependency_health() -> dict[str, dict[str, Any]]:
+    database_url = config.database_url()
+    return {
+        "database": database_dependency_status(database_url),
+        "resend": external_dependency_status(
+            configured=config.resend_configured(),
+            host="api.resend.com",
+            label="Resend",
+            required=False,
+        ),
+        "stripe": external_dependency_status(
+            configured=config.stripe_configured(),
+            host="api.stripe.com",
+            label="Stripe",
+            required=False,
+        ),
+        "hubspot": external_dependency_status(
+            configured=bool(hubspot_service.hubspot_access_token()),
+            host="api.hubapi.com",
+            label="HubSpot",
+            required=False,
+        ),
+    }
+
+
+def database_dependency_status(database_url: str) -> dict[str, Any]:
+    if not database_url:
+        return dependency_status(
+            label="Postgres",
+            configured=False,
+            healthy=False,
+            required=True,
+            detail="DATABASE_URL is not configured.",
+        )
+
+    parsed = urlparse(database_url)
+    host = parsed.hostname
+    port = parsed.port or 5432
+    if not host:
+        return dependency_status(
+            label="Postgres",
+            configured=True,
+            healthy=False,
+            required=True,
+            detail="DATABASE_URL is missing a hostname.",
+        )
+
+    healthy, detail = probe_tcp_endpoint(host, port)
+    return dependency_status("Postgres", True, healthy, True, detail)
+
+
+def external_dependency_status(*, configured: bool, host: str, label: str, required: bool) -> dict[str, Any]:
+    if not configured:
+        return dependency_status(label, False, False, required, f"{label} is not configured.")
+    healthy, detail = probe_tcp_endpoint(host, 443)
+    return dependency_status(label, True, healthy, required, detail)
+
+
+def dependency_status(label: str, configured: bool, healthy: bool, required: bool, detail: str) -> dict[str, Any]:
+    return {
+        "name": label,
+        "configured": configured,
+        "healthy": healthy,
+        "required": required,
+        "detail": detail,
+    }
+
+
+def probe_tcp_endpoint(host: str, port: int) -> tuple[bool, str]:
+    timeout = dependency_timeout_seconds()
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True, f"Connected to {host}:{port}."
+    except OSError as exc:
+        return False, f"Connection failed to {host}:{port}: {exc}"
+
+
+def dependency_timeout_seconds() -> float:
+    raw_value = os.environ.get("HEALTHCHECK_TIMEOUT_SECONDS", str(EXTERNAL_DEPENDENCY_TIMEOUT_SECONDS)).strip()
+    try:
+        return max(0.1, min(float(raw_value), 10.0))
+    except ValueError:
+        return EXTERNAL_DEPENDENCY_TIMEOUT_SECONDS
+
+
+def is_rate_limited_endpoint(request: Request) -> bool:
+    return request.method == "POST" and (request.url.path.startswith("/api/") or request.url.path.startswith("/leads"))
+
+
+def allow_request(request: Request, limit: int, window: int) -> tuple[bool, int, int]:
+    client_host = client_ip(request)
+    bucket_key = (client_host, request.url.path)
+    now = datetime.now(timezone.utc).timestamp()
+    cutoff = now - window
+    bucket = [stamp for stamp in _rate_limit_buckets.get(bucket_key, []) if stamp >= cutoff]
+    allowed = len(bucket) < limit
+    if allowed:
+        bucket.append(now)
+    _rate_limit_buckets[bucket_key] = bucket
+    remaining = max(0, limit - len(bucket))
+    reset_seconds = max(0, int(window - (now - bucket[0]))) if bucket else window
+    return allowed, remaining, reset_seconds
+
+
+def client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    if forwarded:
+        return forwarded
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+def rate_limit_headers(limit: int, remaining: int, reset_seconds: int, request_id: str) -> dict[str, str]:
+    return {
+        "X-Request-Id": request_id,
+        "X-RateLimit-Limit": str(limit),
+        "X-RateLimit-Remaining": str(max(0, remaining)),
+        "X-RateLimit-Reset": str(max(0, reset_seconds)),
+    }
+
+
+def rate_limit_max_requests() -> int:
+    raw_value = os.environ.get("PUBLIC_RATE_LIMIT_MAX_REQUESTS", str(RATE_LIMIT_MAX_REQUESTS)).strip()
+    try:
+        return max(1, min(int(raw_value), 10000))
+    except ValueError:
+        return RATE_LIMIT_MAX_REQUESTS
+
+
+def rate_limit_window_seconds() -> int:
+    raw_value = os.environ.get("PUBLIC_RATE_LIMIT_WINDOW_SECONDS", str(RATE_LIMIT_WINDOW_SECONDS)).strip()
+    try:
+        return max(1, min(int(raw_value), 3600))
+    except ValueError:
+        return RATE_LIMIT_WINDOW_SECONDS
 
 
 def normalize_event_payload(payload: dict[str, Any]) -> dict[str, Any]:

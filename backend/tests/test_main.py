@@ -3,10 +3,12 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 try:
+    from backend.app import main as app_main
     from backend.app.main import app
     from backend.app.services import config
     from backend.app.services import hubspot as hubspot_service
 except ModuleNotFoundError:
+    from app import main as app_main
     from app.main import app
     from app.services import config
     from app.services import hubspot as hubspot_service
@@ -15,10 +17,14 @@ client = TestClient(app)
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / 'db' / 'schema.sql'
 
 
-def test_healthcheck() -> None:
+def test_healthcheck(monkeypatch) -> None:
+    monkeypatch.setenv('DATABASE_URL', 'postgresql://localhost:5432/neondb')
+    monkeypatch.setattr(app_main, 'probe_tcp_endpoint', lambda host, port: (True, f'Connected to {host}:{port}.'))
     response = client.get('/health')
     assert response.status_code == 200
-    assert response.json() == {'status': 'ok'}
+    body = response.json()
+    assert body['status'] == 'degraded'
+    assert body['dependencies']['database']['healthy'] is True
 
 
 def test_lead_control_center() -> None:
@@ -28,10 +34,12 @@ def test_lead_control_center() -> None:
     assert 'Render web service' in response.text
 
 
-def test_api_health() -> None:
+def test_api_health(monkeypatch) -> None:
+    monkeypatch.setenv('DATABASE_URL', 'postgresql://localhost:5432/neondb')
+    monkeypatch.setattr(app_main, 'probe_tcp_endpoint', lambda host, port: (True, f'Connected to {host}:{port}.'))
     response = client.get('/api/health')
     assert response.status_code == 200
-    assert response.json()['status'] == 'healthy'
+    assert response.json()['status'] == 'degraded'
 
 
 def test_config_status_does_not_expose_secret(monkeypatch) -> None:

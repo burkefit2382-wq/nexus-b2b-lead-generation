@@ -21,7 +21,7 @@ router = APIRouter()
 
 
 @router.post("/checkout", response_model=CheckoutResponse)
-def create_checkout(payload: CheckoutRequest, db: Session = Depends(get_db)) -> CheckoutResponse:
+def create_checkout(payload: CheckoutRequest, request: Request, db: Session = Depends(get_db)) -> CheckoutResponse:
     """Create a Stripe Checkout session for a new paid membership."""
     if not config.stripe_configured():
         raise HTTPException(status_code=503, detail="Stripe is not configured.")
@@ -29,9 +29,20 @@ def create_checkout(payload: CheckoutRequest, db: Session = Depends(get_db)) -> 
     base = config.public_base_url().rstrip("/")
     success_url = f"{base}/membership/success?session_id={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{base}/membership/cancel"
+    idempotency_key = request.headers.get("Idempotency-Key", "").strip() or stripe_service.checkout_idempotency_key(
+        payload.email,
+        success_url,
+        cancel_url,
+        config.price_id(),
+    )
 
     try:
-        url = stripe_service.create_checkout_session(payload.email, success_url, cancel_url)
+        url = stripe_service.create_checkout_session(
+            payload.email,
+            success_url,
+            cancel_url,
+            idempotency_key=idempotency_key,
+        )
     except stripe.StripeError as exc:
         logger.error("Stripe checkout error: %s", exc)
         raise HTTPException(status_code=502, detail=f"Stripe error: {exc.user_message or str(exc)}") from exc

@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -8,6 +10,7 @@ from ..services.hubspot import HubSpotExportError, hubspot_access_token, hubspot
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/", response_model=LeadOut)
@@ -23,8 +26,12 @@ def create_lead(payload: LeadCreate, db: Session = Depends(get_db)) -> Lead:
             db.rollback()
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except HubSpotExportError as exc:
-            db.rollback()
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+            logger.warning(
+                "HubSpot sync failed for lead email=%s company=%s: %s",
+                payload.email or "",
+                payload.name,
+                exc,
+            )
     db.commit()
     db.refresh(lead)
     return lead
