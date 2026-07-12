@@ -55,12 +55,8 @@ jobs:
 
       - name: Validate required deployment secrets
         run: |
-          test -n "$RENDER_API_KEY"
-          test -n "$RENDER_SERVICE_ID"
-          test -n "$STRIPE_SECRET_KEY"
-          test -n "$STRIPE_WEBHOOK_SECRET"
-          test -n "$NEON_API_KEY"
-          test -n "$ENVIRONMENT"
+          : "${RENDER_API_KEY:?Missing secret RENDER_API_KEY}"
+          : "${RENDER_SERVICE_ID:?Missing secret RENDER_SERVICE_ID}"
 
       - name: Deploy to Render
         run: |
