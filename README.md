@@ -171,6 +171,8 @@ Render and Cloudflare are no longer the primary automatic production path. They 
 
 Use these only when intentionally deploying the Render backend fallback or Cloudflare Worker fallback.
 
+For the Render fallback workflow, store `RENDER_API_KEY` as a GitHub Actions secret. The workflow defaults to service ID `srv-d91akdb7uimc73a2b8g0`, and you can override it at manual run time or by setting repository variable `RENDER_SERVICE_ID`.
+
 ## Cloudflare Workers deployment
 
 `wrangler` is installed as a local devDependency. Use `npm run` scripts or `npx` — do **not** call `wrangler` directly on the command line.

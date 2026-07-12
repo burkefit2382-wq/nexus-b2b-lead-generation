@@ -92,10 +92,9 @@ Configure these GitHub repository secrets before relying on the fallback workflo
 
 ```text
 RENDER_API_KEY
-RENDER_SERVICE_ID
 ```
 
-The workflow runs backend compile checks and pytest first, then calls the Render Deploy API.
+The workflow defaults to Render service ID `srv-d91akdb7uimc73a2b8g0`. You can override it when manually starting the workflow, or set repository variable `RENDER_SERVICE_ID`. The workflow runs backend compile checks and pytest first, prints the selected fallback target when debug mode is on, then calls the Render Deploy API.
 
 ## HubSpot CRM
 
