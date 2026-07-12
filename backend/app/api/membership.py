@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from ..core.db import get_db
+from ..core import sentry as sentry_integration
 from ..models.membership import Membership
 from ..schemas.membership import CheckoutRequest, CheckoutResponse, MembershipStatus
 from ..services import config
@@ -34,6 +35,7 @@ def create_checkout(payload: CheckoutRequest, db: Session = Depends(get_db)) -> 
         url = stripe_service.create_checkout_session(payload.email, success_url, cancel_url)
     except stripe.StripeError as exc:
         logger.error("Stripe checkout error: %s", exc)
+        sentry_integration.capture_integration_error(exc, "stripe", extra={"operation": "checkout"})
         raise HTTPException(status_code=502, detail=f"Stripe error: {exc.user_message or str(exc)}") from exc
 
     # Upsert a pending membership record so we have the email on file.
@@ -56,6 +58,7 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)) -> dic
         event = stripe_service.construct_webhook_event(body, sig)
     except (stripe.SignatureVerificationError, RuntimeError) as exc:
         logger.warning("Webhook signature verification failed: %s", exc)
+        sentry_integration.capture_integration_error(exc, "stripe", extra={"operation": "webhook_verify"})
         raise HTTPException(status_code=400, detail="Invalid webhook signature.") from exc
 
     event_type: str = event["type"]

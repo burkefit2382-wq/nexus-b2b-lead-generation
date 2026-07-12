@@ -65,6 +65,12 @@ services:
         sync: false
       - key: HUBSPOT_PORTAL_ID
         sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: SENTRY_ENVIRONMENT
+        sync: false
+      - key: SENTRY_TRACES_SAMPLE_RATE
+        sync: false
   - type: web
     name: nexus-tracking-api
     runtime: python
@@ -98,6 +104,12 @@ services:
       - key: HUBSPOT_API_KEY
         sync: false
       - key: HUBSPOT_PORTAL_ID
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: SENTRY_ENVIRONMENT
+        sync: false
+      - key: SENTRY_TRACES_SAMPLE_RATE
         sync: false
   - type: cron
     name: nexus-osint-scraper-quality
