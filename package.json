@@ -8,7 +8,7 @@
     "dev:frontend": "npm --prefix frontend run dev",
     "dev:backend": "python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload",
     "build": "node scripts/install-python-backend.js",
-    "test": "PYTHONPATH=. python -m pytest backend/tests",
+    "test": "python -m pytest backend/tests",
     "wrangler:login": "wrangler login",
     "cf:deploy": "wrangler deploy",
     "launch:deploy": "npm run build && azd up --no-prompt"
