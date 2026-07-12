@@ -38,7 +38,6 @@ jobs:
       WAITLIST_NOTIFY_TO: ${{ secrets.WAITLIST_NOTIFY_TO }}
       HUBSPOT_ACCESS_TOKEN: ${{ secrets.HUBSPOT_ACCESS_TOKEN }}
       HUBSPOT_PORTAL_ID: ${{ secrets.HUBSPOT_PORTAL_ID }}
-      VITE_API_BASE_URL: https://api-${{ vars.AZURE_ENV_NAME }}.azurewebsites.net
       ENVIRONMENT: production
     steps:
       - name: Checkout
@@ -92,7 +91,7 @@ jobs:
       - name: Install azd
         uses: Azure/setup-azd@v2
         with:
-          version: "1.11.0"
+          version: "1.27.1"
 
       - name: Log in with Azure (Federated Credentials)
         run: azd auth login --client-id ${{ env.AZURE_CLIENT_ID }} --federated-credential-provider github --tenant-id ${{ env.AZURE_TENANT_ID }}
@@ -113,11 +112,17 @@ jobs:
           azd env set WAITLIST_NOTIFY_TO "$WAITLIST_NOTIFY_TO"
           azd env set HUBSPOT_ACCESS_TOKEN "$HUBSPOT_ACCESS_TOKEN"
           azd env set HUBSPOT_PORTAL_ID "$HUBSPOT_PORTAL_ID"
-          azd env set VITE_API_BASE_URL "$VITE_API_BASE_URL"
           azd env set ENVIRONMENT "$ENVIRONMENT"
 
       - name: Provision infrastructure
         run: azd provision --no-prompt
+
+      - name: Set frontend API endpoint from Azure output
+        run: |
+          API_URI="$(azd env get-value API_URI)"
+          : "${API_URI:?Missing API_URI output from Azure provision}"
+          azd env set VITE_API_BASE_URL "$API_URI"
+          echo "VITE_API_BASE_URL=$API_URI" >> "$GITHUB_ENV"
 
       - name: Deploy services
         run: azd deploy --no-prompt

@@ -12,7 +12,7 @@ This repository now includes a runnable MVP structure for local testing and CI v
 - `/backend/requirements-dev.txt` — development/test dependencies
 - `/frontend` — Vite + TypeScript frontend that calls backend endpoints
 - `/infra/main.bicep` — Bicep subscription-level orchestration template
-- `/infra/resources.bicep` — App Service + Static Web App resource definitions
+- `/infra/resources.bicep` — Container Apps, Azure Container Registry, and Static Web App resource definitions
 - `/azure.yaml` — Azure Developer CLI service definitions
 - `/.github/workflows/azure-dev.yml` — primary Azure Developer CLI provision + deploy workflow
 - `/.github/workflows/deploy-backend.yml` — manual Render fallback deploy workflow
@@ -24,6 +24,7 @@ This repository now includes a runnable MVP structure for local testing and CI v
 - **Backend:** Python 3.10+, FastAPI, Uvicorn, Pytest
 - **Frontend:** TypeScript, Vite
 - **Primary CI/CD:** GitHub Actions + Azure Developer CLI (`azd`)
+- **Primary Azure runtime:** Azure Container Apps API, Azure Container Registry remote Docker builds, Azure Static Web Apps frontend
 - **Fallback/edge deploys:** Render API deploys and Cloudflare Workers through manual workflows
 - **Infrastructure as Code:** Bicep
 
@@ -63,7 +64,7 @@ PYTHONPATH=. python -m pytest backend/tests
 
 ### Prerequisites
 
-- [Install azd](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd) **v1.11.0 or later** (CI uses `1.11.0`)
+- [Install azd](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd) **v1.27.1 or later** (CI uses `1.27.1`)
 - An Azure subscription with contributor access
 
 To check your installed version:
@@ -97,7 +98,7 @@ azd init
 azd up
 ```
 
-`azd up` creates a resource group, an App Service (Python 3.11) for the backend, and an Azure Static Web App for the Vite frontend, then deploys both services.
+`azd up` creates a resource group, Azure Container Registry, a Container Apps environment, a Dockerized Container App for the backend, and an Azure Static Web App for the Vite frontend, then deploys both services.
 
 ### Subsequent deploys
 
@@ -122,7 +123,7 @@ Set the following repository **secrets** in GitHub → Settings → Secrets and 
 
 | Secret | Description |
 |---|---|
-| `STRIPE_SECRET_KEY` | Stripe live or test secret key for Azure App Service runtime |
+| `STRIPE_SECRET_KEY` | Stripe live or test secret key for the Azure Container Apps runtime |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
 | `PRICE_ID` | Default Stripe price used by the membership checkout endpoint |
 | `DATABASE_URL` | Production Postgres connection string for memberships and tracking |
@@ -136,7 +137,7 @@ Then run `azd pipeline config` to wire up federated credentials automatically, o
 
 ### What Azure receives
 
-The Bicep infrastructure sets App Service runtime settings from the GitHub secrets above:
+The Bicep infrastructure sets Container App runtime settings from the GitHub secrets above. Sensitive values are mounted as Container App secrets:
 
 - `LAUNCH_HOST=0.0.0.0`
 - `PUBLIC_BASE_URL`

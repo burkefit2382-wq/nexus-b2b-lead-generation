@@ -6,7 +6,8 @@ Azure is the primary production deployment path.
 
 The repository uses Azure Developer CLI (`azd`) to provision and deploy:
 
-- Python App Service for the backend
+- Azure Container Registry for remote Docker builds
+- Azure Container Apps environment and backend API container
 - Azure Static Web App for the frontend
 
 Key files:
@@ -49,7 +50,7 @@ HUBSPOT_ACCESS_TOKEN
 HUBSPOT_PORTAL_ID
 ```
 
-The Azure Bicep template applies these values as App Service runtime settings during provision. It also sets `PUBLIC_BASE_URL` and `TRACKING_ALLOWED_ORIGIN` from the Azure Static Web App hostname, while the GitHub workflow builds the frontend with `VITE_API_BASE_URL=https://api-${AZURE_ENV_NAME}.azurewebsites.net`.
+The Azure Bicep template applies these values as Container App runtime settings during provision. Sensitive values are stored as Container App secrets. It also sets `PUBLIC_BASE_URL` and `TRACKING_ALLOWED_ORIGIN` from the Azure Static Web App hostname. After provisioning, the GitHub workflow reads the real Container Apps `API_URI` output and sets `VITE_API_BASE_URL` before deployment.
 
 ## Render Fallback
 

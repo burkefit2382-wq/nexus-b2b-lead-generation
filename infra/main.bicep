@@ -1,7 +1,7 @@
 targetScope = 'subscription'
 
-@minLength(1)
-@maxLength(64)
+@minLength(2)
+@maxLength(39)
 @description('Name of the environment (e.g. dev, prod)')
 param environmentName string
 
@@ -66,3 +66,4 @@ module resources './resources.bicep' = {
 
 output API_URI string = resources.outputs.API_URI
 output WEB_URI string = resources.outputs.WEB_URI
+output AZURE_CONTAINER_REGISTRY_ENDPOINT string = resources.outputs.AZURE_CONTAINER_REGISTRY_ENDPOINT
