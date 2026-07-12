@@ -26,10 +26,6 @@ jobs:
     env:
       RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
       RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
-      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
-      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
-      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-      ENVIRONMENT: ${{ secrets.ENVIRONMENT }}
 
     steps:
       - name: Checkout
