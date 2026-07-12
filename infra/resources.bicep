@@ -2,6 +2,30 @@ param environmentName string
 param location string
 param tags object
 
+@secure()
+param stripeSecretKey string
+
+@secure()
+param stripeWebhookSecret string
+
+@secure()
+param priceId string
+
+@secure()
+param databaseUrl string
+
+@secure()
+param resendApiKey string
+
+param resendFrom string
+param waitlistNotifyTo string
+
+@secure()
+param hubspotAccessToken string
+
+param hubspotPortalId string
+param runtimeEnvironment string
+
 var appServicePlanName = 'asp-${environmentName}'
 var apiAppName = 'api-${environmentName}'
 var staticWebAppName = 'web-${environmentName}'
@@ -30,7 +54,61 @@ resource apiApp 'Microsoft.Web/sites@2022-03-01' = {
     serverFarmId: appServicePlan.id
     siteConfig: {
       linuxFxVersion: 'PYTHON|3.11'
-      appCommandLine: 'python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000'
+      appCommandLine: 'python main.py'
+      appSettings: [
+        {
+          name: 'LAUNCH_HOST'
+          value: '0.0.0.0'
+        }
+        {
+          name: 'PUBLIC_BASE_URL'
+          value: 'https://${staticWebApp.properties.defaultHostname}'
+        }
+        {
+          name: 'TRACKING_ALLOWED_ORIGIN'
+          value: 'https://${staticWebApp.properties.defaultHostname}'
+        }
+        {
+          name: 'STRIPE_SECRET_KEY'
+          value: stripeSecretKey
+        }
+        {
+          name: 'STRIPE_WEBHOOK_SECRET'
+          value: stripeWebhookSecret
+        }
+        {
+          name: 'PRICE_ID'
+          value: priceId
+        }
+        {
+          name: 'DATABASE_URL'
+          value: databaseUrl
+        }
+        {
+          name: 'RESEND_API_KEY'
+          value: resendApiKey
+        }
+        {
+          name: 'RESEND_FROM'
+          value: resendFrom
+        }
+        {
+          name: 'WAITLIST_NOTIFY_TO'
+          value: waitlistNotifyTo
+        }
+        {
+          name: 'HUBSPOT_ACCESS_TOKEN'
+          value: hubspotAccessToken
+        }
+        {
+          name: 'HUBSPOT_PORTAL_ID'
+          value: hubspotPortalId
+        }
+        {
+          name: 'ENVIRONMENT'
+          value: runtimeEnvironment
+        }
+      ]
     }
     httpsOnly: true
   }

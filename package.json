@@ -11,7 +11,7 @@
     "test": "PYTHONPATH=. python -m pytest backend/tests",
     "wrangler:login": "wrangler login",
     "cf:deploy": "wrangler deploy",
-    "launch:deploy": "npm run build && azd up --no-prompt && npm run cf:deploy"
+    "launch:deploy": "npm run build && azd up --no-prompt"
   },
   "devDependencies": {
     "wrangler": "^4.104.0"

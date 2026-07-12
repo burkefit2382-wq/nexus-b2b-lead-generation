@@ -1,25 +1,93 @@
+name: Azure primary deploy
+
 on:
   workflow_dispatch:
   push:
     branches:
       - main
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "infra/**"
+      - "azure.yaml"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/azure-dev.yml"
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  build-and-deploy:
+  validate-and-deploy:
+    name: Validate and deploy to Azure
     runs-on: ubuntu-latest
+    environment: Production
     env:
       AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       AZURE_ENV_NAME: ${{ vars.AZURE_ENV_NAME }}
       AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      PRICE_ID: ${{ secrets.PRICE_ID }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      RESEND_FROM: ${{ secrets.RESEND_FROM }}
+      WAITLIST_NOTIFY_TO: ${{ secrets.WAITLIST_NOTIFY_TO }}
+      HUBSPOT_ACCESS_TOKEN: ${{ secrets.HUBSPOT_ACCESS_TOKEN }}
+      HUBSPOT_PORTAL_ID: ${{ secrets.HUBSPOT_PORTAL_ID }}
+      VITE_API_BASE_URL: https://api-${{ vars.AZURE_ENV_NAME }}.azurewebsites.net
+      ENVIRONMENT: production
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Validate required Azure variables
+        run: |
+          : "${AZURE_CLIENT_ID:?Missing repository variable AZURE_CLIENT_ID}"
+          : "${AZURE_TENANT_ID:?Missing repository variable AZURE_TENANT_ID}"
+          : "${AZURE_SUBSCRIPTION_ID:?Missing repository variable AZURE_SUBSCRIPTION_ID}"
+          : "${AZURE_ENV_NAME:?Missing repository variable AZURE_ENV_NAME}"
+          : "${AZURE_LOCATION:?Missing repository variable AZURE_LOCATION}"
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements-dev.txt
+
+      - name: Compile backend entrypoints
+        run: |
+          python -m py_compile \
+            backend/server.py \
+            backend/main.py \
+            backend/app/main.py \
+            backend/app/api/leads.py \
+            backend/app/api/membership.py \
+            backend/app/services/hubspot.py \
+            backend/app/services/stripe_service.py
+
+      - name: Run backend tests
+        run: PYTHONPATH=. python -m pytest backend/tests -q
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm --prefix frontend run build
 
       - name: Install azd
         uses: Azure/setup-azd@v2
@@ -28,6 +96,25 @@ jobs:
 
       - name: Log in with Azure (Federated Credentials)
         run: azd auth login --client-id ${{ env.AZURE_CLIENT_ID }} --federated-credential-provider github --tenant-id ${{ env.AZURE_TENANT_ID }}
+
+      - name: Select Azure Developer CLI environment
+        run: azd env select "$AZURE_ENV_NAME" || azd env new "$AZURE_ENV_NAME" --no-prompt
+
+      - name: Set Azure environment values
+        run: |
+          azd env set AZURE_SUBSCRIPTION_ID "$AZURE_SUBSCRIPTION_ID"
+          azd env set AZURE_LOCATION "$AZURE_LOCATION"
+          azd env set STRIPE_SECRET_KEY "$STRIPE_SECRET_KEY"
+          azd env set STRIPE_WEBHOOK_SECRET "$STRIPE_WEBHOOK_SECRET"
+          azd env set PRICE_ID "$PRICE_ID"
+          azd env set DATABASE_URL "$DATABASE_URL"
+          azd env set RESEND_API_KEY "$RESEND_API_KEY"
+          azd env set RESEND_FROM "$RESEND_FROM"
+          azd env set WAITLIST_NOTIFY_TO "$WAITLIST_NOTIFY_TO"
+          azd env set HUBSPOT_ACCESS_TOKEN "$HUBSPOT_ACCESS_TOKEN"
+          azd env set HUBSPOT_PORTAL_ID "$HUBSPOT_PORTAL_ID"
+          azd env set VITE_API_BASE_URL "$VITE_API_BASE_URL"
+          azd env set ENVIRONMENT "$ENVIRONMENT"
 
       - name: Provision infrastructure
         run: azd provision --no-prompt

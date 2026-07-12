@@ -9,6 +9,32 @@ param environmentName string
 @description('Primary location for all resources')
 param location string
 
+@secure()
+param stripeSecretKey string = ''
+
+@secure()
+param stripeWebhookSecret string = ''
+
+@secure()
+param priceId string = ''
+
+@secure()
+param databaseUrl string = ''
+
+@secure()
+param resendApiKey string = ''
+
+param resendFrom string = ''
+
+param waitlistNotifyTo string = ''
+
+@secure()
+param hubspotAccessToken string = ''
+
+param hubspotPortalId string = ''
+
+param runtimeEnvironment string = 'production'
+
 var tags = { 'azd-env-name': environmentName }
 var resourceGroupName = 'rg-${environmentName}'
 
@@ -25,6 +51,16 @@ module resources './resources.bicep' = {
     environmentName: environmentName
     location: location
     tags: tags
+    stripeSecretKey: stripeSecretKey
+    stripeWebhookSecret: stripeWebhookSecret
+    priceId: priceId
+    databaseUrl: databaseUrl
+    resendApiKey: resendApiKey
+    resendFrom: resendFrom
+    waitlistNotifyTo: waitlistNotifyTo
+    hubspotAccessToken: hubspotAccessToken
+    hubspotPortalId: hubspotPortalId
+    runtimeEnvironment: runtimeEnvironment
   }
 }
 

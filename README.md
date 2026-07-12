@@ -14,15 +14,17 @@ This repository now includes a runnable MVP structure for local testing and CI v
 - `/infra/main.bicep` — Bicep subscription-level orchestration template
 - `/infra/resources.bicep` — App Service + Static Web App resource definitions
 - `/azure.yaml` — Azure Developer CLI service definitions
-- `/.github/workflows/azure-webapps-node.yml` — CI build/test + Azure Web Apps deploy workflow
-- `/.github/workflows/azure-dev.yml` — Azure Developer CLI provision + deploy workflow
+- `/.github/workflows/azure-dev.yml` — primary Azure Developer CLI provision + deploy workflow
+- `/.github/workflows/deploy-backend.yml` — manual Render fallback deploy workflow
+- `/.github/workflows/deploy-worker.yml` — manual Cloudflare Worker fallback deploy workflow
 - `/.env.example` — shared local/cloud environment template
 
 ## Key technologies
 
 - **Backend:** Python 3.10+, FastAPI, Uvicorn, Pytest
 - **Frontend:** TypeScript, Vite
-- **CI/CD:** GitHub Actions, Azure Web Apps deploy action, Azure Developer CLI (`azd`)
+- **Primary CI/CD:** GitHub Actions + Azure Developer CLI (`azd`)
+- **Fallback/edge deploys:** Render API deploys and Cloudflare Workers through manual workflows
 - **Infrastructure as Code:** Bicep
 
 ## Local launch (testing)
@@ -55,17 +57,7 @@ npm --prefix frontend run build
 PYTHONPATH=. python -m pytest backend/tests
 ```
 
-## Deploy for Azure testing
-
-1. Create your Azure Web App.
-2. Set repository secret:
-   - `AZURE_WEBAPP_PUBLISH_PROFILE`
-3. Update workflow variable in `/.github/workflows/azure-webapps-node.yml`:
-   - `AZURE_WEBAPP_NAME`
-4. Push to `main` (or run workflow manually).
-5. Open deployed app URL from workflow output and run smoke checks.
-
-## Deploy with Azure Developer CLI (`azd`)
+## Primary deploy: Azure Developer CLI (`azd`)
 
 `azd` provisions all Azure infrastructure **and** deploys both services in one command.
 
@@ -105,7 +97,7 @@ azd init
 azd up
 ```
 
-`azd up` creates a resource group, an App Service (Python 3.11) for the FastAPI backend, and an Azure Static Web App for the Vite frontend, then deploys both services.
+`azd up` creates a resource group, an App Service (Python 3.11) for the backend, and an Azure Static Web App for the Vite frontend, then deploys both services.
 
 ### Subsequent deploys
 
@@ -126,15 +118,58 @@ Set the following repository **variables** (not secrets) in GitHub → Settings 
 | `AZURE_ENV_NAME` | `azd` environment name (e.g. `nexus-dev`) |
 | `AZURE_LOCATION` | Azure region (e.g. `eastus`) |
 
+Set the following repository **secrets** in GitHub → Settings → Secrets and variables → Actions:
+
+| Secret | Description |
+|---|---|
+| `STRIPE_SECRET_KEY` | Stripe live or test secret key for Azure App Service runtime |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
+| `PRICE_ID` | Default Stripe price used by the membership checkout endpoint |
+| `DATABASE_URL` | Production Postgres connection string for memberships and tracking |
+| `RESEND_API_KEY` | Resend email API key |
+| `RESEND_FROM` | Verified sender, for example `NEXUS <no-reply@mail.nexuscloud.sh>` |
+| `WAITLIST_NOTIFY_TO` | Internal fulfillment/lead notification inbox |
+| `HUBSPOT_ACCESS_TOKEN` | HubSpot private app token or service key |
+| `HUBSPOT_PORTAL_ID` | HubSpot portal ID, for example `246668830` |
+
 Then run `azd pipeline config` to wire up federated credentials automatically, or push to `main` to trigger `.github/workflows/azure-dev.yml`.
+
+### What Azure receives
+
+The Bicep infrastructure sets App Service runtime settings from the GitHub secrets above:
+
+- `LAUNCH_HOST=0.0.0.0`
+- `PUBLIC_BASE_URL`
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `PRICE_ID`
+- `DATABASE_URL`
+- `RESEND_API_KEY`
+- `RESEND_FROM`
+- `WAITLIST_NOTIFY_TO`
+- `HUBSPOT_ACCESS_TOKEN`
+- `HUBSPOT_PORTAL_ID`
+- `ENVIRONMENT=production`
 
 ## Environment variables
 
 Copy `.env.example` and set values for your environment:
 
 - `VITE_API_BASE_URL`
+- `DATABASE_URL`
 - `API_PORT`
 - `CORS_ORIGINS`
+
+## Fallback deploys
+
+Render and Cloudflare are no longer the primary automatic production path. They are kept as manual fallback/edge workflows:
+
+```text
+.github/workflows/deploy-backend.yml
+.github/workflows/deploy-worker.yml
+```
+
+Use these only when intentionally deploying the Render backend fallback or Cloudflare Worker fallback.
 
 ## Cloudflare Workers deployment
 

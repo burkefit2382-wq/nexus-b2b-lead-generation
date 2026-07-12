@@ -2,14 +2,6 @@ name: Deploy Backend to Render
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - "backend/**"
-      - "requirements.txt"
-      - "nexusrequirements.txt"
-      - ".github/workflows/deploy-backend.yml"
 
 permissions:
   contents: read
@@ -20,7 +12,7 @@ concurrency:
 
 jobs:
   validate-and-deploy:
-    name: Validate and deploy backend
+    name: Validate and deploy Render fallback
     runs-on: ubuntu-latest
     environment: Production
     env:
@@ -58,7 +50,7 @@ jobs:
           : "${RENDER_API_KEY:?Missing secret RENDER_API_KEY}"
           : "${RENDER_SERVICE_ID:?Missing secret RENDER_SERVICE_ID}"
 
-      - name: Deploy to Render
+      - name: Deploy to Render fallback
         run: |
           curl --fail --silent --show-error \
             --request POST \
