@@ -23,6 +23,7 @@ jobs:
     name: Validate and deploy to Azure
     runs-on: ubuntu-latest
     environment: Production
+    # Defaults match the Azure OIDC app created for this repository.
     env:
       AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID || '4bfb6ef1-5cd1-45c1-af2d-1ac9f8c33bd2' }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID || '2a9e4c0a-7d39-4898-945c-43628ebb4f54' }}
