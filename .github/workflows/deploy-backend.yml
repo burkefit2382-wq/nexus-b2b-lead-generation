@@ -1,0 +1,76 @@
+name: Deploy Backend to Render
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - "requirements.txt"
+      - "nexusrequirements.txt"
+      - ".github/workflows/deploy-backend.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-and-deploy:
+    name: Validate and deploy backend
+    runs-on: ubuntu-latest
+    environment: Production
+    env:
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      ENVIRONMENT: ${{ secrets.ENVIRONMENT }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements-dev.txt
+
+      - name: Compile backend entrypoints
+        run: |
+          python -m py_compile \
+            backend/server.py \
+            backend/main.py \
+            backend/app/main.py \
+            backend/app/api/leads.py \
+            backend/app/services/hubspot.py
+
+      - name: Run backend tests
+        run: PYTHONPATH=. python -m pytest backend/tests -q
+
+      - name: Validate required deployment secrets
+        run: |
+          test -n "$RENDER_API_KEY"
+          test -n "$RENDER_SERVICE_ID"
+          test -n "$STRIPE_SECRET_KEY"
+          test -n "$STRIPE_WEBHOOK_SECRET"
+          test -n "$NEON_API_KEY"
+          test -n "$ENVIRONMENT"
+
+      - name: Deploy to Render
+        run: |
+          curl --fail --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${RENDER_API_KEY}" \
+            --header "Content-Type: application/json" \
+            --data '{}' \
+            "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys"
