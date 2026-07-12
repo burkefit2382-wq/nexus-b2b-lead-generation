@@ -56,13 +56,22 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
-      - name: Validate required Azure variables
+      - name: Validate required deployment configuration
         run: |
           : "${AZURE_CLIENT_ID:?Missing repository variable AZURE_CLIENT_ID}"
           : "${AZURE_TENANT_ID:?Missing repository variable AZURE_TENANT_ID}"
           : "${AZURE_SUBSCRIPTION_ID:?Missing repository variable AZURE_SUBSCRIPTION_ID}"
           : "${AZURE_ENV_NAME:?Missing repository variable AZURE_ENV_NAME}"
           : "${AZURE_LOCATION:?Missing repository variable AZURE_LOCATION}"
+          : "${STRIPE_SECRET_KEY:?Missing secret STRIPE_SECRET_KEY}"
+          : "${STRIPE_WEBHOOK_SECRET:?Missing secret STRIPE_WEBHOOK_SECRET}"
+          : "${PRICE_ID:?Missing secret PRICE_ID}"
+          : "${DATABASE_URL:?Missing secret DATABASE_URL}"
+          : "${RESEND_API_KEY:?Missing secret RESEND_API_KEY}"
+          : "${RESEND_FROM:?Missing secret RESEND_FROM}"
+          : "${WAITLIST_NOTIFY_TO:?Missing secret WAITLIST_NOTIFY_TO}"
+          : "${HUBSPOT_ACCESS_TOKEN:?Missing secret HUBSPOT_ACCESS_TOKEN}"
+          : "${HUBSPOT_PORTAL_ID:?Missing secret HUBSPOT_PORTAL_ID}"
 
       - name: Install backend dependencies
         run: |
