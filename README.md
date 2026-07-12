@@ -149,7 +149,7 @@ Set the following repository **variables** (not secrets) in GitHub → Settings 
 | `AZURE_TENANT_ID` | Azure AD tenant ID |
 | `AZURE_SUBSCRIPTION_ID` | Target subscription ID |
 | `AZURE_ENV_NAME` | `azd` environment name (e.g. `nexus-dev`) |
-| `AZURE_LOCATION` | Azure region (e.g. `eastus`) |
+| `AZURE_LOCATION` | Azure region (e.g. `eastus2`; Static Web Apps are not available in every Azure region) |
 
 Set the following repository **secrets** in GitHub → Settings → Secrets and variables → Actions:
 

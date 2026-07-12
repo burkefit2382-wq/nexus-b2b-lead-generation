@@ -29,7 +29,7 @@ jobs:
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID || '2a9e4c0a-7d39-4898-945c-43628ebb4f54' }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID || 'ef5d53d0-d68e-406e-ad7c-4098880bab4f' }}
       AZURE_ENV_NAME: ${{ vars.AZURE_ENV_NAME || 'nexus-prod' }}
-      AZURE_LOCATION: ${{ vars.AZURE_LOCATION || 'eastus' }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION || 'eastus2' }}
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
       STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
       PRICE_ID: ${{ secrets.PRICE_ID }}
