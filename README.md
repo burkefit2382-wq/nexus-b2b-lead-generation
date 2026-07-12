@@ -1,6 +1,38 @@
-# NEXUS B2B Lead Generation (MVP Skeleton)
+# NEXUS B2B Lead Intelligence
 
-This repository now includes a runnable MVP structure for local testing and CI validation.
+[![Azure primary deploy](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/azure-dev.yml/badge.svg)](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/azure-dev.yml)
+[![Render fallback deploy](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/deploy-backend.yml/badge.svg)](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/deploy-backend.yml)
+[![Cloudflare fallback deploy](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/deploy-worker.yml/badge.svg)](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/deploy-worker.yml)
+
+NEXUS is an AI-powered lead intelligence and OSINT workflow for collecting, enriching, scoring, packaging, and selling high-quality B2B lead data. The production path is Azure-first, with Render and Cloudflare retained as manual fallback and edge deployment options.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  User["Buyer / operator"] --> Web["Azure Static Web Apps frontend"]
+  Web --> API["Azure Container Apps API"]
+  API --> DB["Postgres / DATABASE_URL"]
+  API --> Stripe["Stripe checkout + webhooks"]
+  API --> Resend["Resend fulfillment email"]
+  API --> HubSpot["HubSpot CRM export"]
+  API --> Workers["Lead scraper + enrichment workers"]
+  GitHub["GitHub Actions"] --> AZD["Azure Developer CLI"]
+  AZD --> ACR["Azure Container Registry remote build"]
+  ACR --> API
+  Cloudflare["Cloudflare Worker fallback"] -. manual .-> Web
+  Render["Render backend fallback"] -. manual .-> API
+```
+
+## Screenshots
+
+Add production screenshots here after the first Azure deployment:
+
+- Command center dashboard
+- Lead marketplace / storefront
+- Checkout flow
+- CRM export confirmation
+- Azure deployment run summary
 
 ## Codebase structure
 
