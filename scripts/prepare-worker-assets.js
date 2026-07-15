@@ -12,7 +12,6 @@ const files = [
   "styles.css",
   "app.js",
   "_headers",
-  "_redirects",
   "staticwebapp.config.json",
 ];
 
