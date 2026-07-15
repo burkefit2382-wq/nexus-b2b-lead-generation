@@ -9,6 +9,10 @@ command = "npm run build:worker-assets"
 directory = "frontend/dist"
 binding = "ASSETS"
 
+[[routes]]
+pattern = "nexuscloud.sh/*"
+zone_name = "nexuscloud.sh"
+
 # Optional custom domain template (disabled by default).
 # Uncomment and set your real hostname (e.g. app.example.com) to enable.
 # [[custom_domains]]
