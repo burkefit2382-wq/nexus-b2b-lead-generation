@@ -3,7 +3,7 @@ compatibility_date = "2024-09-23"
 main = "worker.js"
 
 [build]
-command = "npm --prefix frontend install && npm --prefix frontend run build"
+command = "npm run build:worker-assets"
 
 [assets]
 directory = "frontend/dist"

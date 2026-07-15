@@ -8,6 +8,7 @@
     "dev:frontend": "npm --prefix frontend run dev",
     "dev:backend": "python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload",
     "build": "node scripts/install-python-backend.js",
+    "build:worker-assets": "npm --prefix frontend install && npm --prefix frontend run build && node scripts/prepare-worker-assets.js",
     "test": "python -m pytest backend/tests",
     "wrangler:login": "wrangler login",
     "cf:deploy": "wrangler deploy",

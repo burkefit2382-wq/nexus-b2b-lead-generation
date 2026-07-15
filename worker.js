@@ -28,6 +28,18 @@ async function fetchWithRetry(binding, request, retries) {
 
 export default {
   async fetch(request, env) {
+    const url = new URL(request.url);
+
+    if (url.pathname === "/dashboard" || url.pathname === "/dashboard/") {
+      url.pathname = "/dashboard.html";
+      return fetchWithRetry(env.ASSETS, new Request(url, request), MAX_RETRIES);
+    }
+
+    if (url.pathname === "/lead-control-center" || url.pathname === "/control-center" || url.pathname === "/control") {
+      url.pathname = "/lead-control-center.html";
+      return fetchWithRetry(env.ASSETS, new Request(url, request), MAX_RETRIES);
+    }
+
     return fetchWithRetry(env.ASSETS, request, MAX_RETRIES);
   },
 };
