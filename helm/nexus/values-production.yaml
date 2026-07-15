@@ -1,0 +1,17 @@
+replicaCount: 3
+
+image:
+  tag: latest
+
+env:
+  PUBLIC_BASE_URL: "https://nexuscloud.sh"
+  TRACKING_ALLOWED_ORIGIN: "https://nexuscloud.sh"
+  ENVIRONMENT: "production"
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 768Mi
+  limits:
+    cpu: "2"
+    memory: 2Gi

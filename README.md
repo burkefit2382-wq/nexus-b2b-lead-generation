@@ -45,6 +45,9 @@ Add production screenshots here after the first Azure deployment:
 - `/frontend` — Vite + TypeScript frontend that calls backend endpoints
 - `/infra/main.bicep` — Bicep subscription-level orchestration template
 - `/infra/resources.bicep` — Container Apps, Azure Container Registry, and Static Web App resource definitions
+- `/k8s` — AKS-ready Kubernetes namespace, secret template, deployment, service, and Kustomize entrypoint
+- `/helm/nexus` — Helm chart for AKS or ArgoCD-managed deployments
+- `/argocd/nexus-app.yaml` — ArgoCD Application manifest for GitOps sync
 - `/azure.yaml` — Azure Developer CLI service definitions
 - `/.github/workflows/azure-dev.yml` — primary Azure Developer CLI provision + deploy workflow
 - `/.github/workflows/deploy-backend.yml` — manual Render fallback deploy workflow

@@ -1,0 +1,36 @@
+replicaCount: 2
+
+image:
+  repository: acrnexusprodnexus.azurecr.io/nexus-api
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+
+env:
+  LAUNCH_HOST: "0.0.0.0"
+  PORT: "4173"
+  PUBLIC_BASE_URL: "https://nexuscloud.sh"
+  TRACKING_ALLOWED_ORIGIN: "https://nexuscloud.sh"
+  ENVIRONMENT: "production"
+
+secretEnv:
+  STRIPE_SECRET_KEY: "REPLACE_ME"
+  STRIPE_WEBHOOK_SECRET: "REPLACE_ME"
+  PRICE_ID: "REPLACE_ME"
+  DATABASE_URL: "REPLACE_ME"
+  RESEND_API_KEY: "REPLACE_ME"
+  RESEND_FROM: "NEXUS <noreply@nexuscloud.sh>"
+  WAITLIST_NOTIFY_TO: "REPLACE_ME"
+  HUBSPOT_ACCESS_TOKEN: "REPLACE_ME"
+  HUBSPOT_PORTAL_ID: "246668830"
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
