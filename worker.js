@@ -40,6 +40,11 @@ export default {
       return fetchWithRetry(env.ASSETS, new Request(url, request), MAX_RETRIES);
     }
 
+    if (url.pathname === "/workflow" || url.pathname === "/workflow/" || url.pathname === "/workflow-demo" || url.pathname === "/workflow-demo/") {
+      url.pathname = "/workflow-demo.html";
+      return fetchWithRetry(env.ASSETS, new Request(url, request), MAX_RETRIES);
+    }
+
     return fetchWithRetry(env.ASSETS, request, MAX_RETRIES);
   },
 };

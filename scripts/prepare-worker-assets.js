@@ -9,6 +9,7 @@ const files = [
   "index.html",
   "dashboard.html",
   "lead-control-center.html",
+  "workflow-demo.html",
   "styles.css",
   "app.js",
   "_headers",
