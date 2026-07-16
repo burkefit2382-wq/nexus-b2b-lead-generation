@@ -3,10 +3,31 @@
 [![Azure primary deploy](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/azure-dev.yml/badge.svg)](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/azure-dev.yml)
 [![Render fallback deploy](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/deploy-backend.yml/badge.svg)](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/deploy-backend.yml)
 [![Cloudflare fallback deploy](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/deploy-worker.yml/badge.svg)](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/deploy-worker.yml)
-[![CodeQL](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/codeql.yml/badge.svg)](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/codeql.yml)
-[![Uptime Check](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/uptime-check.yml/badge.svg)](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/uptime-check.yml)
 
-NEXUS is an AI-powered lead intelligence and OSINT workflow for collecting, enriching, scoring, packaging, and selling high-quality B2B lead data. The production path is Azure-first, with Render and Cloudflare retained as manual fallback and edge deployment options.
+NEXUS is an AI-powered B2B lead intelligence platform for collecting, enriching, scoring, packaging, and selling high-quality lead data. It combines a FastAPI backend, a TypeScript/Vite frontend, Stripe checkout, HubSpot export, Resend fulfillment, Postgres-backed membership tracking, and Azure-first deployment automation.
+
+## Live Demo
+
+- Production storefront: <https://nexuscloud.sh/>
+- Command center dashboard: <https://nexuscloud.sh/dashboard>
+- Interactive workflow demo: <https://nexuscloud.sh/workflow-demo>
+- Backend health check: <https://nexuscloud.sh/api/health>
+
+Command center preview:
+
+![NEXUS command center dashboard](backend/assets/dashboard-preview.png)
+
+Demo video status: the repository now has a dedicated evidence page and demo script in [docs/portfolio-evidence.md](docs/portfolio-evidence.md). Upload the recorded walkthrough to the issue/PR or a stable video URL, then replace this note with the final link.
+
+## What It Builds
+
+- Lead marketplace and checkout flow for packaged B2B data products.
+- Command center dashboard for lead quality, enrichment, fulfillment, and operations.
+- Worker-backed OSINT and Tampa Bay lead generation flows.
+- Stripe membership checkout and webhook handling.
+- HubSpot CRM export and Resend fulfillment notification paths.
+- Azure Container Apps and Azure Static Web Apps deployment through GitHub Actions.
+- Render and Cloudflare fallback deployment paths for resilience and edge experiments.
 
 ## Architecture
 
@@ -26,59 +47,46 @@ flowchart LR
   Render["Render backend fallback"] -. manual .-> API
 ```
 
-## Screenshots
+## Evidence Snapshot
 
-Live production surfaces:
+Validated locally on July 16, 2026:
 
-- Storefront: <https://nexuscloud.sh/>
-- Command center dashboard: <https://nexuscloud.sh/dashboard>
-- Public workflow demo: <https://nexuscloud.sh/workflow-demo>
-- Backend health via public domain: <https://nexuscloud.sh/api/health>
+| Area | Result |
+|---|---|
+| Backend tests | `27 passed, 1 warning` in 7.23s |
+| Focused app/worker coverage | 55% across `backend/app` and `backend/workers` |
+| Whole backend coverage | 41% baseline including legacy `backend/server.py` |
+| Frontend build | Vite production build completed in 812ms |
+| Frontend bundle | `index.html` 0.41 kB, CSS 1.19 kB, JS 3.60 kB before gzip |
+| Vulnerability audit | `npm --prefix frontend install` reported 0 vulnerabilities |
 
-Command center preview:
+Reproduce the validation:
 
-![NEXUS command center dashboard](backend/assets/dashboard-preview.png)
+```bash
+python -m pip install -r backend/requirements-dev.txt
+python -m pip install coverage
+PYTHONPATH=. python -m coverage run --source=backend/app,backend/workers -m pytest backend/tests
+python -m coverage report -m
+npm --prefix frontend install
+npm --prefix frontend run build
+```
 
-Recommended screenshot capture checklist for investor/customer updates:
+## Repository Tour
 
-- Lead marketplace / storefront
-- Checkout flow with test product
-- CRM export confirmation
-- GitHub Actions deployment run summary
-- Azure resource overview after primary deployment
+- `backend/app/main.py` - FastAPI application and core product endpoints.
+- `backend/app/api` - Lead and membership API modules.
+- `backend/app/services` - Stripe, HubSpot, storage, database, and config services.
+- `backend/workers/tampa_bay_lead_worker.py` - Lead worker pipeline and quality scoring logic.
+- `backend/tests` - API, checkout, webhook, and worker quality tests.
+- `backend/assets/dashboard-preview.png` - Current dashboard screenshot for the portfolio README.
+- `frontend` - TypeScript/Vite frontend.
+- `infra` - Azure Bicep infrastructure definitions.
+- `.github/workflows` - CI/CD and deployment automation.
+- `backend/docs` - API, architecture, deployment, observability, operations, roadmap, and security notes.
 
-## Codebase structure
+## Local Development
 
-- `/backend/app/main.py` — FastAPI app with:
-  - `GET /health` health check
-  - `GET /api/leads/mock` mock lead generator endpoint
-- `/backend/tests/test_main.py` — API tests with `pytest`
-- `/backend/requirements.txt` — runtime Python dependencies
-- `/backend/requirements-dev.txt` — development/test dependencies
-- `/frontend` — Vite + TypeScript frontend that calls backend endpoints
-- `/infra/main.bicep` — Bicep subscription-level orchestration template
-- `/infra/resources.bicep` — Container Apps, Azure Container Registry, and Static Web App resource definitions
-- `/k8s` — AKS-ready Kubernetes namespace, secret template, deployment, service, and Kustomize entrypoint
-- `/helm/nexus` — Helm chart for AKS or ArgoCD-managed deployments
-- `/argocd/nexus-app.yaml` — ArgoCD Application manifest for GitOps sync
-- `/azure.yaml` — Azure Developer CLI service definitions
-- `/.github/workflows/azure-dev.yml` — primary Azure Developer CLI provision + deploy workflow
-- `/.github/workflows/deploy-backend.yml` — manual Render fallback deploy workflow
-- `/.github/workflows/deploy-worker.yml` — manual Cloudflare Worker fallback deploy workflow
-- `/.env.example` — shared local/cloud environment template
-
-## Key technologies
-
-- **Backend:** Python 3.10+, FastAPI, Uvicorn, Pytest
-- **Frontend:** TypeScript, Vite
-- **Primary CI/CD:** GitHub Actions + Azure Developer CLI (`azd`)
-- **Primary Azure runtime:** Azure Container Apps API, Azure Container Registry remote Docker builds, Azure Static Web Apps frontend
-- **Fallback/edge deploys:** Render API deploys and Cloudflare Workers through manual workflows
-- **Infrastructure as Code:** Bicep
-
-## Local launch (testing)
-
-### 1) Backend
+Backend:
 
 ```bash
 python -m venv .venv
@@ -87,9 +95,7 @@ python -m pip install -r backend/requirements-dev.txt
 uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 2) Frontend
-
-In a new terminal:
+Frontend:
 
 ```bash
 cd frontend
@@ -97,160 +103,43 @@ npm install
 npm run dev
 ```
 
-Open the Vite URL (default `http://localhost:5173`) and verify backend health + sample leads render.
-
-## Local validation
+Validation:
 
 ```bash
 npm --prefix frontend run build
 PYTHONPATH=. python -m pytest backend/tests
 ```
 
-## Primary deploy: Azure Developer CLI (`azd`)
+## Deployment
 
-`azd` provisions all Azure infrastructure **and** deploys both services in one command.
+The primary production path is Azure Developer CLI through GitHub Actions. `azd up` provisions Azure Container Registry, Azure Container Apps for the backend, and Azure Static Web Apps for the frontend. Render and Cloudflare remain manual fallback/edge workflows.
 
-### Prerequisites
-
-- [Install azd](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd) **v1.27.1 or later** (CI uses `1.27.1`)
-- An Azure subscription with contributor access
-
-To check your installed version:
-
-```bash
-azd version
-```
-
-To install or upgrade on Windows:
-
-```powershell
-winget install microsoft.azd
-```
-
-On macOS/Linux:
-
-```bash
-curl -fsSL https://aka.ms/install-azd.sh | bash
-```
-
-### First-time setup
-
-```bash
-# 1. Authenticate
-azd auth login
-
-# 2. Initialise the environment (pick a short name, e.g. "nexus-dev")
-azd init
-
-# 3. Provision resources + deploy in one step
-azd up
-```
-
-`azd up` creates a resource group, Azure Container Registry, a Container Apps environment, a Dockerized Container App for the backend, and an Azure Static Web App for the Vite frontend, then deploys both services.
-
-### Subsequent deploys
-
-```bash
-azd deploy          # re-deploy code changes only
-azd provision       # re-apply infrastructure changes only
-```
-
-### CI/CD with GitHub Actions
-
-Set the following repository **variables** (not secrets) in GitHub → Settings → Secrets and variables → Actions:
+Required GitHub Actions variables:
 
 | Variable | Description |
 |---|---|
 | `AZURE_CLIENT_ID` | Service principal / managed identity client ID |
 | `AZURE_TENANT_ID` | Azure AD tenant ID |
 | `AZURE_SUBSCRIPTION_ID` | Target subscription ID |
-| `AZURE_ENV_NAME` | `azd` environment name (e.g. `nexus-dev`) |
-| `AZURE_LOCATION` | Azure region (e.g. `eastus2`; Static Web Apps are not available in every Azure region) |
+| `AZURE_ENV_NAME` | Azure environment name, for example `nexus-dev` |
+| `AZURE_LOCATION` | Azure region, for example `eastus2` |
 
-Set the following repository **secrets** in GitHub → Settings → Secrets and variables → Actions:
+Required secrets include Stripe, Postgres, Resend, and HubSpot credentials. See [backend/docs/deployment.md](backend/docs/deployment.md) for the full deployment path.
 
-| Secret | Description |
-|---|---|
-| `STRIPE_SECRET_KEY` | Stripe live or test secret key for the Azure Container Apps runtime |
-| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
-| `PRICE_ID` | Default Stripe price used by the membership checkout endpoint |
-| `DATABASE_URL` | Production Postgres connection string for memberships and tracking |
-| `RESEND_API_KEY` | Resend email API key |
-| `RESEND_FROM` | Verified sender, for example `NEXUS <no-reply@mail.nexuscloud.sh>` |
-| `WAITLIST_NOTIFY_TO` | Internal fulfillment/lead notification inbox |
-| `HUBSPOT_ACCESS_TOKEN` | HubSpot private app token or service key |
-| `HUBSPOT_PORTAL_ID` | HubSpot portal ID, for example `246668830` |
+## Project Process
 
-Then run `azd pipeline config` to wire up federated credentials automatically, or push to `main` to trigger `.github/workflows/azure-dev.yml`.
+NEXUS should show visible engineering discipline:
 
-### What Azure receives
+- Open focused issues for portfolio-facing improvements.
+- Use short-lived branches and clean pull requests with screenshots, test results, and performance notes.
+- Keep releases tied to working product milestones.
+- Keep commits scoped and descriptive, using prefixes like `feat:`, `fix:`, `docs:`, `test:`, and `ci:`.
+- Track coverage and bundle size as explicit quality signals.
 
-The Bicep infrastructure sets Container App runtime settings from the GitHub secrets above. Sensitive values are mounted as Container App secrets:
+## Roadmap
 
-- `LAUNCH_HOST=0.0.0.0`
-- `PUBLIC_BASE_URL`
-- `STRIPE_SECRET_KEY`
-- `STRIPE_WEBHOOK_SECRET`
-- `PRICE_ID`
-- `DATABASE_URL`
-- `RESEND_API_KEY`
-- `RESEND_FROM`
-- `WAITLIST_NOTIFY_TO`
-- `HUBSPOT_ACCESS_TOKEN`
-- `HUBSPOT_PORTAL_ID`
-- `ENVIRONMENT=production`
-
-## Environment variables
-
-Copy `.env.example` and set values for your environment:
-
-- `VITE_API_BASE_URL`
-- `DATABASE_URL`
-- `API_PORT`
-- `CORS_ORIGINS`
-
-## Fallback deploys
-
-Render and Cloudflare are no longer the primary automatic production path. They are kept as manual fallback/edge workflows:
-
-```text
-.github/workflows/deploy-backend.yml
-.github/workflows/deploy-worker.yml
-```
-
-Use these only when intentionally deploying the Render backend fallback or Cloudflare Worker fallback.
-
-For the Render fallback workflow, store `RENDER_API_KEY` as a GitHub Actions secret. The workflow defaults to service ID `srv-d91akdb7uimc73a2b8g0`, and you can override it at manual run time or by setting repository variable `RENDER_SERVICE_ID`.
-
-## Cloudflare Workers deployment
-
-`wrangler` is installed as a local devDependency. Use `npm run` scripts or `npx` — do **not** call `wrangler` directly on the command line.
-
-```bash
-# Authenticate with Cloudflare (run once)
-npm run wrangler:login
-# or: npx wrangler login
-
-# Deploy the Worker
-npm run cf:deploy
-# or: npx wrangler deploy
-```
-
-### Custom domain (optional)
-
-`wrangler.toml` includes a commented custom-domain template. To activate it:
-
-1. Uncomment the `[[custom_domains]]` and `hostname` lines.
-2. Set `hostname` to your domain (for example `app.example.com`).
-3. Ensure the domain's zone is already in your Cloudflare account.
-4. Run `npm run cf:deploy` — Wrangler will create the DNS record automatically.
-
-Without this step the Worker is reachable on its default `raspy-hat-15da.<your-subdomain>.workers.dev` URL.
-
-### Cloudflare 1033 quick fix
-
-If you see **Error 1033**, the hostname is usually pointing to a missing/invalid Cloudflare tunnel target.
-
-1. Test your Worker on the default `workers.dev` URL first (`npm run cf:deploy` output).
-2. If `workers.dev` works but your custom hostname fails, remove stale tunnel/DNS records for that hostname in Cloudflare.
-3. Re-deploy after setting `[[custom_domains]]` only for a hostname in a zone you own in this account.
+- Record and attach a 60-90 second product walkthrough video.
+- Raise focused app/worker coverage above 70%.
+- Add CI-published coverage and build-size artifacts.
+- Publish a release with screenshots, demo link, deployment notes, and known limitations.
+- Continue moving legacy server behavior into tested FastAPI service modules.
