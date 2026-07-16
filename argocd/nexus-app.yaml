@@ -40,7 +40,7 @@ spec:
           PRICE_ID: "REPLACE_ME"
           DATABASE_URL: "REPLACE_ME"
           RESEND_API_KEY: "REPLACE_ME"
-          RESEND_FROM: "NEXUS <noreply@nexuscloud.sh>"
+          RESEND_FROM: "NEXUS <noreply@mail.nexuscloud.sh>"
           WAITLIST_NOTIFY_TO: "REPLACE_ME"
           HUBSPOT_ACCESS_TOKEN: "REPLACE_ME"
           HUBSPOT_PORTAL_ID: "246668830"
