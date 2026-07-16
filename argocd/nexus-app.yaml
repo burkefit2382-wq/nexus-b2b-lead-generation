@@ -16,6 +16,24 @@ spec:
           PUBLIC_BASE_URL: "https://nexuscloud.sh"
           TRACKING_ALLOWED_ORIGIN: "https://nexuscloud.sh"
           ENVIRONMENT: "production"
+        backendAlias:
+          enabled: true
+          name: nexus-backend
+          port: 8000
+        ingress:
+          enabled: true
+          className: nginx
+          backendServiceName: nexus-backend
+          backendServicePort: 8000
+          hosts:
+            - host: nexuscloud.sh
+              paths:
+                - path: /hubspot
+                  pathType: Prefix
+                - path: /api
+                  pathType: Prefix
+                - path: /
+                  pathType: Prefix
         secretEnv:
           STRIPE_SECRET_KEY: "REPLACE_ME"
           STRIPE_WEBHOOK_SECRET: "REPLACE_ME"

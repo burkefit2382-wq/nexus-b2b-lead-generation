@@ -50,6 +50,7 @@ It routes these public prefixes to the backend service:
 ```text
 /hubspot -> nexus-backend:8000
 /api     -> nexus-backend:8000
+/        -> nexus-backend:8000
 ```
 
 The Helm chart exposes the same routes through `ingress.hosts` in `helm/nexus/values-production.yaml`.

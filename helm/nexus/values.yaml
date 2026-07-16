@@ -26,6 +26,8 @@ ingress:
           pathType: Prefix
         - path: /api
           pathType: Prefix
+        - path: /
+          pathType: Prefix
   tls: []
   backendServiceName: nexus-backend
   backendServicePort: 8000

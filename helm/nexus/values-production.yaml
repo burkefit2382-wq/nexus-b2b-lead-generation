@@ -20,6 +20,8 @@ ingress:
           pathType: Prefix
         - path: /api
           pathType: Prefix
+        - path: /
+          pathType: Prefix
 
 resources:
   requests:
