@@ -9,6 +9,27 @@ service:
   type: ClusterIP
   port: 80
 
+backendAlias:
+  enabled: true
+  name: nexus-backend
+  port: 8000
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+  hosts:
+    - host: nexuscloud.sh
+      paths:
+        - path: /hubspot
+          pathType: Prefix
+        - path: /api
+          pathType: Prefix
+  tls: []
+  backendServiceName: nexus-backend
+  backendServicePort: 8000
+
 env:
   LAUNCH_HOST: "0.0.0.0"
   PORT: "4173"

@@ -42,6 +42,20 @@ For GitOps, prefer Azure Key Vault + External Secrets Operator or Sealed Secrets
 helm upgrade --install nexus ./helm/nexus --namespace nexus --create-namespace -f helm/nexus/values-production.yaml
 ```
 
+## Ingress routing
+
+The raw Kustomize manifests include `k8s/ingress/nexus-ingress.yaml`.
+It routes these public prefixes to the backend service:
+
+```text
+/hubspot -> nexus-backend:8000
+/api     -> nexus-backend:8000
+```
+
+The Helm chart exposes the same routes through `ingress.hosts` in `helm/nexus/values-production.yaml`.
+
+`nexus-backend` is a ClusterIP service alias that selects the same pods as `nexus-api` and forwards port `8000` to the container's named `http` port.
+
 ## ArgoCD
 
 ```bash

@@ -8,6 +8,19 @@ env:
   TRACKING_ALLOWED_ORIGIN: "https://nexuscloud.sh"
   ENVIRONMENT: "production"
 
+ingress:
+  enabled: true
+  className: nginx
+  backendServiceName: nexus-backend
+  backendServicePort: 8000
+  hosts:
+    - host: nexuscloud.sh
+      paths:
+        - path: /hubspot
+          pathType: Prefix
+        - path: /api
+          pathType: Prefix
+
 resources:
   requests:
     cpu: 500m

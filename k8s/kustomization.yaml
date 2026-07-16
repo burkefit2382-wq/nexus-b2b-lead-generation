@@ -5,3 +5,5 @@ resources:
   - namespaces/nexus-namespace.yaml
   - deployments/nexus-api-deployment.yaml
   - services/nexus-api-service.yaml
+  - services/nexus-backend-service.yaml
+  - ingress/nexus-ingress.yaml
