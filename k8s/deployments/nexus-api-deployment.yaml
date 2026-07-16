@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: nexus-api
-          image: acrnexusprodnexus.azurecr.io/nexus-api:latest
+          image: crjqmupr2v7hmzm.azurecr.io/nexus-api:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

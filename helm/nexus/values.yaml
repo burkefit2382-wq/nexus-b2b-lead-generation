@@ -1,7 +1,7 @@
 replicaCount: 2
 
 image:
-  repository: acrnexusprodnexus.azurecr.io/nexus-api
+  repository: crjqmupr2v7hmzm.azurecr.io/nexus-api
   tag: latest
   pullPolicy: IfNotPresent
 
