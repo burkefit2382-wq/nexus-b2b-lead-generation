@@ -35,3 +35,26 @@ spec:
                 name: nexus-backend
                 port:
                   number: 8000
+    - http:
+        paths:
+          - path: /hubspot
+            pathType: Prefix
+            backend:
+              service:
+                name: nexus-backend
+                port:
+                  number: 8000
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: nexus-backend
+                port:
+                  number: 8000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nexus-backend
+                port:
+                  number: 8000

@@ -1,6 +1,6 @@
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 150;
-const DEFAULT_BACKEND_ORIGIN = "https://nexus-b2b-lead-generation.onrender.com";
+const DEFAULT_BACKEND_ORIGIN = "http://nexuscloud-aks-api.canadacentral.cloudapp.azure.com";
 
 async function fetchWithRetry(binding, request, retries) {
   let lastResponse;

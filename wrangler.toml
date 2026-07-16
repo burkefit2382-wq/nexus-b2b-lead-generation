@@ -10,7 +10,7 @@ directory = "frontend/dist"
 binding = "ASSETS"
 
 [vars]
-BACKEND_ORIGIN = "https://nexus-b2b-lead-generation.onrender.com"
+BACKEND_ORIGIN = "http://nexuscloud-aks-api.canadacentral.cloudapp.azure.com"
 
 [[routes]]
 pattern = "nexuscloud.sh/*"
