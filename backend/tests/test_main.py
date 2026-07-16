@@ -28,6 +28,20 @@ def test_lead_control_center() -> None:
     assert 'Render web service' in response.text
 
 
+def test_workflow_demo() -> None:
+    response = client.get('/workflow-demo')
+    assert response.status_code == 200
+    assert 'NEXUS Public Workflow Demo' in response.text
+    assert 'Lead intelligence pipeline' in response.text
+
+
+def test_workflow_demo_stylesheet_is_served() -> None:
+    response = client.get('/workflow-demo.css')
+    assert response.status_code == 200
+    assert 'text/css' in response.headers['content-type']
+    assert '.workflow-demo-page' in response.text
+
+
 def test_api_health() -> None:
     response = client.get('/api/health')
     assert response.status_code == 200

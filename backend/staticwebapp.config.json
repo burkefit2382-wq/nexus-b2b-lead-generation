@@ -1,7 +1,7 @@
 {
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/styles.css", "/app.js", "/assets/*", "/dashboard.html", "/pilot/*"]
+    "exclude": ["/styles.css", "/workflow-demo.css", "/app.js", "/assets/*", "/dashboard.html", "/workflow-demo.html", "/pilot/*"]
   },
   "routes": [
     {
@@ -15,6 +15,14 @@
     {
       "route": "/dashboard/",
       "rewrite": "/dashboard.html"
+    },
+    {
+      "route": "/workflow-demo",
+      "rewrite": "/workflow-demo.html"
+    },
+    {
+      "route": "/workflow-demo/",
+      "rewrite": "/workflow-demo.html"
     }
   ],
   "globalHeaders": {

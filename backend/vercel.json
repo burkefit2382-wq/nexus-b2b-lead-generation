@@ -22,11 +22,21 @@
     {
       "source": "/dashboard.html",
       "headers": [{ "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, max-age=0" }]
+    },
+    {
+      "source": "/workflow-demo.html",
+      "headers": [{ "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, max-age=0" }]
+    },
+    {
+      "source": "/workflow-demo.css",
+      "headers": [{ "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, max-age=0" }]
     }
   ],
   "rewrites": [
     { "source": "/dashboard", "destination": "/dashboard.html" },
     { "source": "/dashboard/", "destination": "/dashboard.html" },
+    { "source": "/workflow-demo", "destination": "/workflow-demo.html" },
+    { "source": "/workflow-demo/", "destination": "/workflow-demo.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

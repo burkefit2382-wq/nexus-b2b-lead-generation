@@ -1,8 +1,12 @@
 / /index.html 200
 /index.html /index.html 200
 /styles.css /styles.css 200
+/workflow-demo.css /workflow-demo.css 200
 /app.js /app.js 200
 /dashboard /dashboard.html 200
 /dashboard/ /dashboard.html 200
 /dashboard.html /dashboard.html 200
+/workflow-demo /workflow-demo.html 200
+/workflow-demo/ /workflow-demo.html 200
+/workflow-demo.html /workflow-demo.html 200
 /* /index.html 200
