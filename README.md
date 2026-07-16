@@ -3,6 +3,8 @@
 [![Azure primary deploy](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/azure-dev.yml/badge.svg)](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/azure-dev.yml)
 [![Render fallback deploy](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/deploy-backend.yml/badge.svg)](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/deploy-backend.yml)
 [![Cloudflare fallback deploy](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/deploy-worker.yml/badge.svg)](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/deploy-worker.yml)
+[![CodeQL](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/codeql.yml/badge.svg)](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/codeql.yml)
+[![Uptime Check](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/uptime-check.yml/badge.svg)](https://github.com/burkefit2382-wq/nexus-b2b-lead-generation/actions/workflows/uptime-check.yml)
 
 NEXUS is an AI-powered lead intelligence and OSINT workflow for collecting, enriching, scoring, packaging, and selling high-quality B2B lead data. The production path is Azure-first, with Render and Cloudflare retained as manual fallback and edge deployment options.
 
@@ -26,13 +28,24 @@ flowchart LR
 
 ## Screenshots
 
-Add production screenshots here after the first Azure deployment:
+Live production surfaces:
 
-- Command center dashboard
+- Storefront: <https://nexuscloud.sh/>
+- Command center dashboard: <https://nexuscloud.sh/dashboard>
+- Public workflow demo: <https://nexuscloud.sh/workflow-demo>
+- Backend health via public domain: <https://nexuscloud.sh/api/health>
+
+Command center preview:
+
+![NEXUS command center dashboard](backend/assets/dashboard-preview.png)
+
+Recommended screenshot capture checklist for investor/customer updates:
+
 - Lead marketplace / storefront
-- Checkout flow
+- Checkout flow with test product
 - CRM export confirmation
-- Azure deployment run summary
+- GitHub Actions deployment run summary
+- Azure resource overview after primary deployment
 
 ## Codebase structure
 

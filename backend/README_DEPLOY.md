@@ -27,9 +27,9 @@ cd "C:\Users\Robert\OneDrive\Imports\burkefit2382@gmail.com - Google Drive\Googl
 python -m pip install -r requirements.txt
 $env:LAUNCH_HOST = "127.0.0.1"
 $env:PUBLIC_BASE_URL = "https://your-tunnel.trycloudflare.com"
-$env:STRIPE_SECRET_KEY = "sk_test_or_live_xxxxxxxxx"
-$env:STRIPE_WEBHOOK_SECRET = "whsec_xxxxxxxxx"
-$env:RESEND_API_KEY = "re_xxxxxxxxx"
+$env:STRIPE_SECRET_KEY = "<set-in-local-shell-only>"
+$env:STRIPE_WEBHOOK_SECRET = "<set-in-local-shell-only>"
+$env:RESEND_API_KEY = "<set-in-local-shell-only>"
 $env:RESEND_FROM = "NEXUS <no-reply@mail.nexuscloud.sh>"
 $env:EMAIL_DOMAIN = "mail.nexuscloud.sh"
 $env:WAITLIST_NOTIFY_TO = "you@yourdomain.com"
@@ -173,7 +173,7 @@ Use Resend from a serverless function or backend route, not directly from browse
 For local testing, `server.py` calls the Resend helper when these environment variables are configured:
 
 ```powershell
-$env:RESEND_API_KEY = "re_xxxxxxxxx"
+$env:RESEND_API_KEY = "<set-in-local-shell-only>"
 $env:RESEND_FROM = "NEXUS <no-reply@mail.nexuscloud.sh>"
 $env:EMAIL_DOMAIN = "mail.nexuscloud.sh"
 $env:WAITLIST_NOTIFY_TO = "you@yourdomain.com"
@@ -209,7 +209,7 @@ For local testing after rotating any exposed key:
 ```powershell
 $env:PUBLIC_BASE_URL = "https://nexuscloud.sh"
 $env:STRIPE_API_VERSION = "2026-06-24.dahlia"
-$env:STRIPE_SECRET_KEY = "your_rotated_stripe_secret_key"
+$env:STRIPE_SECRET_KEY = "<set-in-local-shell-only>"
 python server.py
 ```
 
@@ -260,7 +260,7 @@ checkout.session.completed
 Set the webhook signing secret in the backend:
 
 ```powershell
-$env:STRIPE_WEBHOOK_SECRET = "your_stripe_webhook_secret"
+$env:STRIPE_WEBHOOK_SECRET = "<set-in-hosting-provider>"
 ```
 
 When a paid checkout completes, the backend records a fulfillment event in:

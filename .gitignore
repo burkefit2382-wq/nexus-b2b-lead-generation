@@ -1,4 +1,10 @@
 .venv/
+.env
+.env.*
+!.env.example
+!backend/.env.example
+backend/.env
+backend/.env.*
 .env.local
 __pycache__/
 *.pyc
@@ -9,3 +15,6 @@ frontend/dist/
 .azure/
 .hs/
 k8s/secrets/nexus-secrets.yaml
+output/
+outputs/
+tmp/

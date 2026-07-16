@@ -9,6 +9,9 @@ command = "npm run build:worker-assets"
 directory = "frontend/dist"
 binding = "ASSETS"
 
+[vars]
+BACKEND_ORIGIN = "https://nexus-b2b-lead-generation.onrender.com"
+
 [[routes]]
 pattern = "nexuscloud.sh/*"
 zone_name = "nexuscloud.sh"
