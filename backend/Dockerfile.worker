@@ -1,0 +1,12 @@
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV NEXUS_SCRAPER_INTERVAL_MINUTES=360
+ENV NEXUS_SCRAPER_DELAY_SECONDS=15
+
+WORKDIR /app
+
+COPY workers ./workers
+
+CMD ["python", "workers/tampa_bay_lead_worker.py", "--loop"]

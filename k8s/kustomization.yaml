@@ -4,6 +4,8 @@ namespace: nexus
 resources:
   - namespaces/nexus-namespace.yaml
   - deployments/nexus-api-deployment.yaml
+  - deployments/nexus-worker-deployment.yaml
+  - cronjobs/nexus-scraper-quality-cronjob.yaml
   - services/nexus-api-service.yaml
   - services/nexus-backend-service.yaml
   - ingress/nexus-ingress.yaml

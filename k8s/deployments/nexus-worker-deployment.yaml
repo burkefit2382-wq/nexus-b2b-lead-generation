@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus-worker
+  namespace: nexus
+  labels:
+    app.kubernetes.io/name: nexus-worker
+    app.kubernetes.io/part-of: nexus-lead-intelligence
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nexus-worker
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nexus-worker
+        app.kubernetes.io/part-of: nexus-lead-intelligence
+    spec:
+      containers:
+        - name: worker
+          image: crjqmupr2v7hmzm.azurecr.io/nexus-worker:latest
+          imagePullPolicy: Always
+          workingDir: /app
+          command:
+            - python
+            - workers/tampa_bay_lead_worker.py
+            - --loop
+          env:
+            - name: NEXUS_SCRAPER_USER_AGENT
+              value: "NexusLeadGen/1.0 buyer-safe Kubernetes worker"
+            - name: NEXUS_SCRAPER_INTERVAL_MINUTES
+              value: "360"
+            - name: NEXUS_SCRAPER_DELAY_SECONDS
+              value: "15"
+            - name: NEXUS_SCRAPER_COUNTIES
+              value: "Pinellas,Hillsborough,Pasco,Hernando"
+            - name: NEXUS_SCRAPER_TARGETS
+              value: "real_estate,mortgage,insurance,home_services,professional_cleaning"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
