@@ -10,6 +10,13 @@ NEXUS production secrets should live in Azure Key Vault, then sync into Kubernet
 - Git content: only templates and non-secret references.
 - Rotation: update Key Vault first; External Secrets reconciles the Kubernetes Secret.
 
+Current activation state:
+
+- External Secrets Operator is managed by ArgoCD Application `external-secrets`.
+- `nexus-platform` owns the Azure Key Vault `ClusterSecretStore`.
+- `nexus-keyvault-smoke` proves Key Vault sync against `nexusvault28095` without overwriting the live production `nexus-secrets` Secret.
+- Move the target to `nexus-secrets` only after all required production secrets are present in Key Vault.
+
 ## Required One-Time Setup
 
 1. Install External Secrets Operator into the cluster.

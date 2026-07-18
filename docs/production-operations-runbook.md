@@ -10,6 +10,12 @@ This runbook covers NEXUS AKS deploys, health checks, alerting, TLS, rollback, a
 4. The workflow updates `k8s/kustomization.yaml` with the new image tags and pushes the GitOps commit.
 5. ArgoCD Application `nexus-k8s` syncs the `k8s` path into the `nexus` namespace.
 
+Platform controllers are also registered in ArgoCD:
+
+- `cert-manager`: installs and reconciles cert-manager through the Jetstack Helm chart.
+- `external-secrets`: installs and reconciles External Secrets Operator through its Helm chart.
+- `nexus-platform`: applies the NEXUS `ClusterIssuer`, Azure Key Vault `ClusterSecretStore`, and Key Vault smoke sync manifests.
+
 ## Health Checks
 
 Kubernetes native checks:
