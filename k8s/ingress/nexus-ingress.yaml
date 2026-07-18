@@ -7,9 +7,14 @@ metadata:
     app.kubernetes.io/name: nexus-ingress
     app.kubernetes.io/part-of: nexus-lead-intelligence
   annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-production
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
 spec:
   ingressClassName: nginx
+  tls:
+    - hosts:
+        - nexuscloud.sh
+      secretName: nexuscloud-sh-tls
   rules:
     - host: nexuscloud.sh
       http:

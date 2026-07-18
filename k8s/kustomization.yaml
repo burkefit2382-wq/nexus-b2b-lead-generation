@@ -6,6 +6,13 @@ resources:
   - deployments/nexus-api-deployment.yaml
   - deployments/nexus-worker-deployment.yaml
   - cronjobs/nexus-scraper-quality-cronjob.yaml
+  - cronjobs/nexus-internal-health-cronjob.yaml
   - services/nexus-api-service.yaml
   - services/nexus-backend-service.yaml
   - ingress/nexus-ingress.yaml
+
+images:
+  - name: crjqmupr2v7hmzm.azurecr.io/nexus-api
+    newTag: latest
+  - name: crjqmupr2v7hmzm.azurecr.io/nexus-worker
+    newTag: latest
