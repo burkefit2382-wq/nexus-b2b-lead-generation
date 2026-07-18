@@ -2,17 +2,19 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: nexus
 resources:
-  - namespaces/nexus-namespace.yaml
-  - deployments/nexus-api-deployment.yaml
-  - deployments/nexus-worker-deployment.yaml
-  - cronjobs/nexus-scraper-quality-cronjob.yaml
-  - cronjobs/nexus-internal-health-cronjob.yaml
-  - services/nexus-api-service.yaml
-  - services/nexus-backend-service.yaml
-  - ingress/nexus-ingress.yaml
+- namespaces/nexus-namespace.yaml
+- deployments/nexus-api-deployment.yaml
+- deployments/nexus-worker-deployment.yaml
+- cronjobs/nexus-scraper-quality-cronjob.yaml
+- cronjobs/nexus-internal-health-cronjob.yaml
+- services/nexus-api-service.yaml
+- services/nexus-backend-service.yaml
+- ingress/nexus-ingress.yaml
 
 images:
-  - name: crjqmupr2v7hmzm.azurecr.io/nexus-api
-    newTag: latest
-  - name: crjqmupr2v7hmzm.azurecr.io/nexus-worker
-    newTag: latest
+- name: crjqmupr2v7hmzm.azurecr.io/nexus-api
+  newName: crjqmupr2v7hmzm.azurecr.io/nexus-api
+  newTag: sha-040e4793611532f7781aebc8c3fc73b32d0623f6
+- name: crjqmupr2v7hmzm.azurecr.io/nexus-worker
+  newName: crjqmupr2v7hmzm.azurecr.io/nexus-worker
+  newTag: sha-040e4793611532f7781aebc8c3fc73b32d0623f6
