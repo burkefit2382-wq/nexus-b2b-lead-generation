@@ -37,7 +37,7 @@ spec:
                 - name: NEXUS_SCRAPER_COUNTIES
                   value: "Pinellas,Hillsborough,Pasco,Hernando"
                 - name: NEXUS_SCRAPER_TARGETS
-                  value: "real_estate,mortgage,insurance,home_services,professional_cleaning"
+                  value: "real_estate,mortgage,insurance,home_services,professional_cleaning,biopharma"
               resources:
                 requests:
                   cpu: 100m
