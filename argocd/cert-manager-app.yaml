@@ -12,13 +12,13 @@ spec:
     - group: admissionregistration.k8s.io
       kind: MutatingWebhookConfiguration
       name: cert-manager-webhook
-      jqPathExpressions:
-        - '.webhooks[]?.clientConfig.caBundle'
+      jsonPointers:
+        - /webhooks
     - group: admissionregistration.k8s.io
       kind: ValidatingWebhookConfiguration
       name: cert-manager-webhook
-      jqPathExpressions:
-        - '.webhooks[]?.clientConfig.caBundle'
+      jsonPointers:
+        - /webhooks
   source:
     repoURL: https://charts.jetstack.io
     chart: cert-manager
