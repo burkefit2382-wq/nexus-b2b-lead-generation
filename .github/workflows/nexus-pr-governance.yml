@@ -66,6 +66,7 @@ jobs:
           $required = @(
             ".github/CODEOWNERS",
             ".github/branch-protection-main.json",
+            ".github/ruleset-main.json",
             "scripts/apply-github-branch-protection.ps1",
             "scripts/nexus-production-alerts.ps1",
             "scripts/export-production-evidence.ps1",

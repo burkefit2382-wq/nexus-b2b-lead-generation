@@ -1,7 +1,8 @@
 param(
   [string]$Repository = "burkefit2382-wq/nexus-b2b-lead-generation",
   [string]$Branch = "main",
-  [string]$PolicyPath = ".github/branch-protection-main.json"
+  [string]$PolicyPath = ".github/branch-protection-main.json",
+  [string]$RulesetPath = ".github/ruleset-main.json"
 )
 
 $ErrorActionPreference = "Stop"
@@ -40,5 +41,30 @@ $headers = @{
   "X-GitHub-Api-Version" = "2022-11-28"
 }
 
-Invoke-RestMethod -Method Put -Uri $uri -Headers $headers -Body $body -ContentType "application/json" | Out-Null
-Write-Host "Branch protection applied to $Repository/$Branch"
+try {
+  Invoke-RestMethod -Method Put -Uri $uri -Headers $headers -Body $body -ContentType "application/json" | Out-Null
+  Write-Host "Branch protection applied to $Repository/$Branch"
+  return
+} catch {
+  $message = $_.ErrorDetails.Message
+  if ($message -notmatch "Branch protection has been disabled") {
+    throw
+  }
+}
+
+if (-not (Test-Path $RulesetPath)) {
+  throw "Classic branch protection is disabled and ruleset file was not found: $RulesetPath"
+}
+
+$rulesetBody = Get-Content -Raw $RulesetPath
+$rulesetsUri = "https://api.github.com/repos/$Repository/rulesets"
+$existing = Invoke-RestMethod -Method Get -Uri $rulesetsUri -Headers $headers
+$ruleset = $existing | Where-Object { $_.name -eq "main-protection" } | Select-Object -First 1
+
+if ($ruleset) {
+  Invoke-RestMethod -Method Put -Uri "$rulesetsUri/$($ruleset.id)" -Headers $headers -Body $rulesetBody -ContentType "application/json" | Out-Null
+  Write-Host "Repository ruleset main-protection updated and enabled for $Repository/$Branch"
+} else {
+  Invoke-RestMethod -Method Post -Uri $rulesetsUri -Headers $headers -Body $rulesetBody -ContentType "application/json" | Out-Null
+  Write-Host "Repository ruleset main-protection created and enabled for $Repository/$Branch"
+}
