@@ -87,6 +87,14 @@ FIELDNAMES = (
     "osint_sources",
     "quality_band",
     "review_status",
+    "data_completeness_score",
+    "fit_signals",
+    "buyer_persona",
+    "recommended_offer",
+    "outreach_angle",
+    "enrichment_summary",
+    "compliance_notes",
+    "source_risk",
     "collected_at",
 )
 
@@ -187,6 +195,20 @@ def normalize_element(element: dict[str, Any], county: str, target: dict[str, An
     score, notes = score_record(target["kind"], website, phone, street, lat, lon, osint)
     quality_band = quality_band_for(osint["score"])
     review_status = review_status_for(osint["score"], osint["flags"])
+    enrichment = build_enrichment_profile(
+        target["kind"],
+        tags,
+        county,
+        name,
+        website,
+        phone,
+        street,
+        lat,
+        lon,
+        osint,
+        score,
+        review_status,
+    )
 
     return {
         "lead_id": f"tb-{lead_hash}",
@@ -211,6 +233,7 @@ def normalize_element(element: dict[str, Any], county: str, target: dict[str, An
         "osint_sources": "; ".join(osint["sources"]),
         "quality_band": quality_band,
         "review_status": review_status,
+        **enrichment,
         "collected_at": collected_at,
     }
 
@@ -359,6 +382,149 @@ def review_status_for(score: int, flags: list[str]) -> str:
     return "hold_for_manual_review"
 
 
+def build_enrichment_profile(
+    kind: str,
+    tags: dict[str, Any],
+    county: str,
+    name: str,
+    website: str,
+    phone: str,
+    street: str,
+    lat: Any,
+    lon: Any,
+    osint: dict[str, Any],
+    score: int,
+    review_status: str,
+) -> dict[str, Any]:
+    city = text_value(tags, "addr:city")
+    postcode = text_value(tags, "addr:postcode")
+    county_label = county.replace(" County", "")
+    completeness = data_completeness_score(tags, website, phone, street, lat, lon)
+    signals = fit_signals(kind, tags, website, phone, street, lat, lon, osint)
+    persona = buyer_persona_for(kind)
+    offer = recommended_offer_for(kind, score, review_status)
+    risk = source_risk_for(osint["flags"], completeness, review_status)
+    location = ", ".join(part for part in (city, county_label) if part) or county_label
+    summary = (
+        f"{name} is a {persona.lower()} candidate in {location} with "
+        f"{quality_band_for(int(osint['score'])).lower()} OSINT confidence and "
+        f"{completeness}% public-data completeness."
+    )
+    compliance = (
+        "Public business/location data only; no private accounts, hidden records, "
+        "sensitive personal data, or credentialed sources used."
+    )
+
+    return {
+        "data_completeness_score": completeness,
+        "fit_signals": "; ".join(signals),
+        "buyer_persona": persona,
+        "recommended_offer": offer,
+        "outreach_angle": outreach_angle_for(kind, location, score, completeness),
+        "enrichment_summary": summary,
+        "compliance_notes": compliance,
+        "source_risk": risk,
+    }
+
+
+def data_completeness_score(tags: dict[str, Any], website: str, phone: str, street: str, lat: Any, lon: Any) -> int:
+    score = 0
+    if website:
+        score += 30
+    if phone:
+        score += 25
+    if street and (text_value(tags, "addr:city") or text_value(tags, "addr:postcode")):
+        score += 25
+    elif street:
+        score += 15
+    if lat is not None and lon is not None:
+        score += 10
+    if public_social_tags(tags):
+        score += 10
+    return min(score, 100)
+
+
+def fit_signals(kind: str, tags: dict[str, Any], website: str, phone: str, street: str, lat: Any, lon: Any, osint: dict[str, Any]) -> list[str]:
+    signals = [buyer_persona_for(kind)]
+    if website and has_business_domain(website):
+        signals.append("Owned business website")
+    elif website:
+        signals.append("Public web presence needs review")
+    if phone:
+        signals.append("Public phone available")
+    if street and (text_value(tags, "addr:city") or text_value(tags, "addr:postcode")):
+        signals.append("Structured local address")
+    if lat is not None and lon is not None:
+        signals.append("County geofence verified")
+    if public_social_tags(tags):
+        signals.append("Public social profile tag")
+    if text_value(tags, "opening_hours"):
+        signals.append("Published operating hours")
+    if text_value(tags, "brand", "operator"):
+        signals.append("Brand/operator attribution")
+    if int(osint["score"]) >= 85 and not osint["flags"]:
+        signals.append("Package-ready OSINT QA")
+    return sorted(set(signals))
+
+
+def public_social_tags(tags: dict[str, Any]) -> list[str]:
+    return [
+        key
+        for key in ("contact:facebook", "facebook", "contact:instagram", "instagram", "contact:linkedin", "linkedin")
+        if tags.get(key)
+    ]
+
+
+def buyer_persona_for(kind: str) -> str:
+    personas = {
+        "real_estate": "Real estate agent or brokerage",
+        "mortgage": "Mortgage broker or finance partner",
+        "insurance": "Insurance agency",
+        "home_services": "Home-service contractor",
+        "professional_cleaning": "Cleaning and facility-services operator",
+        "biopharma": "Biopharma or life-sciences operator",
+    }
+    return personas.get(kind, "Local business lead")
+
+
+def recommended_offer_for(kind: str, score: int, review_status: str) -> str:
+    if review_status == "hold_for_manual_review":
+        return "Manual verification before buyer delivery"
+    offers = {
+        "real_estate": "Tampa Bay real estate lead sprint",
+        "mortgage": "Real estate referral partner pack",
+        "insurance": "Homeowner cross-sell lead pack",
+        "home_services": "Local home-services growth pack",
+        "professional_cleaning": "Commercial cleaning prospect pack",
+        "biopharma": "Life-sciences market intelligence brief",
+    }
+    if score >= 90:
+        return f"Priority {offers.get(kind, 'local business intelligence pack')}"
+    return offers.get(kind, "Local business intelligence pack")
+
+
+def outreach_angle_for(kind: str, location: str, score: int, completeness: int) -> str:
+    readiness = "priority" if score >= 90 and completeness >= 80 else "reviewed"
+    angles = {
+        "real_estate": f"{readiness.title()} local real estate prospect for {location} territory campaigns.",
+        "mortgage": f"{readiness.title()} finance-adjacent prospect for referral and co-marketing campaigns in {location}.",
+        "insurance": f"{readiness.title()} insurance prospect for homeowner and real estate-adjacent offers in {location}.",
+        "home_services": f"{readiness.title()} home-services prospect for agent/vendor referral campaigns in {location}.",
+        "professional_cleaning": f"{readiness.title()} cleaning-services prospect for property-manager or commercial outreach in {location}.",
+        "biopharma": f"{readiness.title()} life-sciences prospect for market mapping and account research in {location}.",
+    }
+    return angles.get(kind, f"{readiness.title()} local business prospect for {location} outreach.")
+
+
+def source_risk_for(flags: list[str], completeness: int, review_status: str) -> str:
+    blocking_flags = ("State mismatch", "Coordinates outside")
+    if review_status == "hold_for_manual_review" or any(any(flag.startswith(prefix) for prefix in blocking_flags) for flag in flags):
+        return "High"
+    if flags or completeness < 65:
+        return "Medium"
+    return "Low"
+
+
 def load_existing() -> dict[str, dict[str, Any]]:
     records: dict[str, dict[str, Any]] = {}
     if not JSONL_PATH.exists():
@@ -389,6 +555,8 @@ def apply_osint_quality(record: dict[str, Any]) -> None:
         if "mortgage" in category
         else "insurance"
         if "insurance" in category
+        else "professional_cleaning"
+        if "cleaning" in category or "janitorial" in category or "facility" in category
         else "home_services"
     )
     tags = {
@@ -404,6 +572,21 @@ def apply_osint_quality(record: dict[str, Any]) -> None:
     lon = record.get("longitude")
     osint = osint_quality_check(tags, county_name, website, phone, street, lat, lon)
     score, notes = score_record(kind, website, phone, street, lat, lon, osint)
+    review_status = review_status_for(osint["score"], osint["flags"])
+    enrichment = build_enrichment_profile(
+        kind,
+        tags,
+        county_name,
+        str(record.get("name") or "Unknown lead"),
+        website,
+        phone,
+        street,
+        lat,
+        lon,
+        osint,
+        score,
+        review_status,
+    )
     record["score"] = score
     record["score_notes"] = "; ".join(notes)
     record["osint_quality_score"] = osint["score"]
@@ -411,7 +594,8 @@ def apply_osint_quality(record: dict[str, Any]) -> None:
     record["osint_flags"] = "; ".join(osint["flags"])
     record["osint_sources"] = "; ".join(osint["sources"])
     record["quality_band"] = quality_band_for(osint["score"])
-    record["review_status"] = review_status_for(osint["score"], osint["flags"])
+    record["review_status"] = review_status
+    record.update(enrichment)
 
 
 def write_outputs(records: dict[str, dict[str, Any]], summary: dict[str, Any]) -> None:
@@ -492,6 +676,8 @@ def run_once(delay_seconds: float = 3.0, counties: tuple[str, ...] = COUNTIES, t
         "last_run_at": collected_at,
         "source_runs": source_runs,
         "errors": errors,
+        "quality": quality_summary(records),
+        "enrichment": enrichment_summary(records),
         "outputs": {
             "jsonl": str(JSONL_PATH),
             "csv": str(CSV_PATH),
@@ -528,6 +714,7 @@ def backfill_quality() -> dict[str, Any]:
         "source_runs": [],
         "errors": [],
         "quality": quality_summary(records),
+        "enrichment": enrichment_summary(records),
         "outputs": {
             "jsonl": str(JSONL_PATH),
             "csv": str(CSV_PATH),
@@ -549,6 +736,24 @@ def quality_summary(records: dict[str, dict[str, Any]]) -> dict[str, int]:
         if status in counts:
             counts[status] += 1
     return counts
+
+
+def enrichment_summary(records: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    risk_counts = {"Low": 0, "Medium": 0, "High": 0}
+    total_completeness = 0
+    for record in records.values():
+        risk = str(record.get("source_risk") or "Medium")
+        if risk in risk_counts:
+            risk_counts[risk] += 1
+        try:
+            total_completeness += int(record.get("data_completeness_score") or 0)
+        except (TypeError, ValueError):
+            pass
+    average = round(total_completeness / len(records), 1) if records else 0
+    return {
+        "average_data_completeness_score": average,
+        "source_risk": risk_counts,
+    }
 
 
 def main() -> int:
