@@ -8,6 +8,17 @@ metadata:
     app.kubernetes.io/part-of: nexus-platform
 spec:
   project: default
+  ignoreDifferences:
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+      name: cert-manager-webhook
+      jqPathExpressions:
+        - '.webhooks[]?.clientConfig.caBundle'
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      name: cert-manager-webhook
+      jqPathExpressions:
+        - '.webhooks[]?.clientConfig.caBundle'
   source:
     repoURL: https://charts.jetstack.io
     chart: cert-manager
@@ -27,3 +38,4 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
+      - RespectIgnoreDifferences=true
