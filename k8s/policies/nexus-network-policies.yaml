@@ -84,6 +84,15 @@ spec:
         - protocol: TCP
           port: 53
     - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: nexus
+      ports:
+        - protocol: TCP
+          port: 8000
+        - protocol: TCP
+          port: 4173
+    - to:
         - ipBlock:
             cidr: 0.0.0.0/0
       ports:
