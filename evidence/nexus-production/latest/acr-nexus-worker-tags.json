@@ -1,0 +1,28 @@
+[
+  {
+    "changeableAttributes": {
+      "deleteEnabled": true,
+      "listEnabled": true,
+      "readEnabled": true,
+      "writeEnabled": true
+    },
+    "createdTime": "2026-07-18T22:46:31.6118608Z",
+    "digest": "sha256:cc6b720bb086af6523c02b6f9d2af81d4b583be3f95eace47471d0b520320b1c",
+    "lastUpdateTime": "2026-07-18T23:14:09.8320494Z",
+    "name": "latest",
+    "signed": false
+  },
+  {
+    "changeableAttributes": {
+      "deleteEnabled": true,
+      "listEnabled": true,
+      "readEnabled": true,
+      "writeEnabled": true
+    },
+    "createdTime": "2026-07-18T23:14:09.2430144Z",
+    "digest": "sha256:cc6b720bb086af6523c02b6f9d2af81d4b583be3f95eace47471d0b520320b1c",
+    "lastUpdateTime": "2026-07-18T23:14:09.2430144Z",
+    "name": "sha-040e4793611532f7781aebc8c3fc73b32d0623f6",
+    "signed": false
+  }
+]

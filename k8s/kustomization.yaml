@@ -10,6 +10,9 @@ resources:
 - services/nexus-api-service.yaml
 - services/nexus-backend-service.yaml
 - ingress/nexus-ingress.yaml
+- policies/nexus-network-policies.yaml
+- policies/nexus-poddisruptionbudgets.yaml
+- policies/nexus-resource-controls.yaml
 
 images:
 - name: crjqmupr2v7hmzm.azurecr.io/nexus-api

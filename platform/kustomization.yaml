@@ -6,3 +6,4 @@ resources:
   - secrets/azure-key-vault-store.yaml
   - secrets/nexus-keyvault-smoke-external-secret.yaml
   - secrets/nexus-production-external-secret.yaml
+  - policies/nexus-image-admission-policy.yaml

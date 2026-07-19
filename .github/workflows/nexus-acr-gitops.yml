@@ -67,16 +67,38 @@ jobs:
             --tag "$ACR_LOGIN_SERVER/nexus-api:$IMAGE_TAG" \
             --tag "$ACR_LOGIN_SERVER/nexus-api:latest" \
             backend
+
+      - name: Scan API image for critical vulnerabilities
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: ${{ env.ACR_LOGIN_SERVER }}/nexus-api:${{ env.IMAGE_TAG }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Push API image
+        run: |
           docker push "$ACR_LOGIN_SERVER/nexus-api:$IMAGE_TAG"
           docker push "$ACR_LOGIN_SERVER/nexus-api:latest"
 
-      - name: Build and push worker image
+      - name: Build worker image
         run: |
           docker build \
             --file backend/Dockerfile.worker \
             --tag "$ACR_LOGIN_SERVER/nexus-worker:$IMAGE_TAG" \
             --tag "$ACR_LOGIN_SERVER/nexus-worker:latest" \
             backend
+
+      - name: Scan worker image for critical vulnerabilities
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: ${{ env.ACR_LOGIN_SERVER }}/nexus-worker:${{ env.IMAGE_TAG }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Push worker image
+        run: |
           docker push "$ACR_LOGIN_SERVER/nexus-worker:$IMAGE_TAG"
           docker push "$ACR_LOGIN_SERVER/nexus-worker:latest"
 

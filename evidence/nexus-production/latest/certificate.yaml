@@ -1,0 +1,42 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  creationTimestamp: "2026-07-18T23:23:24Z"
+  generation: 1
+  labels:
+    app.kubernetes.io/name: nexus-ingress
+    app.kubernetes.io/part-of: nexus-lead-intelligence
+  name: nexuscloud-sh-tls
+  namespace: nexus
+  ownerReferences:
+  - apiVersion: networking.k8s.io/v1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Ingress
+    name: nexus-ingress
+    uid: 255655ad-7f72-486f-9418-5f130244a1af
+  resourceVersion: "1867374"
+  uid: 323b6811-d782-44eb-b7e8-d0338f3220a0
+spec:
+  dnsNames:
+  - nexuscloud.sh
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: letsencrypt-production
+  secretName: nexuscloud-sh-tls
+  usages:
+  - digital signature
+  - key encipherment
+status:
+  conditions:
+  - lastTransitionTime: "2026-07-19T00:11:43Z"
+    message: Certificate is up to date and has not expired
+    observedGeneration: 1
+    reason: Ready
+    status: "True"
+    type: Ready
+  notAfter: "2026-10-16T23:13:12Z"
+  notBefore: "2026-07-18T23:13:13Z"
+  renewalTime: "2026-09-16T23:13:12Z"
+  revision: 1

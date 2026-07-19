@@ -1,0 +1,32 @@
+NAME                           READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/nexus-api      2/2     2            2           3d
+deployment.apps/nexus-worker   1/1     1            1           3h12m
+
+NAME                                             READY   STATUS      RESTARTS   AGE
+pod/nexus-api-54db48f7c9-2tbzz                   1/1     Running     0          163m
+pod/nexus-api-54db48f7c9-zdj28                   1/1     Running     0          163m
+pod/nexus-internal-health-29740425-rmsxz         0/1     Completed   0          14m
+pod/nexus-internal-health-29740430-8m5sp         0/1     Completed   0          9m44s
+pod/nexus-internal-health-29740435-mtm42         0/1     Completed   0          4m44s
+pod/nexus-osint-scraper-quality-29739600-ff64j   0/1     Completed   0          13h
+pod/nexus-osint-scraper-quality-29739960-qxggm   0/1     Completed   0          7h59m
+pod/nexus-osint-scraper-quality-29740320-hpkpz   0/1     Completed   0          119m
+pod/nexus-worker-7b574f79b8-9txwn                1/1     Running     0          163m
+
+NAME                    TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)    AGE
+service/nexus-api       ClusterIP   10.0.102.119   <none>        80/TCP     3d
+service/nexus-backend   ClusterIP   10.0.40.46     <none>        8000/TCP   3d
+
+NAME                                      CLASS   HOSTS           ADDRESS        PORTS     AGE
+ingress.networking.k8s.io/nexus-ingress   nginx   nexuscloud.sh   4.204.168.92   80, 443   3d
+
+NAME                                        SCHEDULE      TIMEZONE   SUSPEND   ACTIVE   LAST SCHEDULE   AGE
+cronjob.batch/nexus-internal-health         */5 * * * *   <none>     False     0        4m45s           166m
+cronjob.batch/nexus-osint-scraper-quality   0 */6 * * *   <none>     False     0        119m            2d9h
+
+NAME                                            READY   SECRET              AGE
+certificate.cert-manager.io/nexuscloud-sh-tls   True    nexuscloud-sh-tls   156m
+
+NAME                                                      STORETYPE            STORE                  REFRESH INTERVAL   STATUS         READY   LAST SYNC
+externalsecret.external-secrets.io/nexus-keyvault-smoke   ClusterSecretStore   nexus-azure-keyvault   1h                 SecretSynced   True    46m
+externalsecret.external-secrets.io/nexus-secrets          ClusterSecretStore   nexus-azure-keyvault   1h                 SecretSynced   True    40m
