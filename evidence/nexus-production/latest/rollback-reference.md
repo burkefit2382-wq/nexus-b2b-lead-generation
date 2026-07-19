@@ -76,7 +76,11 @@ The `nexus-platform` app applies:
 - ValidatingAdmissionPolicy requiring NEXUS Deployments, Jobs, and CronJobs in the `nexus` namespace to use non-`latest` images from `crjqmupr2v7hmzm.azurecr.io`.
 - External Secrets and cert-manager platform configuration.
 
-AKS currently reports `networkPolicy: none`; NetworkPolicy manifests are present in GitOps, but enforcement requires enabling a supported AKS network policy provider.
+AKS enforces Kubernetes NetworkPolicy with Calico. Confirm with:
+
+```bash
+az aks show --resource-group nexus-rg --name nexus-aks --query networkProfile.networkPolicy -o tsv
+```
 
 ## HTTPS/TLS
 

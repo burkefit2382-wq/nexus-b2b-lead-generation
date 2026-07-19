@@ -9,14 +9,14 @@
                     "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"argoproj.io/v1alpha1\",\"kind\":\"Application\",\"metadata\":{\"annotations\":{},\"labels\":{\"app.kubernetes.io/name\":\"cert-manager\",\"app.kubernetes.io/part-of\":\"nexus-platform\"},\"name\":\"cert-manager\",\"namespace\":\"argocd\"},\"spec\":{\"destination\":{\"namespace\":\"cert-manager\",\"server\":\"https://kubernetes.default.svc\"},\"ignoreDifferences\":[{\"group\":\"admissionregistration.k8s.io\",\"jsonPointers\":[\"/webhooks\"],\"kind\":\"MutatingWebhookConfiguration\",\"name\":\"cert-manager-webhook\"},{\"group\":\"admissionregistration.k8s.io\",\"jsonPointers\":[\"/webhooks\"],\"kind\":\"ValidatingWebhookConfiguration\",\"name\":\"cert-manager-webhook\"}],\"project\":\"default\",\"source\":{\"chart\":\"cert-manager\",\"helm\":{\"releaseName\":\"cert-manager\",\"values\":\"crds:\\n  enabled: true\\n\"},\"repoURL\":\"https://charts.jetstack.io\",\"targetRevision\":\"v1.21.0\"},\"syncPolicy\":{\"automated\":{\"prune\":true,\"selfHeal\":true},\"syncOptions\":[\"CreateNamespace=true\",\"ServerSideApply=true\",\"RespectIgnoreDifferences=true\"]}}}\n"
                 },
                 "creationTimestamp": "2026-07-18T23:59:08Z",
-                "generation": 87,
+                "generation": 102,
                 "labels": {
                     "app.kubernetes.io/name": "cert-manager",
                     "app.kubernetes.io/part-of": "nexus-platform"
                 },
                 "name": "cert-manager",
                 "namespace": "argocd",
-                "resourceVersion": "1899236",
+                "resourceVersion": "1912711",
                 "uid": "116b1bf6-b5f1-438b-8ff6-3c7fbca95370"
             },
             "spec": {
@@ -67,7 +67,7 @@
             "status": {
                 "controllerNamespace": "argocd",
                 "health": {
-                    "lastTransitionTime": "2026-07-18T23:59:09Z",
+                    "lastTransitionTime": "2026-07-19T02:28:47Z",
                     "status": "Healthy"
                 },
                 "history": [
@@ -155,7 +155,7 @@
                         }
                     }
                 },
-                "reconciledAt": "2026-07-19T02:02:11Z",
+                "reconciledAt": "2026-07-19T02:34:26Z",
                 "resourceHealthSource": "appTree",
                 "resources": [
                     {
@@ -546,14 +546,14 @@
                     "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"argoproj.io/v1alpha1\",\"kind\":\"Application\",\"metadata\":{\"annotations\":{},\"labels\":{\"app.kubernetes.io/name\":\"external-secrets\",\"app.kubernetes.io/part-of\":\"nexus-platform\"},\"name\":\"external-secrets\",\"namespace\":\"argocd\"},\"spec\":{\"destination\":{\"namespace\":\"external-secrets\",\"server\":\"https://kubernetes.default.svc\"},\"project\":\"default\",\"source\":{\"chart\":\"external-secrets\",\"helm\":{\"releaseName\":\"external-secrets\"},\"repoURL\":\"https://charts.external-secrets.io\",\"targetRevision\":\"2.8.0\"},\"syncPolicy\":{\"automated\":{\"prune\":true,\"selfHeal\":true},\"syncOptions\":[\"CreateNamespace=true\",\"ServerSideApply=true\"]}}}\n"
                 },
                 "creationTimestamp": "2026-07-18T23:59:08Z",
-                "generation": 40,
+                "generation": 49,
                 "labels": {
                     "app.kubernetes.io/name": "external-secrets",
                     "app.kubernetes.io/part-of": "nexus-platform"
                 },
                 "name": "external-secrets",
                 "namespace": "argocd",
-                "resourceVersion": "1899645",
+                "resourceVersion": "1912303",
                 "uid": "742921c6-6c48-47e3-96ac-ac12c69ec66d"
             },
             "spec": {
@@ -587,7 +587,7 @@
                     "lastTransitionTime": "2026-07-18T23:59:11Z",
                     "status": "Healthy"
                 },
-                "reconciledAt": "2026-07-19T02:03:28Z",
+                "reconciledAt": "2026-07-19T02:33:10Z",
                 "resourceHealthSource": "appTree",
                 "resources": [
                     {
@@ -938,14 +938,14 @@
                     "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"argoproj.io/v1alpha1\",\"kind\":\"Application\",\"metadata\":{\"annotations\":{},\"labels\":{\"app.kubernetes.io/name\":\"nexus-k8s\",\"app.kubernetes.io/part-of\":\"nexus-lead-intelligence\"},\"name\":\"nexus-k8s\",\"namespace\":\"argocd\"},\"spec\":{\"destination\":{\"namespace\":\"nexus\",\"server\":\"https://kubernetes.default.svc\"},\"project\":\"default\",\"source\":{\"path\":\"k8s\",\"repoURL\":\"https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git\",\"targetRevision\":\"main\"},\"syncPolicy\":{\"automated\":{\"prune\":true,\"selfHeal\":true},\"syncOptions\":[\"CreateNamespace=true\",\"PruneLast=true\"]}}}\n"
                 },
                 "creationTimestamp": "2026-07-18T22:55:44Z",
-                "generation": 99,
+                "generation": 133,
                 "labels": {
                     "app.kubernetes.io/name": "nexus-k8s",
                     "app.kubernetes.io/part-of": "nexus-lead-intelligence"
                 },
                 "name": "nexus-k8s",
                 "namespace": "argocd",
-                "resourceVersion": "1899357",
+                "resourceVersion": "1912904",
                 "uid": "396b9fea-44c9-4447-9387-57bde93e2df1"
             },
             "spec": {
@@ -973,7 +973,7 @@
             "status": {
                 "controllerNamespace": "argocd",
                 "health": {
-                    "lastTransitionTime": "2026-07-18T23:16:37Z",
+                    "lastTransitionTime": "2026-07-19T02:35:00Z",
                     "status": "Healthy"
                 },
                 "history": [
@@ -1032,10 +1032,38 @@
                             "repoURL": "https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git",
                             "targetRevision": "main"
                         }
+                    },
+                    {
+                        "deployStartedAt": "2026-07-19T02:07:02Z",
+                        "deployedAt": "2026-07-19T02:07:03Z",
+                        "id": 4,
+                        "initiatedBy": {
+                            "automated": true
+                        },
+                        "revision": "5765538397a77a6b995cd9a53a72c3f7fbce346d",
+                        "source": {
+                            "path": "k8s",
+                            "repoURL": "https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git",
+                            "targetRevision": "main"
+                        }
+                    },
+                    {
+                        "deployStartedAt": "2026-07-19T02:34:33Z",
+                        "deployedAt": "2026-07-19T02:34:35Z",
+                        "id": 5,
+                        "initiatedBy": {
+                            "automated": true
+                        },
+                        "revision": "03b30d0eb86fbc733833c6ac070cc0c805bd902e",
+                        "source": {
+                            "path": "k8s",
+                            "repoURL": "https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git",
+                            "targetRevision": "main"
+                        }
                     }
                 ],
                 "operationState": {
-                    "finishedAt": "2026-07-19T02:02:27Z",
+                    "finishedAt": "2026-07-19T02:34:35Z",
                     "message": "successfully synced (all tasks run)",
                     "operation": {
                         "initiatedBy": {
@@ -1046,7 +1074,7 @@
                         },
                         "sync": {
                             "prune": true,
-                            "revision": "42b7e0f2ede552942a86afd30ec361920b40521c",
+                            "revision": "03b30d0eb86fbc733833c6ac070cc0c805bd902e",
                             "source": {
                                 "path": "k8s",
                                 "repoURL": "https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git",
@@ -1059,7 +1087,7 @@
                         }
                     },
                     "phase": "Succeeded",
-                    "startedAt": "2026-07-19T02:02:25Z",
+                    "startedAt": "2026-07-19T02:34:33Z",
                     "syncResult": {
                         "resources": [
                             {
@@ -1077,18 +1105,7 @@
                                 "group": "networking.k8s.io",
                                 "hookPhase": "Running",
                                 "kind": "NetworkPolicy",
-                                "message": "networkpolicy.networking.k8s.io/nexus-acme-solver-ingress created",
-                                "name": "nexus-acme-solver-ingress",
-                                "namespace": "nexus",
-                                "status": "Synced",
-                                "syncPhase": "Sync",
-                                "version": "v1"
-                            },
-                            {
-                                "group": "networking.k8s.io",
-                                "hookPhase": "Running",
-                                "kind": "NetworkPolicy",
-                                "message": "networkpolicy.networking.k8s.io/nexus-api-ingress created",
+                                "message": "networkpolicy.networking.k8s.io/nexus-api-ingress unchanged",
                                 "name": "nexus-api-ingress",
                                 "namespace": "nexus",
                                 "status": "Synced",
@@ -1099,8 +1116,8 @@
                                 "group": "networking.k8s.io",
                                 "hookPhase": "Running",
                                 "kind": "NetworkPolicy",
-                                "message": "networkpolicy.networking.k8s.io/nexus-controlled-egress created",
-                                "name": "nexus-controlled-egress",
+                                "message": "networkpolicy.networking.k8s.io/nexus-acme-solver-ingress unchanged",
+                                "name": "nexus-acme-solver-ingress",
                                 "namespace": "nexus",
                                 "status": "Synced",
                                 "syncPhase": "Sync",
@@ -1110,8 +1127,19 @@
                                 "group": "networking.k8s.io",
                                 "hookPhase": "Running",
                                 "kind": "NetworkPolicy",
-                                "message": "networkpolicy.networking.k8s.io/nexus-default-deny created",
+                                "message": "networkpolicy.networking.k8s.io/nexus-default-deny unchanged",
                                 "name": "nexus-default-deny",
+                                "namespace": "nexus",
+                                "status": "Synced",
+                                "syncPhase": "Sync",
+                                "version": "v1"
+                            },
+                            {
+                                "group": "networking.k8s.io",
+                                "hookPhase": "Running",
+                                "kind": "NetworkPolicy",
+                                "message": "networkpolicy.networking.k8s.io/nexus-controlled-egress configured",
+                                "name": "nexus-controlled-egress",
                                 "namespace": "nexus",
                                 "status": "Synced",
                                 "syncPhase": "Sync",
@@ -1121,7 +1149,7 @@
                                 "group": "",
                                 "hookPhase": "Running",
                                 "kind": "ResourceQuota",
-                                "message": "resourcequota/nexus-production-quota created",
+                                "message": "resourcequota/nexus-production-quota unchanged",
                                 "name": "nexus-production-quota",
                                 "namespace": "nexus",
                                 "status": "Synced",
@@ -1132,7 +1160,7 @@
                                 "group": "",
                                 "hookPhase": "Running",
                                 "kind": "LimitRange",
-                                "message": "limitrange/nexus-default-container-limits created",
+                                "message": "limitrange/nexus-default-container-limits unchanged",
                                 "name": "nexus-default-container-limits",
                                 "namespace": "nexus",
                                 "status": "Synced",
@@ -1143,8 +1171,8 @@
                                 "group": "policy",
                                 "hookPhase": "Running",
                                 "kind": "PodDisruptionBudget",
-                                "message": "poddisruptionbudget.policy/nexus-worker created",
-                                "name": "nexus-worker",
+                                "message": "poddisruptionbudget.policy/nexus-api configured",
+                                "name": "nexus-api",
                                 "namespace": "nexus",
                                 "status": "Synced",
                                 "syncPhase": "Sync",
@@ -1154,8 +1182,8 @@
                                 "group": "policy",
                                 "hookPhase": "Running",
                                 "kind": "PodDisruptionBudget",
-                                "message": "poddisruptionbudget.policy/nexus-api created",
-                                "name": "nexus-api",
+                                "message": "poddisruptionbudget.policy/nexus-worker configured",
+                                "name": "nexus-worker",
                                 "namespace": "nexus",
                                 "status": "Synced",
                                 "syncPhase": "Sync",
@@ -1187,7 +1215,7 @@
                                 "group": "apps",
                                 "hookPhase": "Running",
                                 "images": [
-                                    "crjqmupr2v7hmzm.azurecr.io/nexus-worker:sha-040e4793611532f7781aebc8c3fc73b32d0623f6"
+                                    "crjqmupr2v7hmzm.azurecr.io/nexus-worker:sha-42b7e0f2ede552942a86afd30ec361920b40521c"
                                 ],
                                 "kind": "Deployment",
                                 "message": "deployment.apps/nexus-worker unchanged",
@@ -1201,7 +1229,7 @@
                                 "group": "apps",
                                 "hookPhase": "Running",
                                 "images": [
-                                    "crjqmupr2v7hmzm.azurecr.io/nexus-api:sha-040e4793611532f7781aebc8c3fc73b32d0623f6"
+                                    "crjqmupr2v7hmzm.azurecr.io/nexus-api:sha-42b7e0f2ede552942a86afd30ec361920b40521c"
                                 ],
                                 "kind": "Deployment",
                                 "message": "deployment.apps/nexus-api unchanged",
@@ -1215,11 +1243,11 @@
                                 "group": "batch",
                                 "hookPhase": "Running",
                                 "images": [
-                                    "crjqmupr2v7hmzm.azurecr.io/nexus-api:sha-040e4793611532f7781aebc8c3fc73b32d0623f6"
+                                    "crjqmupr2v7hmzm.azurecr.io/nexus-api:sha-42b7e0f2ede552942a86afd30ec361920b40521c"
                                 ],
                                 "kind": "CronJob",
-                                "message": "cronjob.batch/nexus-internal-health unchanged",
-                                "name": "nexus-internal-health",
+                                "message": "cronjob.batch/nexus-osint-scraper-quality unchanged",
+                                "name": "nexus-osint-scraper-quality",
                                 "namespace": "nexus",
                                 "status": "Synced",
                                 "syncPhase": "Sync",
@@ -1229,11 +1257,11 @@
                                 "group": "batch",
                                 "hookPhase": "Running",
                                 "images": [
-                                    "crjqmupr2v7hmzm.azurecr.io/nexus-api:sha-040e4793611532f7781aebc8c3fc73b32d0623f6"
+                                    "crjqmupr2v7hmzm.azurecr.io/nexus-api:sha-42b7e0f2ede552942a86afd30ec361920b40521c"
                                 ],
                                 "kind": "CronJob",
-                                "message": "cronjob.batch/nexus-osint-scraper-quality unchanged",
-                                "name": "nexus-osint-scraper-quality",
+                                "message": "cronjob.batch/nexus-internal-health unchanged",
+                                "name": "nexus-internal-health",
                                 "namespace": "nexus",
                                 "status": "Synced",
                                 "syncPhase": "Sync",
@@ -1251,7 +1279,7 @@
                                 "version": "v1"
                             }
                         ],
-                        "revision": "42b7e0f2ede552942a86afd30ec361920b40521c",
+                        "revision": "03b30d0eb86fbc733833c6ac070cc0c805bd902e",
                         "source": {
                             "path": "k8s",
                             "repoURL": "https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git",
@@ -1259,7 +1287,7 @@
                         }
                     }
                 },
-                "reconciledAt": "2026-07-19T02:02:27Z",
+                "reconciledAt": "2026-07-19T02:34:35Z",
                 "resourceHealthSource": "appTree",
                 "resources": [
                     {
@@ -1397,9 +1425,8 @@
                         "https://nexuscloud.sh/hubspot"
                     ],
                     "images": [
-                        "crjqmupr2v7hmzm.azurecr.io/nexus-api:latest",
-                        "crjqmupr2v7hmzm.azurecr.io/nexus-api:sha-040e4793611532f7781aebc8c3fc73b32d0623f6",
-                        "crjqmupr2v7hmzm.azurecr.io/nexus-worker:sha-040e4793611532f7781aebc8c3fc73b32d0623f6"
+                        "crjqmupr2v7hmzm.azurecr.io/nexus-api:sha-42b7e0f2ede552942a86afd30ec361920b40521c",
+                        "crjqmupr2v7hmzm.azurecr.io/nexus-worker:sha-42b7e0f2ede552942a86afd30ec361920b40521c"
                     ]
                 },
                 "sync": {
@@ -1414,7 +1441,7 @@
                             "targetRevision": "main"
                         }
                     },
-                    "revision": "42b7e0f2ede552942a86afd30ec361920b40521c",
+                    "revision": "03b30d0eb86fbc733833c6ac070cc0c805bd902e",
                     "status": "Synced"
                 }
             }
@@ -1427,14 +1454,14 @@
                     "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"argoproj.io/v1alpha1\",\"kind\":\"Application\",\"metadata\":{\"annotations\":{},\"labels\":{\"app.kubernetes.io/name\":\"nexus-platform\",\"app.kubernetes.io/part-of\":\"nexus-platform\"},\"name\":\"nexus-platform\",\"namespace\":\"argocd\"},\"spec\":{\"destination\":{\"namespace\":\"nexus\",\"server\":\"https://kubernetes.default.svc\"},\"project\":\"default\",\"source\":{\"path\":\"platform\",\"repoURL\":\"https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git\",\"targetRevision\":\"main\"},\"syncPolicy\":{\"automated\":{\"prune\":true,\"selfHeal\":true},\"syncOptions\":[\"CreateNamespace=true\",\"ServerSideApply=true\"]}}}\n"
                 },
                 "creationTimestamp": "2026-07-18T23:59:08Z",
-                "generation": 185,
+                "generation": 194,
                 "labels": {
                     "app.kubernetes.io/name": "nexus-platform",
                     "app.kubernetes.io/part-of": "nexus-platform"
                 },
                 "name": "nexus-platform",
                 "namespace": "argocd",
-                "resourceVersion": "1899351",
+                "resourceVersion": "1912724",
                 "uid": "fe116a72-6d2d-4094-b940-4902a6ac325f"
             },
             "spec": {
@@ -1665,7 +1692,7 @@
                         }
                     }
                 },
-                "reconciledAt": "2026-07-19T02:02:27Z",
+                "reconciledAt": "2026-07-19T02:34:29Z",
                 "resourceHealthSource": "appTree",
                 "resources": [
                     {
@@ -1741,7 +1768,7 @@
                             "targetRevision": "main"
                         }
                     },
-                    "revision": "42b7e0f2ede552942a86afd30ec361920b40521c",
+                    "revision": "5765538397a77a6b995cd9a53a72c3f7fbce346d",
                     "status": "Synced"
                 }
             }
