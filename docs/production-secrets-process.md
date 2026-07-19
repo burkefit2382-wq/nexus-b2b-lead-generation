@@ -15,7 +15,7 @@ Current activation state:
 - External Secrets Operator is managed by ArgoCD Application `external-secrets`.
 - `nexus-platform` owns the Azure Key Vault `ClusterSecretStore`.
 - `nexus-keyvault-smoke` proves Key Vault sync against `nexusvault28095` without overwriting the live production `nexus-secrets` Secret.
-- Move the target to `nexus-secrets` only after all required production secrets are present in Key Vault.
+- `nexus-secrets` is managed by External Secrets with `creationPolicy: Merge`, using the full `nexus-prod-*` production secret set from Key Vault.
 
 ## Required One-Time Setup
 

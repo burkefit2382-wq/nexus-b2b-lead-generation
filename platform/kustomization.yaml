@@ -5,3 +5,4 @@ resources:
   - secrets/nexus-keyvault-serviceaccount.yaml
   - secrets/azure-key-vault-store.yaml
   - secrets/nexus-keyvault-smoke-external-secret.yaml
+  - secrets/nexus-production-external-secret.yaml
