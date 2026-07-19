@@ -4,11 +4,21 @@ This runbook covers NEXUS AKS deploys, health checks, alerting, TLS, rollback, a
 
 ## Deploy Path
 
-1. Code merges to `main`.
-2. GitHub Actions workflow `Build AKS images and update GitOps` builds `nexus-api` and `nexus-worker`.
-3. Images are pushed to Azure Container Registry with immutable `sha-<commit>` tags.
-4. The workflow updates `k8s/kustomization.yaml` with the new image tags and pushes the GitOps commit.
-5. ArgoCD Application `nexus-k8s` syncs the `k8s` path into the `nexus` namespace.
+1. Changes are proposed through a pull request to `main`.
+2. Required checks pass: `NEXUS PR Governance`, `Secret Scan`, and `CodeQL`.
+3. CODEOWNERS review is approved and conversations are resolved.
+4. The pull request is merged to `main`.
+5. GitHub Actions workflow `Build AKS images and update GitOps` builds `nexus-api` and `nexus-worker`.
+6. Images are pushed to Azure Container Registry with immutable `sha-<commit>` tags.
+7. The workflow updates `k8s/kustomization.yaml` with the new image tags and pushes the GitOps commit.
+8. ArgoCD Application `nexus-k8s` syncs the `k8s` path into the `nexus` namespace.
+
+Apply branch protection with:
+
+```powershell
+$env:GH_TOKEN = "REPLACE_WITH_GITHUB_ADMIN_TOKEN"
+./scripts/apply-github-branch-protection.ps1
+```
 
 Platform controllers are also registered in ArgoCD:
 
