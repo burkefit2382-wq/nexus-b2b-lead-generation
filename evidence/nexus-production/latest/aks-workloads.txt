@@ -1,17 +1,17 @@
 NAME                           READY   UP-TO-DATE   AVAILABLE   AGE
 deployment.apps/nexus-api      2/2     2            2           3d
-deployment.apps/nexus-worker   1/1     1            1           3h12m
+deployment.apps/nexus-worker   1/1     1            1           3h16m
 
 NAME                                             READY   STATUS      RESTARTS   AGE
-pod/nexus-api-54db48f7c9-2tbzz                   1/1     Running     0          163m
-pod/nexus-api-54db48f7c9-zdj28                   1/1     Running     0          163m
-pod/nexus-internal-health-29740425-rmsxz         0/1     Completed   0          14m
-pod/nexus-internal-health-29740430-8m5sp         0/1     Completed   0          9m44s
-pod/nexus-internal-health-29740435-mtm42         0/1     Completed   0          4m44s
-pod/nexus-osint-scraper-quality-29739600-ff64j   0/1     Completed   0          13h
-pod/nexus-osint-scraper-quality-29739960-qxggm   0/1     Completed   0          7h59m
-pod/nexus-osint-scraper-quality-29740320-hpkpz   0/1     Completed   0          119m
-pod/nexus-worker-7b574f79b8-9txwn                1/1     Running     0          163m
+pod/nexus-api-54db48f7c9-2tbzz                   1/1     Running     0          167m
+pod/nexus-api-54db48f7c9-zdj28                   1/1     Running     0          167m
+pod/nexus-internal-health-29740430-8m5sp         0/1     Completed   0          14m
+pod/nexus-internal-health-29740435-mtm42         0/1     Completed   0          9m3s
+pod/nexus-internal-health-29740440-kzn5w         0/1     Completed   0          4m3s
+pod/nexus-osint-scraper-quality-29739600-ff64j   0/1     Completed   0          14h
+pod/nexus-osint-scraper-quality-29739960-qxggm   0/1     Completed   0          8h
+pod/nexus-osint-scraper-quality-29740320-hpkpz   0/1     Completed   0          124m
+pod/nexus-worker-7b574f79b8-9txwn                1/1     Running     0          167m
 
 NAME                    TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)    AGE
 service/nexus-api       ClusterIP   10.0.102.119   <none>        80/TCP     3d
@@ -21,12 +21,28 @@ NAME                                      CLASS   HOSTS           ADDRESS       
 ingress.networking.k8s.io/nexus-ingress   nginx   nexuscloud.sh   4.204.168.92   80, 443   3d
 
 NAME                                        SCHEDULE      TIMEZONE   SUSPEND   ACTIVE   LAST SCHEDULE   AGE
-cronjob.batch/nexus-internal-health         */5 * * * *   <none>     False     0        4m45s           166m
-cronjob.batch/nexus-osint-scraper-quality   0 */6 * * *   <none>     False     0        119m            2d9h
+cronjob.batch/nexus-internal-health         */5 * * * *   <none>     False     0        4m3s            170m
+cronjob.batch/nexus-osint-scraper-quality   0 */6 * * *   <none>     False     0        124m            2d9h
+
+NAME                                      MIN AVAILABLE   MAX UNAVAILABLE   ALLOWED DISRUPTIONS   AGE
+poddisruptionbudget.policy/nexus-api      1               N/A               1                     96s
+poddisruptionbudget.policy/nexus-worker   N/A             1                 1                     96s
+
+NAME                                   REQUEST                                                                                                                                       LIMIT                                             AGE
+resourcequota/nexus-production-quota   configmaps: 2/30, persistentvolumeclaims: 0/5, pods: 3/30, requests.cpu: 600m/3, requests.memory: 1280Mi/6Gi, secrets: 3/30, services: 2/10   limits.cpu: 2500m/8, limits.memory: 2560Mi/12Gi   97s
+
+NAME                                        CREATED AT
+limitrange/nexus-default-container-limits   2026-07-19T02:02:27Z
+
+NAME                                                        POD-SELECTOR                              AGE
+networkpolicy.networking.k8s.io/nexus-acme-solver-ingress   acme.cert-manager.io/http01-solver=true   97s
+networkpolicy.networking.k8s.io/nexus-api-ingress           app.kubernetes.io/name=nexus-api          97s
+networkpolicy.networking.k8s.io/nexus-controlled-egress     <none>                                    97s
+networkpolicy.networking.k8s.io/nexus-default-deny          <none>                                    97s
 
 NAME                                            READY   SECRET              AGE
-certificate.cert-manager.io/nexuscloud-sh-tls   True    nexuscloud-sh-tls   156m
+certificate.cert-manager.io/nexuscloud-sh-tls   True    nexuscloud-sh-tls   160m
 
 NAME                                                      STORETYPE            STORE                  REFRESH INTERVAL   STATUS         READY   LAST SYNC
-externalsecret.external-secrets.io/nexus-keyvault-smoke   ClusterSecretStore   nexus-azure-keyvault   1h                 SecretSynced   True    46m
-externalsecret.external-secrets.io/nexus-secrets          ClusterSecretStore   nexus-azure-keyvault   1h                 SecretSynced   True    40m
+externalsecret.external-secrets.io/nexus-keyvault-smoke   ClusterSecretStore   nexus-azure-keyvault   1h                 SecretSynced   True    50m
+externalsecret.external-secrets.io/nexus-secrets          ClusterSecretStore   nexus-azure-keyvault   1h                 SecretSynced   True    44m

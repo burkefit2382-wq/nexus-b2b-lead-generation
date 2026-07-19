@@ -1,5 +1,5 @@
 NAME               SYNC STATUS   HEALTH STATUS   REVISION                                   PROJECT
 cert-manager       Synced        Healthy         v1.21.0                                    default
 external-secrets   Synced        Healthy         2.8.0                                      default
-nexus-k8s          Synced        Healthy         83ea59e23f4ce36b8d239114cec1c816a0f5cb2f   default
-nexus-platform     Synced        Healthy         83ea59e23f4ce36b8d239114cec1c816a0f5cb2f   default
+nexus-k8s          Synced        Healthy         42b7e0f2ede552942a86afd30ec361920b40521c   default
+nexus-platform     Synced        Healthy         42b7e0f2ede552942a86afd30ec361920b40521c   default
