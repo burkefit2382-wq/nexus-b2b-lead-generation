@@ -41,7 +41,23 @@ spec:
             - name: NEXUS_SCRAPER_COUNTIES
               value: "Pinellas,Hillsborough,Pasco,Hernando"
             - name: NEXUS_SCRAPER_TARGETS
-              value: "real_estate,mortgage,insurance,home_services,professional_cleaning"
+              value: "real_estate,mortgage,insurance,home_services,professional_cleaning,biopharma"
+          readinessProbe:
+            exec:
+              command:
+                - python
+                - workers/tampa_bay_lead_worker.py
+                - --metrics
+            initialDelaySeconds: 20
+            periodSeconds: 60
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - workers/tampa_bay_lead_worker.py
+                - --metrics
+            initialDelaySeconds: 60
+            periodSeconds: 120
           resources:
             requests:
               cpu: 100m

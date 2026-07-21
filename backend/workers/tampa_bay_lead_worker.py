@@ -29,6 +29,7 @@ CSV_PATH = OUT_DIR / "tampa_bay_real_estate_leads.csv"
 SUMMARY_PATH = OUT_DIR / "latest_summary.json"
 STATE_PATH = OUT_DIR / "worker_state.json"
 LOG_PATH = OUT_DIR / "worker.log"
+METRICS_PATH = OUT_DIR / "worker_metrics.prom"
 
 OVERPASS_URL = os.environ.get("OVERPASS_URL", "https://overpass-api.de/api/interpreter")
 USER_AGENT = os.environ.get("NEXUS_SCRAPER_USER_AGENT", "NexusLeadGen/1.0 buyer-safe local lead collector")
@@ -427,6 +428,7 @@ def write_outputs(records: dict[str, dict[str, Any]], summary: dict[str, Any]) -
             writer.writerow({field: record.get(field, "") for field in FIELDNAMES})
     with SUMMARY_PATH.open("w", encoding="utf-8") as handle:
         json.dump(summary, handle, indent=2, sort_keys=True)
+    write_worker_metrics(summary)
 
 
 def select_counties(raw_counties: str | None) -> tuple[str, ...]:
@@ -497,6 +499,7 @@ def run_once(delay_seconds: float = 3.0, counties: tuple[str, ...] = COUNTIES, t
             "csv": str(CSV_PATH),
             "summary": str(SUMMARY_PATH),
             "log": str(LOG_PATH),
+            "metrics": str(METRICS_PATH),
         },
     }
     write_outputs(records, summary)
@@ -533,6 +536,7 @@ def backfill_quality() -> dict[str, Any]:
             "csv": str(CSV_PATH),
             "summary": str(SUMMARY_PATH),
             "log": str(LOG_PATH),
+            "metrics": str(METRICS_PATH),
         },
     }
     write_outputs(records, summary)
@@ -551,10 +555,79 @@ def quality_summary(records: dict[str, dict[str, Any]]) -> dict[str, int]:
     return counts
 
 
+def write_worker_metrics(summary: dict[str, Any]) -> None:
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    METRICS_PATH.write_text(worker_metrics_text(summary), encoding="utf-8")
+
+
+def worker_metrics_text(summary: dict[str, Any]) -> str:
+    errors = summary.get("errors", [])
+    if not isinstance(errors, list):
+        errors = []
+    quality = summary.get("quality") if isinstance(summary.get("quality"), dict) else {}
+    last_run = parse_datetime(str(summary.get("last_run_at") or ""))
+    last_run_timestamp = int(last_run.timestamp()) if last_run else 0
+    ok = 1 if summary.get("ok") is not False else 0
+    lines = [
+        "# HELP nexus_worker_up Whether the Nexus OSINT worker completed its latest execution path.",
+        "# TYPE nexus_worker_up gauge",
+        f'nexus_worker_up{{worker="tampa_bay_lead_worker"}} {ok}',
+        "# HELP nexus_worker_total_records Total public-source OSINT records known to the worker.",
+        "# TYPE nexus_worker_total_records gauge",
+        f'nexus_worker_total_records{{worker="tampa_bay_lead_worker"}} {int(summary.get("total_records") or 0)}',
+        "# HELP nexus_worker_new_records New public-source OSINT records collected in the latest run.",
+        "# TYPE nexus_worker_new_records gauge",
+        f'nexus_worker_new_records{{worker="tampa_bay_lead_worker"}} {int(summary.get("new_records") or 0)}',
+        "# HELP nexus_worker_failed_source_runs Failed source runs in the latest worker execution.",
+        "# TYPE nexus_worker_failed_source_runs gauge",
+        f'nexus_worker_failed_source_runs{{worker="tampa_bay_lead_worker"}} {len(errors)}',
+        "# HELP nexus_worker_last_run_timestamp_seconds Unix timestamp of the latest worker run.",
+        "# TYPE nexus_worker_last_run_timestamp_seconds gauge",
+        f'nexus_worker_last_run_timestamp_seconds{{worker="tampa_bay_lead_worker"}} {last_run_timestamp}',
+    ]
+    for status in ("approved_for_package", "review_recommended", "hold_for_manual_review"):
+        lines.append(f'nexus_worker_quality_records{{worker="tampa_bay_lead_worker",status="{status}"}} {int(quality.get(status) or 0)}')
+    return "\n".join(lines) + "\n"
+
+
+def load_summary() -> dict[str, Any]:
+    if not SUMMARY_PATH.exists():
+        return {
+            "ok": False,
+            "total_records": 0,
+            "new_records": 0,
+            "errors": [{"error": "No worker summary exists yet."}],
+            "quality": quality_summary({}),
+            "last_run_at": "",
+        }
+    try:
+        data = json.loads(SUMMARY_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {
+            "ok": False,
+            "total_records": 0,
+            "new_records": 0,
+            "errors": [{"error": "Worker summary could not be read."}],
+            "quality": quality_summary({}),
+            "last_run_at": "",
+        }
+    return data if isinstance(data, dict) else {}
+
+
+def parse_datetime(value: str) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Collect buyer-safe Tampa Bay real estate lead targets.")
     parser.add_argument("--loop", action="store_true", help="Run forever on an interval.")
     parser.add_argument("--backfill-quality", action="store_true", help="Backfill OSINT QA fields for existing records without scraping.")
+    parser.add_argument("--metrics", action="store_true", help="Print Prometheus metrics for the latest worker summary and exit.")
     parser.add_argument("--interval-minutes", type=int, default=int(os.environ.get("NEXUS_SCRAPER_INTERVAL_MINUTES", "360")))
     parser.add_argument("--delay-seconds", type=float, default=float(os.environ.get("NEXUS_SCRAPER_DELAY_SECONDS", "15")))
     parser.add_argument("--counties", default=os.environ.get("NEXUS_SCRAPER_COUNTIES"), help="Comma-separated counties, e.g. Pinellas,Hillsborough,Pasco.")
@@ -563,7 +636,9 @@ def main() -> int:
     counties = select_counties(args.counties)
     targets = select_targets(args.targets)
 
-    if args.backfill_quality:
+    if args.metrics:
+        print(worker_metrics_text(load_summary()), end="")
+    elif args.backfill_quality:
         summary = backfill_quality()
         print(json.dumps(summary, indent=2, sort_keys=True))
     elif args.loop:

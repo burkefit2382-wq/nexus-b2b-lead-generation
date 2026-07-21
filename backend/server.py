@@ -340,12 +340,20 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self) -> None:
-        if self.path.rstrip("/") == "/healthz":
-            self.send_json({"ok": True, "service": "leadgen-launch-site"}, HTTPStatus.OK)
+        if self.path.rstrip("/") in {"/health", "/healthz"}:
+            self.send_json({"ok": True, "status": "ok", "service": "leadgen-launch-site"}, HTTPStatus.OK)
             return
 
         parsed = urllib.parse.urlparse(self.path)
         route = parsed.path.rstrip("/")
+        if route == "/ready":
+            self.handle_ready()
+            return
+
+        if route == "/metrics":
+            self.handle_metrics()
+            return
+
         if route == "/api/revenue-status":
             self.handle_revenue_status()
             return
@@ -646,11 +654,21 @@ class LaunchHandler(SimpleHTTPRequestHandler):
                 "ok": True,
                 "status": "healthy",
                 "service": "leadgen-launch-site",
-                "healthz": "/healthz",
+                "health": "/health",
+                "ready": "/ready",
+                "metrics": "/metrics",
                 "checkedAt": datetime.now(timezone.utc).isoformat(),
             },
             HTTPStatus.OK,
         )
+
+    def handle_ready(self) -> None:
+        payload = self.readiness_payload()
+        status = HTTPStatus.OK if payload["ready"] else HTTPStatus.SERVICE_UNAVAILABLE
+        self.send_json(payload, status)
+
+    def handle_metrics(self) -> None:
+        self.send_text(self.prometheus_metrics(), HTTPStatus.OK, "text/plain; version=0.0.4; charset=utf-8")
 
     def handle_scraper_queue(self) -> None:
         summary = self.load_json_file(SCRAPER_SUMMARY_PATH)
@@ -1422,6 +1440,15 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def send_text(self, payload: str, status: HTTPStatus, content_type: str) -> None:
+        body = payload.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.end_headers()
+        self.wfile.write(body)
+
     def normalize_event_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
         event_name = str(payload.get("event_name") or "").strip()
         if event_name not in ALLOWED_EVENT_NAMES:
@@ -2044,6 +2071,73 @@ class LaunchHandler(SimpleHTTPRequestHandler):
                 return sum(1 for _ in handle)
         except OSError:
             return 0
+
+    def readiness_payload(self) -> dict[str, Any]:
+        environment = os.environ.get("ENVIRONMENT", "development").strip().lower()
+        data_dir_ready = self.ensure_data_dir_ready()
+        required_config = {
+            "databaseUrlConfigured": bool(os.environ.get("DATABASE_URL", "").strip()),
+            "stripeConfigured": self.stripe_configured(),
+            "resendConfigured": self.resend_status()["configured"],
+            "hubspotConfigured": self.hubspot_status()["configured"],
+        }
+        production = environment == "production"
+        config_ready = all(required_config.values()) if production else True
+        ready = data_dir_ready and config_ready
+        return {
+            "ok": ready,
+            "ready": ready,
+            "status": "ready" if ready else "not_ready",
+            "service": "leadgen-launch-site",
+            "environment": environment,
+            "checkedAt": datetime.now(timezone.utc).isoformat(),
+            "checks": {
+                "dataDirWritable": data_dir_ready,
+                "requiredConfiguration": required_config,
+                "productionConfigurationEnforced": production,
+            },
+        }
+
+    def ensure_data_dir_ready(self) -> bool:
+        try:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            SCRAPER_DIR.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return False
+        return DATA_DIR.exists() and SCRAPER_DIR.exists()
+
+    def prometheus_metrics(self) -> str:
+        summary = self.load_json_file(SCRAPER_SUMMARY_PATH)
+        readiness = self.readiness_payload()
+        errors = summary.get("errors", [])
+        if not isinstance(errors, list):
+            errors = []
+        quality = summary.get("quality") if isinstance(summary.get("quality"), dict) else {}
+        last_run = self.parse_datetime(str(summary.get("last_run_at") or ""))
+        last_run_timestamp = int(last_run.timestamp()) if last_run else 0
+        lines = [
+            "# HELP nexus_service_up Whether the Nexus launch server process is serving requests.",
+            "# TYPE nexus_service_up gauge",
+            'nexus_service_up{service="leadgen-launch-site"} 1',
+            "# HELP nexus_service_ready Whether the Nexus launch server readiness check is passing.",
+            "# TYPE nexus_service_ready gauge",
+            f'nexus_service_ready{{service="leadgen-launch-site"}} {1 if readiness["ready"] else 0}',
+            "# HELP nexus_scraper_total_records Total public-source OSINT records in the latest worker summary.",
+            "# TYPE nexus_scraper_total_records gauge",
+            f'nexus_scraper_total_records {int(summary.get("total_records") or self.count_lines(SCRAPER_JSONL_PATH) or 0)}',
+            "# HELP nexus_scraper_new_records New public-source OSINT records collected in the latest run.",
+            "# TYPE nexus_scraper_new_records gauge",
+            f'nexus_scraper_new_records {int(summary.get("new_records") or 0)}',
+            "# HELP nexus_scraper_failed_runs Failed source runs in the latest worker summary.",
+            "# TYPE nexus_scraper_failed_runs gauge",
+            f"nexus_scraper_failed_runs {len(errors)}",
+            "# HELP nexus_scraper_last_run_timestamp_seconds Unix timestamp of the latest OSINT worker run.",
+            "# TYPE nexus_scraper_last_run_timestamp_seconds gauge",
+            f"nexus_scraper_last_run_timestamp_seconds {last_run_timestamp}",
+        ]
+        for status in ("approved_for_package", "review_recommended", "hold_for_manual_review"):
+            lines.append(f'nexus_scraper_quality_records{{status="{status}"}} {int(quality.get(status) or 0)}')
+        return "\n".join(lines) + "\n"
 
     def parse_datetime(self, value: str) -> datetime | None:
         if not value:
