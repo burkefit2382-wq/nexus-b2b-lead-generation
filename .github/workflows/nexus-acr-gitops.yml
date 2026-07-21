@@ -12,6 +12,7 @@ on:
 permissions:
   contents: write
   id-token: write
+  pull-requests: write
 
 concurrency:
   group: nexus-acr-gitops-${{ github.ref }}
@@ -36,6 +37,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Require main ref for production image promotion
+        run: |
+          if [ "$GITHUB_REF_NAME" != "main" ]; then
+            echo "::error::Production image promotion must run from main so GitOps image pins match reviewed source."
+            echo "Selected ref: $GITHUB_REF_NAME"
+            exit 1
+          fi
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -67,6 +76,37 @@ jobs:
             --tag "$ACR_LOGIN_SERVER/nexus-api:$IMAGE_TAG" \
             --tag "$ACR_LOGIN_SERVER/nexus-api:latest" \
             backend
+
+      - name: Smoke test API image GOV readiness endpoints
+        run: |
+          set -euo pipefail
+
+          cleanup() {
+            docker logs nexus-api-smoke || true
+            docker rm -f nexus-api-smoke || true
+          }
+          trap cleanup EXIT
+
+          docker run \
+            --detach \
+            --name nexus-api-smoke \
+            --publish 4173:4173 \
+            --env ENVIRONMENT=development \
+            --env LAUNCH_HOST=0.0.0.0 \
+            --env PORT=4173 \
+            "$ACR_LOGIN_SERVER/nexus-api:$IMAGE_TAG"
+
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:4173/health >/tmp/nexus-health.json; then
+              break
+            fi
+            sleep 2
+          done
+
+          curl --fail --silent --show-error http://127.0.0.1:4173/health | tee /tmp/nexus-health.json
+          curl --fail --silent --show-error http://127.0.0.1:4173/ready | tee /tmp/nexus-ready.json
+          curl --fail --silent --show-error http://127.0.0.1:4173/metrics | tee /tmp/nexus-metrics.prom
+          grep --fixed-strings "nexus_service_up" /tmp/nexus-metrics.prom
 
       - name: Scan API image for critical vulnerabilities
         uses: aquasecurity/trivy-action@0.35.0
@@ -118,14 +158,52 @@ jobs:
           cd ..
           kustomize build k8s >/tmp/nexus-rendered.yaml
 
-      - name: Commit GitOps image update
+      - name: Create GitOps image promotion pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if git diff --quiet -- k8s/kustomization.yaml; then
             echo "No GitOps image change to commit."
             exit 0
           fi
+
+          promotion_branch="gitops/promote-${IMAGE_TAG}"
+          git checkout -B "$promotion_branch"
           git add k8s/kustomization.yaml
           git commit -m "chore(gitops): pin Nexus images to $IMAGE_TAG [skip ci]"
-          git push
+          git push --force-with-lease origin "$promotion_branch"
+
+          pr_body="$(cat <<EOF
+          Promotes the GOV-ready Nexus images built from \`${GITHUB_SHA}\`.
+
+          Image tags:
+          - \`${ACR_LOGIN_SERVER}/nexus-api:${IMAGE_TAG}\`
+          - \`${ACR_LOGIN_SERVER}/nexus-worker:${IMAGE_TAG}\`
+
+          Validation completed in this workflow:
+          - backend tests
+          - API container smoke test for \`/health\`, \`/ready\`, and \`/metrics\`
+          - critical vulnerability scan
+          - Kustomize render check
+
+          Merge this PR to let ArgoCD reconcile \`nexus-k8s\` from \`main\`.
+          EOF
+          )"
+
+          if gh pr view "$promotion_branch" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh pr edit "$promotion_branch" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "chore(gitops): promote Nexus images to $IMAGE_TAG" \
+              --body "$pr_body"
+          else
+            gh pr create \
+              --repo "$GITHUB_REPOSITORY" \
+              --base main \
+              --head "$promotion_branch" \
+              --title "chore(gitops): promote Nexus images to $IMAGE_TAG" \
+              --body "$pr_body"
+          fi
