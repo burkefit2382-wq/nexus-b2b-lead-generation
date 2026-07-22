@@ -42,6 +42,13 @@ spec:
               value: "Pinellas,Hillsborough,Pasco,Hernando"
             - name: NEXUS_SCRAPER_TARGETS
               value: "real_estate,mortgage,insurance,home_services,professional_cleaning,biopharma"
+            - name: NEXUS_OSINT_RETENTION_DAYS
+              value: "365"
+            - name: NEXUS_OSINT_HUBSPOT_EXPORT
+              value: "false"
+          volumeMounts:
+            - name: osint-data
+              mountPath: /app/data/scrapers
           readinessProbe:
             exec:
               command:
@@ -65,3 +72,7 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+      volumes:
+        - name: osint-data
+          persistentVolumeClaim:
+            claimName: nexus-osint-data
