@@ -8,7 +8,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 
 from .api.leads import router as leads_router
 from .api.membership import router as membership_router
@@ -20,6 +20,8 @@ from .services.database import run_migrations
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 LEAD_CONTROL_CENTER_PATH = STATIC_DIR / "lead-control-center.html"
 APP_ROOT = Path(__file__).resolve().parents[1]
+WORKFLOW_DEMO_PATH = APP_ROOT / "workflow-demo.html"
+WORKFLOW_DEMO_CSS_PATH = APP_ROOT / "workflow-demo.css"
 DATA_DIR = config.NEXUS_DATA_DIR
 SCRAPER_DIR = DATA_DIR / "scrapers"
 SCRAPER_SUMMARY_PATH = SCRAPER_DIR / "latest_summary.json"
@@ -219,6 +221,26 @@ def lead_control_center() -> HTMLResponse:
         )
 
     return HTMLResponse(LEAD_CONTROL_CENTER_PATH.read_text(encoding="utf-8"))
+
+
+@app.get("/workflow-demo", response_class=HTMLResponse)
+@app.get("/workflow-demo.html", response_class=HTMLResponse)
+def workflow_demo() -> HTMLResponse:
+    if not WORKFLOW_DEMO_PATH.exists():
+        return HTMLResponse(
+            "<h2>NEXUS workflow demo file not found.</h2>"
+            "<p>Place workflow-demo.html inside the backend folder.</p>",
+            status_code=404,
+        )
+
+    return HTMLResponse(WORKFLOW_DEMO_PATH.read_text(encoding="utf-8"))
+
+
+@app.get("/workflow-demo.css")
+def workflow_demo_css() -> FileResponse:
+    if not WORKFLOW_DEMO_CSS_PATH.exists():
+        raise HTTPException(status_code=404, detail="workflow-demo.css not found")
+    return FileResponse(WORKFLOW_DEMO_CSS_PATH, media_type="text/css")
 
 
 @app.get("/api/leads/mock")

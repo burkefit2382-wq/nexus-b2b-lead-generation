@@ -324,7 +324,7 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Headers", "Content-Type")
             self.send_header("Access-Control-Max-Age", "86400")
 
-        if parsed.path in {"", "/", "/index.html", "/dashboard.html", "/lead-control-center.html", "/static/lead-control-center.html"}:
+        if parsed.path in {"", "/", "/index.html", "/dashboard.html", "/workflow-demo.html", "/workflow-demo.css", "/lead-control-center.html", "/static/lead-control-center.html"}:
             self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
             self.send_header("Pragma", "no-cache")
             self.send_header("Expires", "0")
@@ -388,6 +388,9 @@ class LaunchHandler(SimpleHTTPRequestHandler):
 
         if parsed.path.rstrip("/") == "/dashboard":
             self.path = "/dashboard.html"
+
+        if parsed.path.rstrip("/") == "/workflow-demo":
+            self.path = "/workflow-demo.html"
 
         if parsed.path.rstrip("/") in {"/lead-control-center", "/control-center", "/control", "/static/lead-control-center.html"}:
             self.path = "/lead-control-center.html"

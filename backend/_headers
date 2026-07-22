@@ -7,6 +7,12 @@
 /dashboard.html
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 
+/workflow-demo.html
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/workflow-demo.css
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
 /*
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
