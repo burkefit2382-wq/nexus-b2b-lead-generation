@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: nexus
 resources:
 - namespaces/nexus-namespace.yaml
+- storage/nexus-osint-data-pvc.yaml
 - deployments/nexus-api-deployment.yaml
 - deployments/nexus-worker-deployment.yaml
 - cronjobs/nexus-scraper-quality-cronjob.yaml

@@ -21,6 +21,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+try:
+    from .osint_pipeline import run_pipeline
+except ImportError:
+    from osint_pipeline import run_pipeline
+
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "data" / "scrapers"
@@ -482,18 +487,22 @@ def run_once(delay_seconds: float = 3.0, counties: tuple[str, ...] = COUNTIES, t
                 log(message)
             time.sleep(delay_seconds)
 
+    new_records = max(len(records) - before_count, 0)
+    records, pipeline = run_pipeline(records.values(), OUT_DIR)
     summary = {
         "ok": not errors,
         "source": "OpenStreetMap Overpass public data",
         "counties": [county.replace(" County", "") for county in counties],
         "targets": [target["kind"] for target in targets],
         "total_records": len(records),
-        "new_records": len(records) - before_count,
+        "new_records": new_records,
         "target_records": 1000,
         "coverage_percent": round((len(records) / 1000) * 100, 1),
         "last_run_at": collected_at,
         "source_runs": source_runs,
         "errors": errors,
+        "quality": quality_summary(records),
+        "pipeline": pipeline,
         "outputs": {
             "jsonl": str(JSONL_PATH),
             "csv": str(CSV_PATH),
@@ -519,6 +528,7 @@ def run_loop(interval_minutes: int, delay_seconds: float, counties: tuple[str, .
 
 def backfill_quality() -> dict[str, Any]:
     records = load_existing()
+    records, pipeline = run_pipeline(records.values(), OUT_DIR)
     summary = {
         "ok": True,
         "source": "OpenStreetMap Overpass public data",
@@ -531,6 +541,7 @@ def backfill_quality() -> dict[str, Any]:
         "source_runs": [],
         "errors": [],
         "quality": quality_summary(records),
+        "pipeline": pipeline,
         "outputs": {
             "jsonl": str(JSONL_PATH),
             "csv": str(CSV_PATH),
@@ -565,6 +576,7 @@ def worker_metrics_text(summary: dict[str, Any]) -> str:
     if not isinstance(errors, list):
         errors = []
     quality = summary.get("quality") if isinstance(summary.get("quality"), dict) else {}
+    pipeline = summary.get("pipeline") if isinstance(summary.get("pipeline"), dict) else {}
     last_run = parse_datetime(str(summary.get("last_run_at") or ""))
     last_run_timestamp = int(last_run.timestamp()) if last_run else 0
     ok = 1 if summary.get("ok") is True else 0
@@ -584,6 +596,15 @@ def worker_metrics_text(summary: dict[str, Any]) -> str:
         "# HELP nexus_worker_last_run_timestamp_seconds Unix timestamp of the latest worker run.",
         "# TYPE nexus_worker_last_run_timestamp_seconds gauge",
         f'nexus_worker_last_run_timestamp_seconds{{worker="tampa_bay_lead_worker"}} {last_run_timestamp}',
+        "# HELP nexus_worker_pipeline_duplicates_merged Duplicate business records merged in the latest pipeline run.",
+        "# TYPE nexus_worker_pipeline_duplicates_merged gauge",
+        f'nexus_worker_pipeline_duplicates_merged{{worker="tampa_bay_lead_worker"}} {int(pipeline.get("duplicates_merged") or 0)}',
+        "# HELP nexus_worker_pipeline_quarantined_records Records blocked by compliance controls in the latest pipeline run.",
+        "# TYPE nexus_worker_pipeline_quarantined_records gauge",
+        f'nexus_worker_pipeline_quarantined_records{{worker="tampa_bay_lead_worker"}} {int(pipeline.get("quarantined_records") or 0)}',
+        "# HELP nexus_worker_pipeline_hubspot_export_errors CRM export errors in the latest pipeline run.",
+        "# TYPE nexus_worker_pipeline_hubspot_export_errors gauge",
+        f'nexus_worker_pipeline_hubspot_export_errors{{worker="tampa_bay_lead_worker"}} {len(pipeline.get("hubspot_export_errors") or [])}',
     ]
     for status in ("approved_for_package", "review_recommended", "hold_for_manual_review"):
         lines.append(f'nexus_worker_quality_records{{worker="tampa_bay_lead_worker",status="{status}"}} {int(quality.get(status) or 0)}')
@@ -640,6 +661,7 @@ def main() -> int:
         summary = load_summary()
         print(worker_metrics_text(summary), end="")
         return 0 if summary.get("ok") is True else 1
+    if args.backfill_quality:
         summary = backfill_quality()
         print(json.dumps(summary, indent=2, sort_keys=True))
     elif args.loop:
