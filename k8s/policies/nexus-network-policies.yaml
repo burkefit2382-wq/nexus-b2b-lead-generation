@@ -1,0 +1,104 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nexus-default-deny
+  namespace: nexus
+  labels:
+    app.kubernetes.io/name: nexus-default-deny
+    app.kubernetes.io/part-of: nexus-lead-intelligence
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nexus-api-ingress
+  namespace: nexus
+  labels:
+    app.kubernetes.io/name: nexus-api-ingress
+    app.kubernetes.io/part-of: nexus-lead-intelligence
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: nexus-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: nexus
+      ports:
+        - protocol: TCP
+          port: http
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nexus-acme-solver-ingress
+  namespace: nexus
+  labels:
+    app.kubernetes.io/name: nexus-acme-solver-ingress
+    app.kubernetes.io/part-of: nexus-lead-intelligence
+spec:
+  podSelector:
+    matchLabels:
+      acme.cert-manager.io/http01-solver: "true"
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8089
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nexus-controlled-egress
+  namespace: nexus
+  labels:
+    app.kubernetes.io/name: nexus-controlled-egress
+    app.kubernetes.io/part-of: nexus-lead-intelligence
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: nexus
+      ports:
+        - protocol: TCP
+          port: 8000
+        - protocol: TCP
+          port: 4173
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 5432

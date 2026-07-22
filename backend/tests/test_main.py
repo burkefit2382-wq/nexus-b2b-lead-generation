@@ -18,7 +18,8 @@ SCHEMA_PATH = Path(__file__).resolve().parents[1] / 'db' / 'schema.sql'
 def test_healthcheck() -> None:
     response = client.get('/health')
     assert response.status_code == 200
-    assert response.json() == {'status': 'ok'}
+    assert response.json()['status'] == 'ok'
+    assert response.json()['service'] == 'nexus-b2b-lead-generation-api'
 
 
 def test_lead_control_center() -> None:
@@ -32,6 +33,40 @@ def test_api_health() -> None:
     response = client.get('/api/health')
     assert response.status_code == 200
     assert response.json()['status'] == 'healthy'
+    assert response.json()['ready'] == '/ready'
+    assert response.json()['metrics'] == '/metrics'
+
+
+def test_readiness_local_environment() -> None:
+    response = client.get('/ready')
+    assert response.status_code == 200
+    data = response.json()
+    assert data['ready'] is True
+    assert data['checks']['productionConfigurationEnforced'] is False
+
+
+def test_readiness_production_requires_configuration(monkeypatch) -> None:
+    monkeypatch.setenv('ENVIRONMENT', 'production')
+    monkeypatch.delenv('DATABASE_URL', raising=False)
+    monkeypatch.delenv('JWT_SECRET', raising=False)
+    monkeypatch.delenv('STRIPE_SECRET_KEY', raising=False)
+    monkeypatch.delenv('STRIPE_WEBHOOK_SECRET', raising=False)
+    monkeypatch.delenv('PRICE_ID', raising=False)
+    monkeypatch.delenv('RESEND_API_KEY', raising=False)
+    monkeypatch.delenv('HUBSPOT_ACCESS_TOKEN', raising=False)
+    response = client.get('/ready')
+    assert response.status_code == 503
+    data = response.json()
+    assert data['ready'] is False
+    assert data['checks']['requiredConfiguration']['databaseUrlConfigured'] is False
+
+
+def test_metrics_endpoint() -> None:
+    response = client.get('/metrics')
+    assert response.status_code == 200
+    assert response.headers['content-type'].startswith('text/plain')
+    assert 'nexus_service_up{service="nexus-api"} 1' in response.text
+    assert 'nexus_scraper_total_records' in response.text
 
 
 def test_config_status_does_not_expose_secret(monkeypatch) -> None:

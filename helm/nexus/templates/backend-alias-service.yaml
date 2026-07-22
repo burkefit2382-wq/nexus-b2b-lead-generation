@@ -1,0 +1,17 @@
+{{- if .Values.backendAlias.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.backendAlias.name }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.backendAlias.name }}
+    app.kubernetes.io/part-of: nexus-lead-intelligence
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: {{ include "nexus.fullname" . }}
+  ports:
+    - name: http
+      port: {{ .Values.backendAlias.port }}
+      targetPort: http
+{{- end }}

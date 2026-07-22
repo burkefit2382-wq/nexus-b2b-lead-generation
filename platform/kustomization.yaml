@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - certificates/clusterissuer-letsencrypt-production.yaml
+  - secrets/nexus-keyvault-serviceaccount.yaml
+  - secrets/azure-key-vault-store.yaml
+  - secrets/nexus-keyvault-smoke-external-secret.yaml
+  - secrets/nexus-production-external-secret.yaml
+  - policies/nexus-image-admission-policy.yaml

@@ -1,0 +1,83 @@
+name: NEXUS PR Governance
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate-release-controls:
+    name: Validate Kubernetes, tests, and release controls
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements-dev.txt
+
+      - name: Run backend tests
+        run: PYTHONPATH=. python -m pytest backend/tests -q
+
+      - name: Install kustomize
+        run: |
+          curl --fail --silent --show-error --location \
+            --output kustomize.tar.gz \
+            https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.7.1/kustomize_v5.7.1_linux_amd64.tar.gz
+          tar -xzf kustomize.tar.gz
+          sudo install kustomize /usr/local/bin/kustomize
+
+      - name: Render Kubernetes manifests
+        run: |
+          kustomize build k8s >/tmp/nexus-k8s.yaml
+          kustomize build platform >/tmp/nexus-platform.yaml
+
+      - name: Check immutable image pins
+        shell: pwsh
+        run: |
+          $kustomization = Get-Content -Raw k8s/kustomization.yaml
+          if ($kustomization -match "newTag:\s*latest") {
+            throw "k8s/kustomization.yaml must not pin production images to latest."
+          }
+          if ($kustomization -notmatch "sha-[0-9a-f]{40}") {
+            throw "k8s/kustomization.yaml must pin production images to immutable sha-* tags."
+          }
+
+      - name: Check governance assets
+        shell: pwsh
+        run: |
+          $required = @(
+            ".github/CODEOWNERS",
+            ".github/branch-protection-main.json",
+            "scripts/apply-github-branch-protection.ps1",
+            "scripts/nexus-production-alerts.ps1",
+            "scripts/export-production-evidence.ps1",
+            "docs/lender-government-packet/README.md",
+            "docs/lender-government-packet/digital-asset-register.md",
+            "docs/lender-government-packet/architecture-diagram.md",
+            "docs/lender-government-packet/deployment-evidence.md",
+            "docs/lender-government-packet/secret-management-proof.md",
+            "docs/lender-government-packet/rollback-plan.md"
+          )
+          foreach ($path in $required) {
+            if (-not (Test-Path $path)) {
+              throw "Missing governance asset: $path"
+            }
+          }

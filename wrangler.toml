@@ -3,11 +3,18 @@ compatibility_date = "2024-09-23"
 main = "worker.js"
 
 [build]
-command = "npm --prefix frontend install && npm --prefix frontend run build"
+command = "npm run build:worker-assets"
 
 [assets]
 directory = "frontend/dist"
 binding = "ASSETS"
+
+[vars]
+BACKEND_ORIGIN = "http://nexuscloud-aks-api.canadacentral.cloudapp.azure.com"
+
+[[routes]]
+pattern = "nexuscloud.sh/*"
+zone_name = "nexuscloud.sh"
 
 # Optional custom domain template (disabled by default).
 # Uncomment and set your real hostname (e.g. app.example.com) to enable.

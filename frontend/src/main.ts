@@ -8,6 +8,12 @@ type Lead = {
   email: string
 }
 
+type MembershipStatus = {
+  status: string
+  email: string
+  current_period_end: string | null
+}
+
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 
 const app = document.querySelector<HTMLDivElement>('#app')
@@ -24,6 +30,17 @@ if (app) {
       <section>
         <h2>Live Leads</h2>
         <ul id="leads"></ul>
+      </section>
+      <section id="membership-section">
+        <h2>Paid Membership</h2>
+        <p>Unlock full lead generation features with a paid subscription.</p>
+        <form id="membership-form">
+          <label for="membership-email">Your email</label>
+          <input id="membership-email" type="email" placeholder="you@example.com" required />
+          <button type="submit" id="membership-btn">Upgrade to Pro</button>
+        </form>
+        <p id="membership-status"></p>
+        <p id="membership-error" style="color:red;display:none;"></p>
       </section>
     </main>
   `
@@ -64,4 +81,66 @@ const loadData = async () => {
   }
 }
 
+const checkMembershipStatus = async (email: string) => {
+  const statusEl = document.querySelector<HTMLParagraphElement>('#membership-status')
+  if (!statusEl) return
+  try {
+    const res = await fetch(`${apiBaseUrl}/api/membership/status?email=${encodeURIComponent(email)}`)
+    if (res.ok) {
+      const data = await res.json() as MembershipStatus
+      const until = data.current_period_end
+        ? ` (active until ${new Date(data.current_period_end).toLocaleDateString()})`
+        : ''
+      statusEl.textContent = `Membership status: ${data.status}${until}`
+    } else if (res.status === 404) {
+      statusEl.textContent = 'No membership found for this email.'
+    }
+  } catch {
+    statusEl.textContent = ''
+  }
+}
+
+const form = document.querySelector<HTMLFormElement>('#membership-form')
+form?.addEventListener('submit', async (e) => {
+  e.preventDefault()
+  const emailInput = document.querySelector<HTMLInputElement>('#membership-email')
+  const btn = document.querySelector<HTMLButtonElement>('#membership-btn')
+  const errorEl = document.querySelector<HTMLParagraphElement>('#membership-error')
+  const email = emailInput?.value.trim() ?? ''
+  if (!email) return
+
+  if (btn) btn.disabled = true
+  if (errorEl) errorEl.style.display = 'none'
+
+  try {
+    const res = await fetch(`${apiBaseUrl}/api/membership/checkout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+    const data = await res.json() as { checkout_url?: string; detail?: string }
+    if (!res.ok) {
+      throw new Error(data.detail ?? 'Checkout failed.')
+    }
+    if (data.checkout_url) {
+      window.location.href = data.checkout_url
+    }
+  } catch (err) {
+    if (errorEl) {
+      errorEl.textContent = err instanceof Error ? err.message : 'An error occurred.'
+      errorEl.style.display = 'block'
+    }
+    if (btn) btn.disabled = false
+  }
+})
+
+// Auto-check membership if email is in URL params (e.g., after redirect back).
+const urlEmail = new URLSearchParams(window.location.search).get('email')
+if (urlEmail) {
+  const emailInput = document.querySelector<HTMLInputElement>('#membership-email')
+  if (emailInput) emailInput.value = urlEmail
+  void checkMembershipStatus(urlEmail)
+}
+
 void loadData()
+

@@ -1,0 +1,17 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-production
+  labels:
+    app.kubernetes.io/name: letsencrypt-production
+    app.kubernetes.io/part-of: nexus-platform
+spec:
+  acme:
+    email: admin@nexuscloud.sh
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-production-account-key
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: nginx

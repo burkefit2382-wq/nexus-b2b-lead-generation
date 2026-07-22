@@ -1,0 +1,55 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nexus-api
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git
+    targetRevision: main
+    path: helm/nexus
+    helm:
+      values: |
+        replicaCount: 3
+        env:
+          PUBLIC_BASE_URL: "https://nexuscloud.sh"
+          TRACKING_ALLOWED_ORIGIN: "https://nexuscloud.sh"
+          ENVIRONMENT: "production"
+        backendAlias:
+          enabled: true
+          name: nexus-backend
+          port: 8000
+        ingress:
+          enabled: true
+          className: nginx
+          backendServiceName: nexus-backend
+          backendServicePort: 8000
+          hosts:
+            - host: nexuscloud.sh
+              paths:
+                - path: /hubspot
+                  pathType: Prefix
+                - path: /api
+                  pathType: Prefix
+                - path: /
+                  pathType: Prefix
+        secretEnv:
+          STRIPE_SECRET_KEY: "REPLACE_ME"
+          STRIPE_WEBHOOK_SECRET: "REPLACE_ME"
+          PRICE_ID: "REPLACE_ME"
+          DATABASE_URL: "REPLACE_ME"
+          RESEND_API_KEY: "REPLACE_ME"
+          RESEND_FROM: "NEXUS <noreply@mail.nexuscloud.sh>"
+          WAITLIST_NOTIFY_TO: "REPLACE_ME"
+          HUBSPOT_ACCESS_TOKEN: "REPLACE_ME"
+          HUBSPOT_PORTAL_ID: "246668830"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: nexus
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

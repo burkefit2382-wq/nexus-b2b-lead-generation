@@ -1,8 +1,60 @@
 # Deployment
 
-## Render
+## Azure Primary
 
-This repo is deployed as a Render web service.
+Azure is the primary production deployment path.
+
+The repository uses Azure Developer CLI (`azd`) to provision and deploy:
+
+- Azure Container Registry for remote Docker builds
+- Azure Container Apps environment and backend API container
+- Azure Static Web App for the frontend
+
+Key files:
+
+```text
+azure.yaml
+infra/main.bicep
+infra/resources.bicep
+infra/main.parameters.json
+.github/workflows/azure-dev.yml
+```
+
+Primary workflow:
+
+```text
+.github/workflows/azure-dev.yml
+```
+
+Required GitHub repository variables:
+
+```text
+AZURE_CLIENT_ID
+AZURE_TENANT_ID
+AZURE_SUBSCRIPTION_ID
+AZURE_ENV_NAME
+AZURE_LOCATION
+```
+
+Required GitHub repository secrets:
+
+```text
+STRIPE_SECRET_KEY
+STRIPE_WEBHOOK_SECRET
+PRICE_ID
+DATABASE_URL
+RESEND_API_KEY
+RESEND_FROM
+WAITLIST_NOTIFY_TO
+HUBSPOT_ACCESS_TOKEN
+HUBSPOT_PORTAL_ID
+```
+
+The Azure Bicep template applies these values as Container App runtime settings during provision. Sensitive values are stored as Container App secrets. It also sets `PUBLIC_BASE_URL` and `TRACKING_ALLOWED_ORIGIN` from the Azure Static Web App hostname. After provisioning, the GitHub workflow reads the real Container Apps `API_URI` output and sets `VITE_API_BASE_URL` before deployment.
+
+## Render Fallback
+
+Render remains available as a fallback web service, not the primary deployment path.
 
 Recommended settings:
 
@@ -20,43 +72,34 @@ LAUNCH_HOST=0.0.0.0
 PUBLIC_BASE_URL=https://nexuscloud.sh
 STRIPE_SECRET_KEY=...
 STRIPE_WEBHOOK_SECRET=...
+PRICE_ID=...
+DATABASE_URL=...
 RESEND_API_KEY=...
-RESEND_FROM=Nexus <sales@nexuscloud.sh>
+RESEND_FROM=NEXUS <noreply@mail.nexuscloud.sh>
 WAITLIST_NOTIFY_TO=...
 LLAMA_CHAT_ENDPOINT=...
 LLAMA_CHAT_MODEL=llama3
 LLAMA_CHAT_API_KEY=...
 HUBSPOT_ACCESS_TOKEN=...
-HUBSPOT_PORTAL_ID=...
+HUBSPOT_SERVICE_KEY=...
+HUBSPOT_PORTAL_ID=246668830
 ```
 
-### GitHub-triggered redeploys
+### Manual GitHub-triggered redeploy
 
-This repo includes `.github/workflows/render-backend-redeploy.yml` for branch-based promotion and manual promotion across environments:
+This repo includes `.github/workflows/deploy-backend.yml` for manual Render fallback deploys.
 
-- `develop` -> Development deploy hooks
-- `staging` -> Staging deploy hooks
-- `main` -> Production deploy hooks
-- `workflow_dispatch` -> manual deploy to `dev`, `staging`, or `prod`
-
-Configure these GitHub repository secrets before relying on the workflow:
+Configure these GitHub repository secrets before relying on the fallback workflow:
 
 ```text
-RENDER_DEV_LAUNCH_SITE_DEPLOY_HOOK=https://api.render.com/deploy/...
-RENDER_DEV_TRACKING_API_DEPLOY_HOOK=https://api.render.com/deploy/...
-RENDER_STAGING_LAUNCH_SITE_DEPLOY_HOOK=https://api.render.com/deploy/...
-RENDER_STAGING_TRACKING_API_DEPLOY_HOOK=https://api.render.com/deploy/...
-RENDER_PROD_LAUNCH_SITE_DEPLOY_HOOK=https://api.render.com/deploy/...
-RENDER_PROD_TRACKING_API_DEPLOY_HOOK=https://api.render.com/deploy/...
+RENDER_API_KEY
 ```
 
-Create one deploy hook per Render service per environment, then store each hook URL in its matching GitHub secret. The workflow always runs backend compile checks and pytest first, then triggers the environment hooks.
-
-For safer promotion, add GitHub environment protection rules on `Development`, `Staging`, and `Production` (for example required reviewers before Production deploys).
+The workflow defaults to Render service ID `srv-d91akdb7uimc73a2b8g0`. You can override it when manually starting the workflow, or set repository variable `RENDER_SERVICE_ID`. The workflow runs backend compile checks and pytest first, prints the selected fallback target when debug mode is on, then calls the Render Deploy API.
 
 ## HubSpot CRM
 
-Create a HubSpot private app token with contact read/write scopes. Set the token in Render using `HUBSPOT_ACCESS_TOKEN`. Nexus also accepts `HUBSPOT_SERVICE_KEY`, `HUBSPOT_PRIVATE_APP_TOKEN`, or `HUBSPOT_API_KEY` as fallback names, which helps when Render already has those environment variables from setup notes. Set `HUBSPOT_PORTAL_ID` for dashboard visibility.
+Create a HubSpot private app or service key and grant contact read/write scopes. Set the token in Azure using `HUBSPOT_ACCESS_TOKEN` or `HUBSPOT_SERVICE_KEY`; for the Render fallback, use the same names. Nexus also accepts `HUBSPOT_PRIVATE_APP_TOKEN` or `HUBSPOT_API_KEY` as fallback names, which helps when a host already has those environment variables from setup notes. Set `HUBSPOT_PORTAL_ID=246668830` for dashboard visibility and the HubSpot embed script.
 
 Nexus sends the token only from the server using a Bearer Authorization header. Contact export is active through `/api/hubspot-export`; inbound HubSpot webhooks require a separate webhook route before they can receive HubSpot events.
 

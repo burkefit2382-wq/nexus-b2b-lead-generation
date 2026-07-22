@@ -1,0 +1,209 @@
+name: Build AKS images and update GitOps
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - ".github/workflows/nexus-acr-gitops.yml"
+
+permissions:
+  contents: write
+  id-token: write
+  pull-requests: write
+
+concurrency:
+  group: nexus-acr-gitops-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-push-and-pin:
+    name: Build, push, and pin AKS images
+    runs-on: ubuntu-latest
+    environment: Production
+    if: github.actor != 'github-actions[bot]'
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID || '4bfb6ef1-5cd1-45c1-af2d-1ac9f8c33bd2' }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID || '2a9e4c0a-7d39-4898-945c-43628ebb4f54' }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID || 'ef5d53d0-d68e-406e-ad7c-4098880bab4f' }}
+      ACR_NAME: ${{ vars.ACR_NAME || 'crjqmupr2v7hmzm' }}
+      ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER || 'crjqmupr2v7hmzm.azurecr.io' }}
+      IMAGE_TAG: sha-${{ github.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require main ref for production image promotion
+        run: |
+          if [ "$GITHUB_REF_NAME" != "main" ]; then
+            echo "::error::Production image promotion must run from main so GitOps image pins match reviewed source."
+            echo "Selected ref: $GITHUB_REF_NAME"
+            exit 1
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements-dev.txt
+
+      - name: Run backend tests
+        run: PYTHONPATH=. python -m pytest backend/tests -q
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Log in to Azure Container Registry
+        run: az acr login --name "$ACR_NAME"
+
+      - name: Build and push API image
+        run: |
+          docker build \
+            --file backend/Dockerfile \
+            --tag "$ACR_LOGIN_SERVER/nexus-api:$IMAGE_TAG" \
+            --tag "$ACR_LOGIN_SERVER/nexus-api:latest" \
+            backend
+
+      - name: Smoke test API image GOV readiness endpoints
+        run: |
+          set -euo pipefail
+
+          cleanup() {
+            docker logs nexus-api-smoke || true
+            docker rm -f nexus-api-smoke || true
+          }
+          trap cleanup EXIT
+
+          docker run \
+            --detach \
+            --name nexus-api-smoke \
+            --publish 4173:4173 \
+            --env ENVIRONMENT=development \
+            --env LAUNCH_HOST=0.0.0.0 \
+            --env PORT=4173 \
+            "$ACR_LOGIN_SERVER/nexus-api:$IMAGE_TAG"
+
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:4173/health >/tmp/nexus-health.json; then
+              break
+            fi
+            sleep 2
+          done
+
+          curl --fail --silent --show-error http://127.0.0.1:4173/health | tee /tmp/nexus-health.json
+          curl --fail --silent --show-error http://127.0.0.1:4173/ready | tee /tmp/nexus-ready.json
+          curl --fail --silent --show-error http://127.0.0.1:4173/metrics | tee /tmp/nexus-metrics.prom
+          grep --fixed-strings "nexus_service_up" /tmp/nexus-metrics.prom
+
+      - name: Scan API image for critical vulnerabilities
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: ${{ env.ACR_LOGIN_SERVER }}/nexus-api:${{ env.IMAGE_TAG }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Push API image
+        run: |
+          docker push "$ACR_LOGIN_SERVER/nexus-api:$IMAGE_TAG"
+          docker push "$ACR_LOGIN_SERVER/nexus-api:latest"
+
+      - name: Build worker image
+        run: |
+          docker build \
+            --file backend/Dockerfile.worker \
+            --tag "$ACR_LOGIN_SERVER/nexus-worker:$IMAGE_TAG" \
+            --tag "$ACR_LOGIN_SERVER/nexus-worker:latest" \
+            backend
+
+      - name: Scan worker image for critical vulnerabilities
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: ${{ env.ACR_LOGIN_SERVER }}/nexus-worker:${{ env.IMAGE_TAG }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Push worker image
+        run: |
+          docker push "$ACR_LOGIN_SERVER/nexus-worker:$IMAGE_TAG"
+          docker push "$ACR_LOGIN_SERVER/nexus-worker:latest"
+
+      - name: Install kustomize
+        run: |
+          curl --fail --silent --show-error --location \
+            --output kustomize.tar.gz \
+            https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.7.1/kustomize_v5.7.1_linux_amd64.tar.gz
+          tar -xzf kustomize.tar.gz
+          sudo install kustomize /usr/local/bin/kustomize
+
+      - name: Pin image tags in GitOps manifests
+        run: |
+          cd k8s
+          kustomize edit set image "$ACR_LOGIN_SERVER/nexus-api=$ACR_LOGIN_SERVER/nexus-api:$IMAGE_TAG"
+          kustomize edit set image "$ACR_LOGIN_SERVER/nexus-worker=$ACR_LOGIN_SERVER/nexus-worker:$IMAGE_TAG"
+          cd ..
+          kustomize build k8s >/tmp/nexus-rendered.yaml
+
+      - name: Create GitOps image promotion pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- k8s/kustomization.yaml; then
+            echo "No GitOps image change to commit."
+            exit 0
+          fi
+
+          promotion_branch="gitops/promote-${IMAGE_TAG}"
+          git checkout -B "$promotion_branch"
+          git add k8s/kustomization.yaml
+          git commit -m "chore(gitops): pin Nexus images to $IMAGE_TAG [skip ci]"
+          git push --force-with-lease origin "$promotion_branch"
+
+          pr_body="$(cat <<EOF
+          Promotes the GOV-ready Nexus images built from \`${GITHUB_SHA}\`.
+
+          Image tags:
+          - \`${ACR_LOGIN_SERVER}/nexus-api:${IMAGE_TAG}\`
+          - \`${ACR_LOGIN_SERVER}/nexus-worker:${IMAGE_TAG}\`
+
+          Validation completed in this workflow:
+          - backend tests
+          - API container smoke test for \`/health\`, \`/ready\`, and \`/metrics\`
+          - critical vulnerability scan
+          - Kustomize render check
+
+          Merge this PR to let ArgoCD reconcile \`nexus-k8s\` from \`main\`.
+          EOF
+          )"
+
+          if gh pr view "$promotion_branch" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh pr edit "$promotion_branch" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "chore(gitops): promote Nexus images to $IMAGE_TAG" \
+              --body "$pr_body"
+          else
+            gh pr create \
+              --repo "$GITHUB_REPOSITORY" \
+              --base main \
+              --head "$promotion_branch" \
+              --title "chore(gitops): promote Nexus images to $IMAGE_TAG" \
+              --body "$pr_body"
+          fi

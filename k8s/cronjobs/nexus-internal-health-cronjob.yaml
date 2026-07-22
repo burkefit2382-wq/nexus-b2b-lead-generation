@@ -1,0 +1,69 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nexus-internal-health
+  namespace: nexus
+  labels:
+    app.kubernetes.io/name: nexus-internal-health
+    app.kubernetes.io/part-of: nexus-lead-intelligence
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 6
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 60
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: nexus-internal-health
+            app.kubernetes.io/part-of: nexus-lead-intelligence
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: healthcheck
+              image: crjqmupr2v7hmzm.azurecr.io/nexus-api:latest
+              imagePullPolicy: IfNotPresent
+              command:
+                - python
+                - -c
+              args:
+                - |
+                  import json
+                  import sys
+                  import urllib.request
+
+                  checks = [
+                      ("service-health", "http://nexus-backend:8000/health", "ok"),
+                      ("service-ready", "http://nexus-backend:8000/ready", "ready"),
+                      ("service-metrics", "http://nexus-backend:8000/metrics", "nexus_service_up"),
+                      ("service-api-health", "http://nexus-backend:8000/api/health", "healthy"),
+                  ]
+
+                  failures = []
+                  for name, url, expected in checks:
+                      try:
+                          with urllib.request.urlopen(url, timeout=10) as response:
+                              body = response.read().decode("utf-8", errors="replace")
+                              status = response.status
+                          ok = status == 200 and expected in body
+                      except Exception as exc:
+                          failures.append({"name": name, "url": url, "error": str(exc)})
+                          continue
+
+                      print(json.dumps({"name": name, "url": url, "status": status, "ok": ok}))
+                      if not ok:
+                          failures.append({"name": name, "url": url, "status": status})
+
+                  if failures:
+                      print(json.dumps({"failures": failures}), file=sys.stderr)
+                      sys.exit(1)
+              resources:
+                requests:
+                  cpu: 25m
+                  memory: 64Mi
+                limits:
+                  cpu: 100m
+                  memory: 128Mi

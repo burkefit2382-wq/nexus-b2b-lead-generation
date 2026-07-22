@@ -49,6 +49,7 @@ LEAD_PACKAGE_REQUESTS_PATH = DATA_DIR / "lead_package_requests.jsonl"
 FULFILLMENT_EVENTS_PATH = DATA_DIR / "fulfillment_events.jsonl"
 OSINT_REPORTS_PATH = DATA_DIR / "osint_report_requests.jsonl"
 HUBSPOT_EXPORTS_PATH = DATA_DIR / "hubspot_exports.jsonl"
+HUBSPOT_DEFAULT_PORTAL_ID = "246668830"
 SCRAPER_DIR = DATA_DIR / "scrapers"
 SCRAPER_SUMMARY_PATH = SCRAPER_DIR / "latest_summary.json"
 SCRAPER_JSONL_PATH = SCRAPER_DIR / "tampa_bay_real_estate_leads.jsonl"
@@ -339,12 +340,20 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self) -> None:
-        if self.path.rstrip("/") == "/healthz":
-            self.send_json({"ok": True, "service": "leadgen-launch-site"}, HTTPStatus.OK)
+        if self.path.rstrip("/") in {"/health", "/healthz"}:
+            self.send_json({"ok": True, "status": "ok", "service": "leadgen-launch-site"}, HTTPStatus.OK)
             return
 
         parsed = urllib.parse.urlparse(self.path)
         route = parsed.path.rstrip("/")
+        if route == "/ready":
+            self.handle_ready()
+            return
+
+        if route == "/metrics":
+            self.handle_metrics()
+            return
+
         if route == "/api/revenue-status":
             self.handle_revenue_status()
             return
@@ -645,11 +654,21 @@ class LaunchHandler(SimpleHTTPRequestHandler):
                 "ok": True,
                 "status": "healthy",
                 "service": "leadgen-launch-site",
-                "healthz": "/healthz",
+                "health": "/health",
+                "ready": "/ready",
+                "metrics": "/metrics",
                 "checkedAt": datetime.now(timezone.utc).isoformat(),
             },
             HTTPStatus.OK,
         )
+
+    def handle_ready(self) -> None:
+        payload = self.readiness_payload()
+        status = HTTPStatus.OK if payload["ready"] else HTTPStatus.SERVICE_UNAVAILABLE
+        self.send_json(payload, status)
+
+    def handle_metrics(self) -> None:
+        self.send_text(self.prometheus_metrics(), HTTPStatus.OK, "text/plain; version=0.0.4; charset=utf-8")
 
     def handle_scraper_queue(self) -> None:
         summary = self.load_json_file(SCRAPER_SUMMARY_PATH)
@@ -933,12 +952,17 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         try:
             public_base_url = self.public_base_url()
             self.configure_stripe(stripe, stripe_secret)
-            resolved_price_id = self.resolve_stripe_price_id(stripe, price_id)
-            line_items = [{"price": resolved_price_id, "quantity": 1}]
+            line_items = [self.checkout_line_item(stripe, price_id, catalog_item)]
             setup_price_id = catalog_item.get("setupPriceId")
             if setup_price_id:
-                resolved_setup_price_id = self.resolve_stripe_price_id(stripe, str(setup_price_id))
-                line_items.append({"price": resolved_setup_price_id, "quantity": 1})
+                setup_key = str(setup_price_id)
+                setup_item = STRIPE_CATALOG.get(setup_key) or {
+                    "name": f"{catalog_item['name']} setup",
+                    "price": "$1,500",
+                    "mode": "payment",
+                    "category": str(catalog_item["category"]),
+                }
+                line_items.append(self.checkout_line_item(stripe, setup_key, setup_item))
 
             session = stripe.checkout.Session.create(
                 mode=catalog_item["mode"],
@@ -975,6 +999,42 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         raise LookupError(
             f"Stripe price is not configured for {price_key}. Create a Stripe Price with this lookup key or update the catalog with the real price ID."
         )
+
+    def checkout_line_item(self, stripe: Any, price_key: str, catalog_item: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return {"price": self.resolve_stripe_price_id(stripe, price_key), "quantity": 1}
+        except LookupError:
+            return {"price_data": self.catalog_price_data(price_key, catalog_item), "quantity": 1}
+
+    def catalog_price_data(self, price_key: str, catalog_item: dict[str, Any]) -> dict[str, Any]:
+        mode = str(catalog_item.get("mode") or "payment")
+        price_data: dict[str, Any] = {
+            "currency": "usd",
+            "unit_amount": self.catalog_unit_amount(catalog_item, mode),
+            "product_data": {
+                "name": str(catalog_item["name"]),
+                "metadata": {
+                    "nexus_price_id": price_key,
+                    "nexus_catalog_category": str(catalog_item["category"]),
+                },
+            },
+        }
+        if mode == "subscription":
+            price_data["recurring"] = {"interval": "month"}
+        return price_data
+
+    def catalog_unit_amount(self, catalog_item: dict[str, Any], mode: str) -> int:
+        price_text = str(catalog_item.get("price") or "")
+        matches = re.findall(r"\$([\d,]+(?:\.\d{1,2})?)(/mo)?", price_text)
+        if not matches:
+            raise LookupError(f"Catalog item {catalog_item.get('name', 'unknown')} is missing a usable price.")
+
+        selected = matches[0]
+        if mode == "subscription":
+            selected = next((match for match in reversed(matches) if match[1] == "/mo"), matches[-1])
+
+        amount = float(selected[0].replace(",", ""))
+        return int(round(amount * 100))
 
     def handle_stripe_webhook(self) -> None:
         webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET")
@@ -1245,11 +1305,13 @@ class LaunchHandler(SimpleHTTPRequestHandler):
 
     def hubspot_status(self) -> dict[str, Any]:
         token_name, token = self.hubspot_token_source()
-        portal_id = os.environ.get("HUBSPOT_PORTAL_ID", "").strip()
+        portal_id = self.hubspot_portal_id()
         return {
             "configured": bool(token),
             "configuredBy": token_name if token else "",
             "portalIdConfigured": bool(portal_id),
+            "portalId": portal_id,
+            "embedScriptUrl": f"https://js-na2.hs-scripts.com/{portal_id}.js" if portal_id else "",
             "missing": [] if token else self.hubspot_missing_token_names(),
             "endpoint": "https://api.hubapi.com/crm/v3/objects/contacts",
         }
@@ -1266,6 +1328,9 @@ class LaunchHandler(SimpleHTTPRequestHandler):
 
     def hubspot_missing_token_names(self) -> list[str]:
         return ["HUBSPOT_ACCESS_TOKEN", "HUBSPOT_SERVICE_KEY", "HUBSPOT_PRIVATE_APP_TOKEN", "HUBSPOT_API_KEY"]
+
+    def hubspot_portal_id(self) -> str:
+        return os.environ.get("HUBSPOT_PORTAL_ID", "").strip() or HUBSPOT_DEFAULT_PORTAL_ID
 
     def hubspot_contact_properties(self, lead: dict[str, Any]) -> dict[str, str]:
         email = str(lead.get("email") or lead.get("enriched_email") or "").strip().lower()
@@ -1370,6 +1435,15 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def send_text(self, payload: str, status: HTTPStatus, content_type: str) -> None:
+        body = payload.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
@@ -1997,6 +2071,73 @@ class LaunchHandler(SimpleHTTPRequestHandler):
                 return sum(1 for _ in handle)
         except OSError:
             return 0
+
+    def readiness_payload(self) -> dict[str, Any]:
+        environment = os.environ.get("ENVIRONMENT", "development").strip().lower()
+        data_dir_ready = self.ensure_data_dir_ready()
+        required_config = {
+            "databaseUrlConfigured": bool(os.environ.get("DATABASE_URL", "").strip()),
+            "stripeConfigured": self.stripe_status()["configured"],
+            "resendConfigured": self.resend_status()["configured"],
+            "hubspotConfigured": self.hubspot_status()["configured"],
+        }
+        production = environment == "production"
+        config_ready = all(required_config.values()) if production else True
+        ready = data_dir_ready and config_ready
+        return {
+            "ok": ready,
+            "ready": ready,
+            "status": "ready" if ready else "not_ready",
+            "service": "leadgen-launch-site",
+            "environment": environment,
+            "checkedAt": datetime.now(timezone.utc).isoformat(),
+            "checks": {
+                "dataDirWritable": data_dir_ready,
+                "requiredConfiguration": required_config,
+                "productionConfigurationEnforced": production,
+            },
+        }
+
+    def ensure_data_dir_ready(self) -> bool:
+        try:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            SCRAPER_DIR.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return False
+        return os.access(DATA_DIR, os.W_OK) and os.access(SCRAPER_DIR, os.W_OK)
+
+    def prometheus_metrics(self) -> str:
+        summary = self.load_json_file(SCRAPER_SUMMARY_PATH)
+        readiness = self.readiness_payload()
+        errors = summary.get("errors", [])
+        if not isinstance(errors, list):
+            errors = []
+        quality = summary.get("quality") if isinstance(summary.get("quality"), dict) else {}
+        last_run = self.parse_datetime(str(summary.get("last_run_at") or ""))
+        last_run_timestamp = int(last_run.timestamp()) if last_run else 0
+        lines = [
+            "# HELP nexus_service_up Whether the Nexus launch server process is serving requests.",
+            "# TYPE nexus_service_up gauge",
+            'nexus_service_up{service="leadgen-launch-site"} 1',
+            "# HELP nexus_service_ready Whether the Nexus launch server readiness check is passing.",
+            "# TYPE nexus_service_ready gauge",
+            f'nexus_service_ready{{service="leadgen-launch-site"}} {1 if readiness["ready"] else 0}',
+            "# HELP nexus_scraper_total_records Total public-source OSINT records in the latest worker summary.",
+            "# TYPE nexus_scraper_total_records gauge",
+            f'nexus_scraper_total_records {int(summary.get("total_records") or self.count_lines(SCRAPER_JSONL_PATH) or 0)}',
+            "# HELP nexus_scraper_new_records New public-source OSINT records collected in the latest run.",
+            "# TYPE nexus_scraper_new_records gauge",
+            f'nexus_scraper_new_records {int(summary.get("new_records") or 0)}',
+            "# HELP nexus_scraper_failed_runs Failed source runs in the latest worker summary.",
+            "# TYPE nexus_scraper_failed_runs gauge",
+            f"nexus_scraper_failed_runs {len(errors)}",
+            "# HELP nexus_scraper_last_run_timestamp_seconds Unix timestamp of the latest OSINT worker run.",
+            "# TYPE nexus_scraper_last_run_timestamp_seconds gauge",
+            f"nexus_scraper_last_run_timestamp_seconds {last_run_timestamp}",
+        ]
+        for status in ("approved_for_package", "review_recommended", "hold_for_manual_review"):
+            lines.append(f'nexus_scraper_quality_records{{status="{status}"}} {int(quality.get(status) or 0)}')
+        return "\n".join(lines) + "\n"
 
     def parse_datetime(self, value: str) -> datetime | None:
         if not value:

@@ -42,3 +42,29 @@ def jwt_configured() -> bool:
 
 
 DATABASE_URL = database_url()
+
+STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "").strip()
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "").strip()
+STRIPE_API_VERSION = os.environ.get("STRIPE_API_VERSION", "2024-06-20").strip()
+PRICE_ID = os.environ.get("PRICE_ID", "").strip()
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://localhost:4173").strip()
+
+
+def stripe_secret_key() -> str:
+    return os.environ.get("STRIPE_SECRET_KEY", "").strip()
+
+
+def stripe_webhook_secret() -> str:
+    return os.environ.get("STRIPE_WEBHOOK_SECRET", "").strip()
+
+
+def price_id() -> str:
+    return os.environ.get("PRICE_ID", "").strip()
+
+
+def public_base_url() -> str:
+    return os.environ.get("PUBLIC_BASE_URL", "http://localhost:4173").strip()
+
+
+def stripe_configured() -> bool:
+    return bool(stripe_secret_key() and stripe_webhook_secret() and price_id())

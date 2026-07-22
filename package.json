@@ -8,16 +8,22 @@
     "dev:frontend": "npm --prefix frontend run dev",
     "dev:backend": "python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload",
     "build": "node scripts/install-python-backend.js",
-    "test": "PYTHONPATH=. python -m pytest backend/tests",
+    "build:worker-assets": "npm --prefix frontend install && npm --prefix frontend run build && node scripts/prepare-worker-assets.js",
+    "test": "python -m pytest backend/tests",
     "wrangler:login": "wrangler login",
     "cf:deploy": "wrangler deploy",
-    "launch:deploy": "npm run build && azd up --no-prompt && npm run cf:deploy"
+    "launch:deploy": "npm run build && azd up --no-prompt"
   },
   "devDependencies": {
     "wrangler": "^4.104.0"
   },
   "dependencies": {
-    "@hubspot/cli": "^8.9.1",
-    "@neondatabase/serverless": "^1.1.0"
+    "@hubspot/cli": "^7.0.2",
+    "@neondatabase/serverless": "^1.1.0",
+    "axios": "^1.18.1",
+    "qs": "^6.15.3",
+    "send": "^1.2.1",
+    "tmp": "^0.2.7",
+    "uuid": "^14.0.1"
   }
 }

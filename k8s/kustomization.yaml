@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: nexus
+resources:
+- namespaces/nexus-namespace.yaml
+- deployments/nexus-api-deployment.yaml
+- deployments/nexus-worker-deployment.yaml
+- cronjobs/nexus-scraper-quality-cronjob.yaml
+- cronjobs/nexus-internal-health-cronjob.yaml
+- services/nexus-api-service.yaml
+- services/nexus-backend-service.yaml
+- ingress/nexus-ingress.yaml
+- policies/nexus-network-policies.yaml
+- policies/nexus-poddisruptionbudgets.yaml
+- policies/nexus-resource-controls.yaml
+
+images:
+- name: crjqmupr2v7hmzm.azurecr.io/nexus-api
+  newName: crjqmupr2v7hmzm.azurecr.io/nexus-api
+  newTag: sha-42b7e0f2ede552942a86afd30ec361920b40521c
+- name: crjqmupr2v7hmzm.azurecr.io/nexus-worker
+  newName: crjqmupr2v7hmzm.azurecr.io/nexus-worker
+  newTag: sha-42b7e0f2ede552942a86afd30ec361920b40521c

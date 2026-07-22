@@ -1,0 +1,1781 @@
+{
+    "apiVersion": "v1",
+    "items": [
+        {
+            "apiVersion": "argoproj.io/v1alpha1",
+            "kind": "Application",
+            "metadata": {
+                "annotations": {
+                    "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"argoproj.io/v1alpha1\",\"kind\":\"Application\",\"metadata\":{\"annotations\":{},\"labels\":{\"app.kubernetes.io/name\":\"cert-manager\",\"app.kubernetes.io/part-of\":\"nexus-platform\"},\"name\":\"cert-manager\",\"namespace\":\"argocd\"},\"spec\":{\"destination\":{\"namespace\":\"cert-manager\",\"server\":\"https://kubernetes.default.svc\"},\"ignoreDifferences\":[{\"group\":\"admissionregistration.k8s.io\",\"jsonPointers\":[\"/webhooks\"],\"kind\":\"MutatingWebhookConfiguration\",\"name\":\"cert-manager-webhook\"},{\"group\":\"admissionregistration.k8s.io\",\"jsonPointers\":[\"/webhooks\"],\"kind\":\"ValidatingWebhookConfiguration\",\"name\":\"cert-manager-webhook\"}],\"project\":\"default\",\"source\":{\"chart\":\"cert-manager\",\"helm\":{\"releaseName\":\"cert-manager\",\"values\":\"crds:\\n  enabled: true\\n\"},\"repoURL\":\"https://charts.jetstack.io\",\"targetRevision\":\"v1.21.0\"},\"syncPolicy\":{\"automated\":{\"prune\":true,\"selfHeal\":true},\"syncOptions\":[\"CreateNamespace=true\",\"ServerSideApply=true\",\"RespectIgnoreDifferences=true\"]}}}\n"
+                },
+                "creationTimestamp": "2026-07-18T23:59:08Z",
+                "generation": 102,
+                "labels": {
+                    "app.kubernetes.io/name": "cert-manager",
+                    "app.kubernetes.io/part-of": "nexus-platform"
+                },
+                "name": "cert-manager",
+                "namespace": "argocd",
+                "resourceVersion": "1912711",
+                "uid": "116b1bf6-b5f1-438b-8ff6-3c7fbca95370"
+            },
+            "spec": {
+                "destination": {
+                    "namespace": "cert-manager",
+                    "server": "https://kubernetes.default.svc"
+                },
+                "ignoreDifferences": [
+                    {
+                        "group": "admissionregistration.k8s.io",
+                        "jsonPointers": [
+                            "/webhooks"
+                        ],
+                        "kind": "MutatingWebhookConfiguration",
+                        "name": "cert-manager-webhook"
+                    },
+                    {
+                        "group": "admissionregistration.k8s.io",
+                        "jsonPointers": [
+                            "/webhooks"
+                        ],
+                        "kind": "ValidatingWebhookConfiguration",
+                        "name": "cert-manager-webhook"
+                    }
+                ],
+                "project": "default",
+                "source": {
+                    "chart": "cert-manager",
+                    "helm": {
+                        "releaseName": "cert-manager",
+                        "values": "crds:\n  enabled: true\n"
+                    },
+                    "repoURL": "https://charts.jetstack.io",
+                    "targetRevision": "v1.21.0"
+                },
+                "syncPolicy": {
+                    "automated": {
+                        "prune": true,
+                        "selfHeal": true
+                    },
+                    "syncOptions": [
+                        "CreateNamespace=true",
+                        "ServerSideApply=true",
+                        "RespectIgnoreDifferences=true"
+                    ]
+                }
+            },
+            "status": {
+                "controllerNamespace": "argocd",
+                "health": {
+                    "lastTransitionTime": "2026-07-19T02:28:47Z",
+                    "status": "Healthy"
+                },
+                "history": [
+                    {
+                        "deployStartedAt": "2026-07-18T23:59:09Z",
+                        "deployedAt": "2026-07-18T23:59:23Z",
+                        "id": 0,
+                        "initiatedBy": {
+                            "automated": true
+                        },
+                        "revision": "v1.21.0",
+                        "source": {
+                            "chart": "cert-manager",
+                            "helm": {
+                                "releaseName": "cert-manager",
+                                "values": "crds:\n  enabled: true\n"
+                            },
+                            "repoURL": "https://charts.jetstack.io",
+                            "targetRevision": "v1.21.0"
+                        }
+                    }
+                ],
+                "operationState": {
+                    "finishedAt": "2026-07-19T00:13:25Z",
+                    "message": "successfully synced (all tasks run)",
+                    "operation": {
+                        "initiatedBy": {
+                            "automated": true
+                        },
+                        "retry": {
+                            "limit": 5
+                        },
+                        "sync": {
+                            "autoHealAttemptsCount": 8,
+                            "prune": true,
+                            "resources": [
+                                {
+                                    "group": "admissionregistration.k8s.io",
+                                    "kind": "ValidatingWebhookConfiguration",
+                                    "name": "cert-manager-webhook"
+                                }
+                            ],
+                            "revision": "v1.21.0",
+                            "source": {
+                                "chart": "cert-manager",
+                                "helm": {
+                                    "releaseName": "cert-manager",
+                                    "values": "crds:\n  enabled: true\n"
+                                },
+                                "repoURL": "https://charts.jetstack.io",
+                                "targetRevision": "v1.21.0"
+                            },
+                            "syncOptions": [
+                                "CreateNamespace=true",
+                                "ServerSideApply=true",
+                                "RespectIgnoreDifferences=true"
+                            ]
+                        }
+                    },
+                    "phase": "Succeeded",
+                    "startedAt": "2026-07-19T00:13:25Z",
+                    "syncResult": {
+                        "resources": [
+                            {
+                                "group": "admissionregistration.k8s.io",
+                                "hookPhase": "Running",
+                                "kind": "ValidatingWebhookConfiguration",
+                                "message": "validatingwebhookconfiguration.admissionregistration.k8s.io/cert-manager-webhook serverside-applied",
+                                "name": "cert-manager-webhook",
+                                "namespace": "cert-manager",
+                                "status": "Synced",
+                                "syncPhase": "Sync",
+                                "version": "v1"
+                            }
+                        ],
+                        "revision": "v1.21.0",
+                        "source": {
+                            "chart": "cert-manager",
+                            "helm": {
+                                "releaseName": "cert-manager",
+                                "values": "crds:\n  enabled: true\n"
+                            },
+                            "repoURL": "https://charts.jetstack.io",
+                            "targetRevision": "v1.21.0"
+                        }
+                    }
+                },
+                "reconciledAt": "2026-07-19T02:34:26Z",
+                "resourceHealthSource": "appTree",
+                "resources": [
+                    {
+                        "kind": "Service",
+                        "name": "cert-manager",
+                        "namespace": "cert-manager",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "kind": "Service",
+                        "name": "cert-manager-cainjector",
+                        "namespace": "cert-manager",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "kind": "Service",
+                        "name": "cert-manager-webhook",
+                        "namespace": "cert-manager",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "kind": "ServiceAccount",
+                        "name": "cert-manager",
+                        "namespace": "cert-manager",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "kind": "ServiceAccount",
+                        "name": "cert-manager-cainjector",
+                        "namespace": "cert-manager",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "kind": "ServiceAccount",
+                        "name": "cert-manager-webhook",
+                        "namespace": "cert-manager",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "admissionregistration.k8s.io",
+                        "kind": "MutatingWebhookConfiguration",
+                        "name": "cert-manager-webhook",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "admissionregistration.k8s.io",
+                        "kind": "ValidatingWebhookConfiguration",
+                        "name": "cert-manager-webhook",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "certificaterequests.cert-manager.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "certificates.cert-manager.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "challenges.acme.cert-manager.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "clusterissuers.cert-manager.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "issuers.cert-manager.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "orders.acme.cert-manager.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apps",
+                        "kind": "Deployment",
+                        "name": "cert-manager",
+                        "namespace": "cert-manager",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apps",
+                        "kind": "Deployment",
+                        "name": "cert-manager-cainjector",
+                        "namespace": "cert-manager",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apps",
+                        "kind": "Deployment",
+                        "name": "cert-manager-webhook",
+                        "namespace": "cert-manager",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRole",
+                        "name": "cert-manager-cainjector",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRole",
+                        "name": "cert-manager-cluster-view",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRole",
+                        "name": "cert-manager-controller-approve:cert-manager-io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRole",
+                        "name": "cert-manager-controller-certificates",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRole",
+                        "name": "cert-manager-controller-certificatesigningrequests",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRole",
+                        "name": "cert-manager-controller-challenges",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRole",
+                        "name": "cert-manager-controller-clusterissuers",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRole",
+                        "name": "cert-manager-controller-ingress-shim",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRole",
+                        "name": "cert-manager-controller-issuers",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRole",
+                        "name": "cert-manager-controller-orders",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRole",
+                        "name": "cert-manager-edit",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRole",
+                        "name": "cert-manager-view",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRole",
+                        "name": "cert-manager-webhook:subjectaccessreviews",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRoleBinding",
+                        "name": "cert-manager-cainjector",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRoleBinding",
+                        "name": "cert-manager-controller-approve:cert-manager-io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRoleBinding",
+                        "name": "cert-manager-controller-certificates",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRoleBinding",
+                        "name": "cert-manager-controller-certificatesigningrequests",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRoleBinding",
+                        "name": "cert-manager-controller-challenges",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRoleBinding",
+                        "name": "cert-manager-controller-clusterissuers",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRoleBinding",
+                        "name": "cert-manager-controller-ingress-shim",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRoleBinding",
+                        "name": "cert-manager-controller-issuers",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRoleBinding",
+                        "name": "cert-manager-controller-orders",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRoleBinding",
+                        "name": "cert-manager-webhook:subjectaccessreviews",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "Role",
+                        "name": "cert-manager-webhook:dynamic-serving",
+                        "namespace": "cert-manager",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "Role",
+                        "name": "cert-manager-cainjector:leaderelection",
+                        "namespace": "kube-system",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "Role",
+                        "name": "cert-manager:leaderelection",
+                        "namespace": "kube-system",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "RoleBinding",
+                        "name": "cert-manager-webhook:dynamic-serving",
+                        "namespace": "cert-manager",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "RoleBinding",
+                        "name": "cert-manager-cainjector:leaderelection",
+                        "namespace": "kube-system",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "RoleBinding",
+                        "name": "cert-manager:leaderelection",
+                        "namespace": "kube-system",
+                        "status": "Synced",
+                        "version": "v1"
+                    }
+                ],
+                "sourceHydrator": {},
+                "sourceType": "Helm",
+                "summary": {
+                    "images": [
+                        "quay.io/jetstack/cert-manager-cainjector:v1.21.0",
+                        "quay.io/jetstack/cert-manager-controller:v1.21.0",
+                        "quay.io/jetstack/cert-manager-webhook:v1.21.0"
+                    ]
+                },
+                "sync": {
+                    "comparedTo": {
+                        "destination": {
+                            "namespace": "cert-manager",
+                            "server": "https://kubernetes.default.svc"
+                        },
+                        "ignoreDifferences": [
+                            {
+                                "group": "admissionregistration.k8s.io",
+                                "jsonPointers": [
+                                    "/webhooks"
+                                ],
+                                "kind": "MutatingWebhookConfiguration",
+                                "name": "cert-manager-webhook"
+                            },
+                            {
+                                "group": "admissionregistration.k8s.io",
+                                "jsonPointers": [
+                                    "/webhooks"
+                                ],
+                                "kind": "ValidatingWebhookConfiguration",
+                                "name": "cert-manager-webhook"
+                            }
+                        ],
+                        "source": {
+                            "chart": "cert-manager",
+                            "helm": {
+                                "releaseName": "cert-manager",
+                                "values": "crds:\n  enabled: true\n"
+                            },
+                            "repoURL": "https://charts.jetstack.io",
+                            "targetRevision": "v1.21.0"
+                        }
+                    },
+                    "revision": "v1.21.0",
+                    "status": "Synced"
+                }
+            }
+        },
+        {
+            "apiVersion": "argoproj.io/v1alpha1",
+            "kind": "Application",
+            "metadata": {
+                "annotations": {
+                    "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"argoproj.io/v1alpha1\",\"kind\":\"Application\",\"metadata\":{\"annotations\":{},\"labels\":{\"app.kubernetes.io/name\":\"external-secrets\",\"app.kubernetes.io/part-of\":\"nexus-platform\"},\"name\":\"external-secrets\",\"namespace\":\"argocd\"},\"spec\":{\"destination\":{\"namespace\":\"external-secrets\",\"server\":\"https://kubernetes.default.svc\"},\"project\":\"default\",\"source\":{\"chart\":\"external-secrets\",\"helm\":{\"releaseName\":\"external-secrets\"},\"repoURL\":\"https://charts.external-secrets.io\",\"targetRevision\":\"2.8.0\"},\"syncPolicy\":{\"automated\":{\"prune\":true,\"selfHeal\":true},\"syncOptions\":[\"CreateNamespace=true\",\"ServerSideApply=true\"]}}}\n"
+                },
+                "creationTimestamp": "2026-07-18T23:59:08Z",
+                "generation": 49,
+                "labels": {
+                    "app.kubernetes.io/name": "external-secrets",
+                    "app.kubernetes.io/part-of": "nexus-platform"
+                },
+                "name": "external-secrets",
+                "namespace": "argocd",
+                "resourceVersion": "1912303",
+                "uid": "742921c6-6c48-47e3-96ac-ac12c69ec66d"
+            },
+            "spec": {
+                "destination": {
+                    "namespace": "external-secrets",
+                    "server": "https://kubernetes.default.svc"
+                },
+                "project": "default",
+                "source": {
+                    "chart": "external-secrets",
+                    "helm": {
+                        "releaseName": "external-secrets"
+                    },
+                    "repoURL": "https://charts.external-secrets.io",
+                    "targetRevision": "2.8.0"
+                },
+                "syncPolicy": {
+                    "automated": {
+                        "prune": true,
+                        "selfHeal": true
+                    },
+                    "syncOptions": [
+                        "CreateNamespace=true",
+                        "ServerSideApply=true"
+                    ]
+                }
+            },
+            "status": {
+                "controllerNamespace": "argocd",
+                "health": {
+                    "lastTransitionTime": "2026-07-18T23:59:11Z",
+                    "status": "Healthy"
+                },
+                "reconciledAt": "2026-07-19T02:33:10Z",
+                "resourceHealthSource": "appTree",
+                "resources": [
+                    {
+                        "kind": "Secret",
+                        "name": "external-secrets-webhook",
+                        "namespace": "external-secrets",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "kind": "Service",
+                        "name": "external-secrets-webhook",
+                        "namespace": "external-secrets",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "kind": "ServiceAccount",
+                        "name": "external-secrets",
+                        "namespace": "external-secrets",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "kind": "ServiceAccount",
+                        "name": "external-secrets-cert-controller",
+                        "namespace": "external-secrets",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "kind": "ServiceAccount",
+                        "name": "external-secrets-webhook",
+                        "namespace": "external-secrets",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "admissionregistration.k8s.io",
+                        "kind": "ValidatingWebhookConfiguration",
+                        "name": "externalsecret-validate",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "admissionregistration.k8s.io",
+                        "kind": "ValidatingWebhookConfiguration",
+                        "name": "secretstore-validate",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "acraccesstokens.generators.external-secrets.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "beyondtrustworkloadcredentialsdynamicsecrets.generators.external-secrets.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "cloudsmithaccesstokens.generators.external-secrets.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "clusterexternalsecrets.external-secrets.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "clustergenerators.generators.external-secrets.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "clusterpushsecrets.external-secrets.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "clustersecretstores.external-secrets.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "ecrauthorizationtokens.generators.external-secrets.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "externalsecrets.external-secrets.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "fakes.generators.external-secrets.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "gcraccesstokens.generators.external-secrets.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "generatorstates.generators.external-secrets.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "githubaccesstokens.generators.external-secrets.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "gitlabdeploytokens.generators.external-secrets.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "grafanas.generators.external-secrets.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "mfas.generators.external-secrets.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "passwords.generators.external-secrets.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "pushsecrets.external-secrets.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "quayaccesstokens.generators.external-secrets.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "secretstores.external-secrets.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "sshkeys.generators.external-secrets.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "stssessiontokens.generators.external-secrets.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "uuids.generators.external-secrets.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "vaultdynamicsecrets.generators.external-secrets.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apiextensions.k8s.io",
+                        "kind": "CustomResourceDefinition",
+                        "name": "webhooks.generators.external-secrets.io",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apps",
+                        "kind": "Deployment",
+                        "name": "external-secrets",
+                        "namespace": "external-secrets",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apps",
+                        "kind": "Deployment",
+                        "name": "external-secrets-cert-controller",
+                        "namespace": "external-secrets",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apps",
+                        "kind": "Deployment",
+                        "name": "external-secrets-webhook",
+                        "namespace": "external-secrets",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRole",
+                        "name": "external-secrets-cert-controller",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRole",
+                        "name": "external-secrets-controller",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRole",
+                        "name": "external-secrets-edit",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRole",
+                        "name": "external-secrets-servicebindings",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRole",
+                        "name": "external-secrets-view",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRoleBinding",
+                        "name": "external-secrets-cert-controller",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "ClusterRoleBinding",
+                        "name": "external-secrets-controller",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "Role",
+                        "name": "external-secrets-leaderelection",
+                        "namespace": "external-secrets",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "rbac.authorization.k8s.io",
+                        "kind": "RoleBinding",
+                        "name": "external-secrets-leaderelection",
+                        "namespace": "external-secrets",
+                        "status": "Synced",
+                        "version": "v1"
+                    }
+                ],
+                "sourceType": "Helm",
+                "summary": {
+                    "images": [
+                        "ghcr.io/external-secrets/external-secrets:v2.8.0"
+                    ]
+                },
+                "sync": {
+                    "comparedTo": {
+                        "destination": {
+                            "namespace": "external-secrets",
+                            "server": "https://kubernetes.default.svc"
+                        },
+                        "source": {
+                            "chart": "external-secrets",
+                            "helm": {
+                                "releaseName": "external-secrets"
+                            },
+                            "repoURL": "https://charts.external-secrets.io",
+                            "targetRevision": "2.8.0"
+                        }
+                    },
+                    "revision": "2.8.0",
+                    "status": "Synced"
+                }
+            }
+        },
+        {
+            "apiVersion": "argoproj.io/v1alpha1",
+            "kind": "Application",
+            "metadata": {
+                "annotations": {
+                    "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"argoproj.io/v1alpha1\",\"kind\":\"Application\",\"metadata\":{\"annotations\":{},\"labels\":{\"app.kubernetes.io/name\":\"nexus-k8s\",\"app.kubernetes.io/part-of\":\"nexus-lead-intelligence\"},\"name\":\"nexus-k8s\",\"namespace\":\"argocd\"},\"spec\":{\"destination\":{\"namespace\":\"nexus\",\"server\":\"https://kubernetes.default.svc\"},\"project\":\"default\",\"source\":{\"path\":\"k8s\",\"repoURL\":\"https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git\",\"targetRevision\":\"main\"},\"syncPolicy\":{\"automated\":{\"prune\":true,\"selfHeal\":true},\"syncOptions\":[\"CreateNamespace=true\",\"PruneLast=true\"]}}}\n"
+                },
+                "creationTimestamp": "2026-07-18T22:55:44Z",
+                "generation": 133,
+                "labels": {
+                    "app.kubernetes.io/name": "nexus-k8s",
+                    "app.kubernetes.io/part-of": "nexus-lead-intelligence"
+                },
+                "name": "nexus-k8s",
+                "namespace": "argocd",
+                "resourceVersion": "1912904",
+                "uid": "396b9fea-44c9-4447-9387-57bde93e2df1"
+            },
+            "spec": {
+                "destination": {
+                    "namespace": "nexus",
+                    "server": "https://kubernetes.default.svc"
+                },
+                "project": "default",
+                "source": {
+                    "path": "k8s",
+                    "repoURL": "https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git",
+                    "targetRevision": "main"
+                },
+                "syncPolicy": {
+                    "automated": {
+                        "prune": true,
+                        "selfHeal": true
+                    },
+                    "syncOptions": [
+                        "CreateNamespace=true",
+                        "PruneLast=true"
+                    ]
+                }
+            },
+            "status": {
+                "controllerNamespace": "argocd",
+                "health": {
+                    "lastTransitionTime": "2026-07-19T02:35:00Z",
+                    "status": "Healthy"
+                },
+                "history": [
+                    {
+                        "deployStartedAt": "2026-07-18T22:55:52Z",
+                        "deployedAt": "2026-07-18T22:55:53Z",
+                        "id": 0,
+                        "initiatedBy": {
+                            "automated": true
+                        },
+                        "revision": "58b0212166cd93ddf23385c08f874f4862ea7709",
+                        "source": {
+                            "path": "k8s",
+                            "repoURL": "https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git",
+                            "targetRevision": "main"
+                        }
+                    },
+                    {
+                        "deployStartedAt": "2026-07-18T23:13:38Z",
+                        "deployedAt": "2026-07-18T23:13:39Z",
+                        "id": 1,
+                        "initiatedBy": {
+                            "automated": true
+                        },
+                        "revision": "040e4793611532f7781aebc8c3fc73b32d0623f6",
+                        "source": {
+                            "path": "k8s",
+                            "repoURL": "https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git",
+                            "targetRevision": "main"
+                        }
+                    },
+                    {
+                        "deployStartedAt": "2026-07-18T23:16:05Z",
+                        "deployedAt": "2026-07-18T23:16:06Z",
+                        "id": 2,
+                        "initiatedBy": {
+                            "automated": true
+                        },
+                        "revision": "6a1072c3cb4b5782f04380c16502d21736ce17ef",
+                        "source": {
+                            "path": "k8s",
+                            "repoURL": "https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git",
+                            "targetRevision": "main"
+                        }
+                    },
+                    {
+                        "deployStartedAt": "2026-07-19T02:02:25Z",
+                        "deployedAt": "2026-07-19T02:02:27Z",
+                        "id": 3,
+                        "initiatedBy": {
+                            "automated": true
+                        },
+                        "revision": "42b7e0f2ede552942a86afd30ec361920b40521c",
+                        "source": {
+                            "path": "k8s",
+                            "repoURL": "https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git",
+                            "targetRevision": "main"
+                        }
+                    },
+                    {
+                        "deployStartedAt": "2026-07-19T02:07:02Z",
+                        "deployedAt": "2026-07-19T02:07:03Z",
+                        "id": 4,
+                        "initiatedBy": {
+                            "automated": true
+                        },
+                        "revision": "5765538397a77a6b995cd9a53a72c3f7fbce346d",
+                        "source": {
+                            "path": "k8s",
+                            "repoURL": "https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git",
+                            "targetRevision": "main"
+                        }
+                    },
+                    {
+                        "deployStartedAt": "2026-07-19T02:34:33Z",
+                        "deployedAt": "2026-07-19T02:34:35Z",
+                        "id": 5,
+                        "initiatedBy": {
+                            "automated": true
+                        },
+                        "revision": "03b30d0eb86fbc733833c6ac070cc0c805bd902e",
+                        "source": {
+                            "path": "k8s",
+                            "repoURL": "https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git",
+                            "targetRevision": "main"
+                        }
+                    }
+                ],
+                "operationState": {
+                    "finishedAt": "2026-07-19T02:34:35Z",
+                    "message": "successfully synced (all tasks run)",
+                    "operation": {
+                        "initiatedBy": {
+                            "automated": true
+                        },
+                        "retry": {
+                            "limit": 5
+                        },
+                        "sync": {
+                            "prune": true,
+                            "revision": "03b30d0eb86fbc733833c6ac070cc0c805bd902e",
+                            "source": {
+                                "path": "k8s",
+                                "repoURL": "https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git",
+                                "targetRevision": "main"
+                            },
+                            "syncOptions": [
+                                "CreateNamespace=true",
+                                "PruneLast=true"
+                            ]
+                        }
+                    },
+                    "phase": "Succeeded",
+                    "startedAt": "2026-07-19T02:34:33Z",
+                    "syncResult": {
+                        "resources": [
+                            {
+                                "group": "",
+                                "hookPhase": "Running",
+                                "kind": "Namespace",
+                                "message": "namespace/nexus unchanged",
+                                "name": "nexus",
+                                "namespace": "nexus",
+                                "status": "Synced",
+                                "syncPhase": "Sync",
+                                "version": "v1"
+                            },
+                            {
+                                "group": "networking.k8s.io",
+                                "hookPhase": "Running",
+                                "kind": "NetworkPolicy",
+                                "message": "networkpolicy.networking.k8s.io/nexus-api-ingress unchanged",
+                                "name": "nexus-api-ingress",
+                                "namespace": "nexus",
+                                "status": "Synced",
+                                "syncPhase": "Sync",
+                                "version": "v1"
+                            },
+                            {
+                                "group": "networking.k8s.io",
+                                "hookPhase": "Running",
+                                "kind": "NetworkPolicy",
+                                "message": "networkpolicy.networking.k8s.io/nexus-acme-solver-ingress unchanged",
+                                "name": "nexus-acme-solver-ingress",
+                                "namespace": "nexus",
+                                "status": "Synced",
+                                "syncPhase": "Sync",
+                                "version": "v1"
+                            },
+                            {
+                                "group": "networking.k8s.io",
+                                "hookPhase": "Running",
+                                "kind": "NetworkPolicy",
+                                "message": "networkpolicy.networking.k8s.io/nexus-default-deny unchanged",
+                                "name": "nexus-default-deny",
+                                "namespace": "nexus",
+                                "status": "Synced",
+                                "syncPhase": "Sync",
+                                "version": "v1"
+                            },
+                            {
+                                "group": "networking.k8s.io",
+                                "hookPhase": "Running",
+                                "kind": "NetworkPolicy",
+                                "message": "networkpolicy.networking.k8s.io/nexus-controlled-egress configured",
+                                "name": "nexus-controlled-egress",
+                                "namespace": "nexus",
+                                "status": "Synced",
+                                "syncPhase": "Sync",
+                                "version": "v1"
+                            },
+                            {
+                                "group": "",
+                                "hookPhase": "Running",
+                                "kind": "ResourceQuota",
+                                "message": "resourcequota/nexus-production-quota unchanged",
+                                "name": "nexus-production-quota",
+                                "namespace": "nexus",
+                                "status": "Synced",
+                                "syncPhase": "Sync",
+                                "version": "v1"
+                            },
+                            {
+                                "group": "",
+                                "hookPhase": "Running",
+                                "kind": "LimitRange",
+                                "message": "limitrange/nexus-default-container-limits unchanged",
+                                "name": "nexus-default-container-limits",
+                                "namespace": "nexus",
+                                "status": "Synced",
+                                "syncPhase": "Sync",
+                                "version": "v1"
+                            },
+                            {
+                                "group": "policy",
+                                "hookPhase": "Running",
+                                "kind": "PodDisruptionBudget",
+                                "message": "poddisruptionbudget.policy/nexus-api configured",
+                                "name": "nexus-api",
+                                "namespace": "nexus",
+                                "status": "Synced",
+                                "syncPhase": "Sync",
+                                "version": "v1"
+                            },
+                            {
+                                "group": "policy",
+                                "hookPhase": "Running",
+                                "kind": "PodDisruptionBudget",
+                                "message": "poddisruptionbudget.policy/nexus-worker configured",
+                                "name": "nexus-worker",
+                                "namespace": "nexus",
+                                "status": "Synced",
+                                "syncPhase": "Sync",
+                                "version": "v1"
+                            },
+                            {
+                                "group": "",
+                                "hookPhase": "Running",
+                                "kind": "Service",
+                                "message": "service/nexus-api unchanged",
+                                "name": "nexus-api",
+                                "namespace": "nexus",
+                                "status": "Synced",
+                                "syncPhase": "Sync",
+                                "version": "v1"
+                            },
+                            {
+                                "group": "",
+                                "hookPhase": "Running",
+                                "kind": "Service",
+                                "message": "service/nexus-backend unchanged",
+                                "name": "nexus-backend",
+                                "namespace": "nexus",
+                                "status": "Synced",
+                                "syncPhase": "Sync",
+                                "version": "v1"
+                            },
+                            {
+                                "group": "apps",
+                                "hookPhase": "Running",
+                                "images": [
+                                    "crjqmupr2v7hmzm.azurecr.io/nexus-worker:sha-42b7e0f2ede552942a86afd30ec361920b40521c"
+                                ],
+                                "kind": "Deployment",
+                                "message": "deployment.apps/nexus-worker unchanged",
+                                "name": "nexus-worker",
+                                "namespace": "nexus",
+                                "status": "Synced",
+                                "syncPhase": "Sync",
+                                "version": "v1"
+                            },
+                            {
+                                "group": "apps",
+                                "hookPhase": "Running",
+                                "images": [
+                                    "crjqmupr2v7hmzm.azurecr.io/nexus-api:sha-42b7e0f2ede552942a86afd30ec361920b40521c"
+                                ],
+                                "kind": "Deployment",
+                                "message": "deployment.apps/nexus-api unchanged",
+                                "name": "nexus-api",
+                                "namespace": "nexus",
+                                "status": "Synced",
+                                "syncPhase": "Sync",
+                                "version": "v1"
+                            },
+                            {
+                                "group": "batch",
+                                "hookPhase": "Running",
+                                "images": [
+                                    "crjqmupr2v7hmzm.azurecr.io/nexus-api:sha-42b7e0f2ede552942a86afd30ec361920b40521c"
+                                ],
+                                "kind": "CronJob",
+                                "message": "cronjob.batch/nexus-osint-scraper-quality unchanged",
+                                "name": "nexus-osint-scraper-quality",
+                                "namespace": "nexus",
+                                "status": "Synced",
+                                "syncPhase": "Sync",
+                                "version": "v1"
+                            },
+                            {
+                                "group": "batch",
+                                "hookPhase": "Running",
+                                "images": [
+                                    "crjqmupr2v7hmzm.azurecr.io/nexus-api:sha-42b7e0f2ede552942a86afd30ec361920b40521c"
+                                ],
+                                "kind": "CronJob",
+                                "message": "cronjob.batch/nexus-internal-health unchanged",
+                                "name": "nexus-internal-health",
+                                "namespace": "nexus",
+                                "status": "Synced",
+                                "syncPhase": "Sync",
+                                "version": "v1"
+                            },
+                            {
+                                "group": "networking.k8s.io",
+                                "hookPhase": "Running",
+                                "kind": "Ingress",
+                                "message": "ingress.networking.k8s.io/nexus-ingress unchanged",
+                                "name": "nexus-ingress",
+                                "namespace": "nexus",
+                                "status": "Synced",
+                                "syncPhase": "Sync",
+                                "version": "v1"
+                            }
+                        ],
+                        "revision": "03b30d0eb86fbc733833c6ac070cc0c805bd902e",
+                        "source": {
+                            "path": "k8s",
+                            "repoURL": "https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git",
+                            "targetRevision": "main"
+                        }
+                    }
+                },
+                "reconciledAt": "2026-07-19T02:34:35Z",
+                "resourceHealthSource": "appTree",
+                "resources": [
+                    {
+                        "kind": "LimitRange",
+                        "name": "nexus-default-container-limits",
+                        "namespace": "nexus",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "kind": "Namespace",
+                        "name": "nexus",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "kind": "ResourceQuota",
+                        "name": "nexus-production-quota",
+                        "namespace": "nexus",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "kind": "Service",
+                        "name": "nexus-api",
+                        "namespace": "nexus",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "kind": "Service",
+                        "name": "nexus-backend",
+                        "namespace": "nexus",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apps",
+                        "kind": "Deployment",
+                        "name": "nexus-api",
+                        "namespace": "nexus",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "apps",
+                        "kind": "Deployment",
+                        "name": "nexus-worker",
+                        "namespace": "nexus",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "batch",
+                        "kind": "CronJob",
+                        "name": "nexus-internal-health",
+                        "namespace": "nexus",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "batch",
+                        "kind": "CronJob",
+                        "name": "nexus-osint-scraper-quality",
+                        "namespace": "nexus",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "networking.k8s.io",
+                        "kind": "Ingress",
+                        "name": "nexus-ingress",
+                        "namespace": "nexus",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "networking.k8s.io",
+                        "kind": "NetworkPolicy",
+                        "name": "nexus-acme-solver-ingress",
+                        "namespace": "nexus",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "networking.k8s.io",
+                        "kind": "NetworkPolicy",
+                        "name": "nexus-api-ingress",
+                        "namespace": "nexus",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "networking.k8s.io",
+                        "kind": "NetworkPolicy",
+                        "name": "nexus-controlled-egress",
+                        "namespace": "nexus",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "networking.k8s.io",
+                        "kind": "NetworkPolicy",
+                        "name": "nexus-default-deny",
+                        "namespace": "nexus",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "policy",
+                        "kind": "PodDisruptionBudget",
+                        "name": "nexus-api",
+                        "namespace": "nexus",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "policy",
+                        "kind": "PodDisruptionBudget",
+                        "name": "nexus-worker",
+                        "namespace": "nexus",
+                        "status": "Synced",
+                        "version": "v1"
+                    }
+                ],
+                "sourceHydrator": {},
+                "sourceType": "Kustomize",
+                "summary": {
+                    "externalURLs": [
+                        "https://4.204.168.92/",
+                        "https://4.204.168.92/api",
+                        "https://4.204.168.92/hubspot",
+                        "https://nexuscloud.sh/",
+                        "https://nexuscloud.sh/api",
+                        "https://nexuscloud.sh/hubspot"
+                    ],
+                    "images": [
+                        "crjqmupr2v7hmzm.azurecr.io/nexus-api:sha-42b7e0f2ede552942a86afd30ec361920b40521c",
+                        "crjqmupr2v7hmzm.azurecr.io/nexus-worker:sha-42b7e0f2ede552942a86afd30ec361920b40521c"
+                    ]
+                },
+                "sync": {
+                    "comparedTo": {
+                        "destination": {
+                            "namespace": "nexus",
+                            "server": "https://kubernetes.default.svc"
+                        },
+                        "source": {
+                            "path": "k8s",
+                            "repoURL": "https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git",
+                            "targetRevision": "main"
+                        }
+                    },
+                    "revision": "03b30d0eb86fbc733833c6ac070cc0c805bd902e",
+                    "status": "Synced"
+                }
+            }
+        },
+        {
+            "apiVersion": "argoproj.io/v1alpha1",
+            "kind": "Application",
+            "metadata": {
+                "annotations": {
+                    "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"argoproj.io/v1alpha1\",\"kind\":\"Application\",\"metadata\":{\"annotations\":{},\"labels\":{\"app.kubernetes.io/name\":\"nexus-platform\",\"app.kubernetes.io/part-of\":\"nexus-platform\"},\"name\":\"nexus-platform\",\"namespace\":\"argocd\"},\"spec\":{\"destination\":{\"namespace\":\"nexus\",\"server\":\"https://kubernetes.default.svc\"},\"project\":\"default\",\"source\":{\"path\":\"platform\",\"repoURL\":\"https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git\",\"targetRevision\":\"main\"},\"syncPolicy\":{\"automated\":{\"prune\":true,\"selfHeal\":true},\"syncOptions\":[\"CreateNamespace=true\",\"ServerSideApply=true\"]}}}\n"
+                },
+                "creationTimestamp": "2026-07-18T23:59:08Z",
+                "generation": 194,
+                "labels": {
+                    "app.kubernetes.io/name": "nexus-platform",
+                    "app.kubernetes.io/part-of": "nexus-platform"
+                },
+                "name": "nexus-platform",
+                "namespace": "argocd",
+                "resourceVersion": "1912724",
+                "uid": "fe116a72-6d2d-4094-b940-4902a6ac325f"
+            },
+            "spec": {
+                "destination": {
+                    "namespace": "nexus",
+                    "server": "https://kubernetes.default.svc"
+                },
+                "project": "default",
+                "source": {
+                    "path": "platform",
+                    "repoURL": "https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git",
+                    "targetRevision": "main"
+                },
+                "syncPolicy": {
+                    "automated": {
+                        "prune": true,
+                        "selfHeal": true
+                    },
+                    "syncOptions": [
+                        "CreateNamespace=true",
+                        "ServerSideApply=true"
+                    ]
+                }
+            },
+            "status": {
+                "controllerNamespace": "argocd",
+                "health": {
+                    "lastTransitionTime": "2026-07-19T01:19:30Z",
+                    "status": "Healthy"
+                },
+                "history": [
+                    {
+                        "deployStartedAt": "2026-07-18T23:59:09Z",
+                        "deployedAt": "2026-07-18T23:59:10Z",
+                        "id": 0,
+                        "initiatedBy": {
+                            "automated": true
+                        },
+                        "revision": "74f3d32ff354ed3cd40de196b5a604a8b7562167",
+                        "source": {
+                            "path": "platform",
+                            "repoURL": "https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git",
+                            "targetRevision": "main"
+                        }
+                    },
+                    {
+                        "deployStartedAt": "2026-07-19T00:01:57Z",
+                        "deployedAt": "2026-07-19T00:01:58Z",
+                        "id": 1,
+                        "initiatedBy": {
+                            "automated": true
+                        },
+                        "revision": "47b4d1b1e074e6d6e81092b8120496d3dd0607e8",
+                        "source": {
+                            "path": "platform",
+                            "repoURL": "https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git",
+                            "targetRevision": "main"
+                        }
+                    },
+                    {
+                        "deployStartedAt": "2026-07-19T00:06:19Z",
+                        "deployedAt": "2026-07-19T00:06:19Z",
+                        "id": 2,
+                        "initiatedBy": {
+                            "automated": true
+                        },
+                        "revision": "f2f3a3c4137b6ceee4a200a94d060270746895f9",
+                        "source": {
+                            "path": "platform",
+                            "repoURL": "https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git",
+                            "targetRevision": "main"
+                        }
+                    },
+                    {
+                        "deployStartedAt": "2026-07-19T00:17:47Z",
+                        "deployedAt": "2026-07-19T00:17:47Z",
+                        "id": 3,
+                        "initiatedBy": {
+                            "automated": true
+                        },
+                        "revision": "b40fff734186690bbc9c162263644ccc5616754a",
+                        "source": {
+                            "path": "platform",
+                            "repoURL": "https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git",
+                            "targetRevision": "main"
+                        }
+                    },
+                    {
+                        "deployStartedAt": "2026-07-19T01:19:28Z",
+                        "deployedAt": "2026-07-19T01:19:28Z",
+                        "id": 4,
+                        "initiatedBy": {
+                            "automated": true
+                        },
+                        "revision": "83ea59e23f4ce36b8d239114cec1c816a0f5cb2f",
+                        "source": {
+                            "path": "platform",
+                            "repoURL": "https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git",
+                            "targetRevision": "main"
+                        }
+                    },
+                    {
+                        "deployStartedAt": "2026-07-19T02:02:26Z",
+                        "deployedAt": "2026-07-19T02:02:27Z",
+                        "id": 5,
+                        "initiatedBy": {
+                            "automated": true
+                        },
+                        "revision": "42b7e0f2ede552942a86afd30ec361920b40521c",
+                        "source": {
+                            "path": "platform",
+                            "repoURL": "https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git",
+                            "targetRevision": "main"
+                        }
+                    }
+                ],
+                "operationState": {
+                    "finishedAt": "2026-07-19T02:02:27Z",
+                    "message": "successfully synced (all tasks run)",
+                    "operation": {
+                        "initiatedBy": {
+                            "automated": true
+                        },
+                        "retry": {
+                            "limit": 5
+                        },
+                        "sync": {
+                            "prune": true,
+                            "revision": "42b7e0f2ede552942a86afd30ec361920b40521c",
+                            "source": {
+                                "path": "platform",
+                                "repoURL": "https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git",
+                                "targetRevision": "main"
+                            },
+                            "syncOptions": [
+                                "CreateNamespace=true",
+                                "ServerSideApply=true"
+                            ]
+                        }
+                    },
+                    "phase": "Succeeded",
+                    "startedAt": "2026-07-19T02:02:26Z",
+                    "syncResult": {
+                        "resources": [
+                            {
+                                "group": "",
+                                "hookPhase": "Running",
+                                "kind": "ServiceAccount",
+                                "message": "serviceaccount/nexus-external-secrets serverside-applied",
+                                "name": "nexus-external-secrets",
+                                "namespace": "nexus",
+                                "status": "Synced",
+                                "syncPhase": "Sync",
+                                "version": "v1"
+                            },
+                            {
+                                "group": "cert-manager.io",
+                                "hookPhase": "Running",
+                                "kind": "ClusterIssuer",
+                                "message": "clusterissuer.cert-manager.io/letsencrypt-production serverside-applied",
+                                "name": "letsencrypt-production",
+                                "namespace": "nexus",
+                                "status": "Synced",
+                                "syncPhase": "Sync",
+                                "version": "v1"
+                            },
+                            {
+                                "group": "admissionregistration.k8s.io",
+                                "hookPhase": "Running",
+                                "kind": "ValidatingAdmissionPolicy",
+                                "message": "validatingadmissionpolicy.admissionregistration.k8s.io/nexus-acr-immutable-images serverside-applied",
+                                "name": "nexus-acr-immutable-images",
+                                "namespace": "nexus",
+                                "status": "Synced",
+                                "syncPhase": "Sync",
+                                "version": "v1"
+                            },
+                            {
+                                "group": "admissionregistration.k8s.io",
+                                "hookPhase": "Running",
+                                "kind": "ValidatingAdmissionPolicyBinding",
+                                "message": "validatingadmissionpolicybinding.admissionregistration.k8s.io/nexus-acr-immutable-images serverside-applied",
+                                "name": "nexus-acr-immutable-images",
+                                "namespace": "nexus",
+                                "status": "Synced",
+                                "syncPhase": "Sync",
+                                "version": "v1"
+                            },
+                            {
+                                "group": "external-secrets.io",
+                                "hookPhase": "Running",
+                                "kind": "ClusterSecretStore",
+                                "message": "clustersecretstore.external-secrets.io/nexus-azure-keyvault serverside-applied",
+                                "name": "nexus-azure-keyvault",
+                                "namespace": "nexus",
+                                "status": "Synced",
+                                "syncPhase": "Sync",
+                                "version": "v1"
+                            },
+                            {
+                                "group": "external-secrets.io",
+                                "hookPhase": "Running",
+                                "kind": "ExternalSecret",
+                                "message": "externalsecret.external-secrets.io/nexus-secrets serverside-applied",
+                                "name": "nexus-secrets",
+                                "namespace": "nexus",
+                                "status": "Synced",
+                                "syncPhase": "Sync",
+                                "version": "v1"
+                            },
+                            {
+                                "group": "external-secrets.io",
+                                "hookPhase": "Running",
+                                "kind": "ExternalSecret",
+                                "message": "externalsecret.external-secrets.io/nexus-keyvault-smoke serverside-applied",
+                                "name": "nexus-keyvault-smoke",
+                                "namespace": "nexus",
+                                "status": "Synced",
+                                "syncPhase": "Sync",
+                                "version": "v1"
+                            }
+                        ],
+                        "revision": "42b7e0f2ede552942a86afd30ec361920b40521c",
+                        "source": {
+                            "path": "platform",
+                            "repoURL": "https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git",
+                            "targetRevision": "main"
+                        }
+                    }
+                },
+                "reconciledAt": "2026-07-19T02:34:29Z",
+                "resourceHealthSource": "appTree",
+                "resources": [
+                    {
+                        "kind": "Secret",
+                        "name": "nexus-secrets",
+                        "namespace": "nexus",
+                        "version": "v1"
+                    },
+                    {
+                        "kind": "ServiceAccount",
+                        "name": "nexus-external-secrets",
+                        "namespace": "nexus",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "admissionregistration.k8s.io",
+                        "kind": "ValidatingAdmissionPolicy",
+                        "name": "nexus-acr-immutable-images",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "admissionregistration.k8s.io",
+                        "kind": "ValidatingAdmissionPolicyBinding",
+                        "name": "nexus-acr-immutable-images",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "cert-manager.io",
+                        "kind": "ClusterIssuer",
+                        "name": "letsencrypt-production",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "external-secrets.io",
+                        "kind": "ClusterSecretStore",
+                        "name": "nexus-azure-keyvault",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "external-secrets.io",
+                        "kind": "ExternalSecret",
+                        "name": "nexus-keyvault-smoke",
+                        "namespace": "nexus",
+                        "status": "Synced",
+                        "version": "v1"
+                    },
+                    {
+                        "group": "external-secrets.io",
+                        "kind": "ExternalSecret",
+                        "name": "nexus-secrets",
+                        "namespace": "nexus",
+                        "status": "Synced",
+                        "version": "v1"
+                    }
+                ],
+                "sourceHydrator": {},
+                "sourceType": "Kustomize",
+                "summary": {},
+                "sync": {
+                    "comparedTo": {
+                        "destination": {
+                            "namespace": "nexus",
+                            "server": "https://kubernetes.default.svc"
+                        },
+                        "source": {
+                            "path": "platform",
+                            "repoURL": "https://github.com/burkefit2382-wq/nexus-b2b-lead-generation.git",
+                            "targetRevision": "main"
+                        }
+                    },
+                    "revision": "5765538397a77a6b995cd9a53a72c3f7fbce346d",
+                    "status": "Synced"
+                }
+            }
+        }
+    ],
+    "kind": "List",
+    "metadata": {
+        "resourceVersion": ""
+    }
+}

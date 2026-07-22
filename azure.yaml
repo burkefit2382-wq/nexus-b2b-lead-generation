@@ -4,8 +4,10 @@ name: nexus-b2b-lead-generation
 services:
   api:
     project: ./backend
-    language: py
-    host: appservice
+    language: docker
+    host: containerapp
+    docker:
+      remoteBuild: true
   web:
     project: ./frontend
     language: js

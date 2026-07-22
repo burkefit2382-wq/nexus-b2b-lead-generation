@@ -1,4 +1,5 @@
 import json
+import os
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -10,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
 from .api.leads import router as leads_router
+from .api.membership import router as membership_router
 from .services import config
 from .services import hubspot as hubspot_service
 from .services.database import run_migrations
@@ -51,11 +53,30 @@ app.add_middleware(
     allow_headers=["Content-Type"],
 )
 app.include_router(leads_router, prefix="/leads", tags=["Leads"])
+app.include_router(membership_router, prefix="/api/membership", tags=["Membership"])
 
 
 @app.get("/health")
-def healthcheck() -> dict[str, str]:
-    return {"status": "ok"}
+def healthcheck() -> dict[str, Any]:
+    return {"ok": True, "status": "ok", "service": "nexus-b2b-lead-generation-api"}
+
+
+@app.get("/healthz")
+def healthz() -> dict[str, Any]:
+    return healthcheck()
+
+
+@app.get("/ready")
+def readiness(response: Response) -> dict[str, Any]:
+    report = readiness_report()
+    if not report["ready"]:
+        response.status_code = 503
+    return report
+
+
+@app.get("/metrics")
+def metrics() -> Response:
+    return Response(content=prometheus_metrics(), media_type="text/plain; version=0.0.4; charset=utf-8")
 
 
 @app.get("/api/health")
@@ -64,7 +85,9 @@ def api_health() -> dict[str, Any]:
         "ok": True,
         "status": "healthy",
         "service": "nexus-b2b-lead-generation-api",
-        "healthz": "/healthz",
+        "health": "/health",
+        "ready": "/ready",
+        "metrics": "/metrics",
         "checkedAt": utc_now(),
     }
 
@@ -79,16 +102,19 @@ def config_status() -> dict[str, bool | str]:
         "resendConfigured": config.resend_configured(),
         "jwtConfigured": config.jwt_configured(),
         "hubspotConfigured": bool(status["configured"]),
+        "stripeConfigured": config.stripe_configured(),
         "checkedAt": utc_now(),
     }
 
 
 @app.get("/api/hubspot-status")
+@app.get("/api/crm-status")
 def api_hubspot_status() -> dict[str, Any]:
     return {"ok": True, "hubspot": hubspot_service.hubspot_status()}
 
 
 @app.post("/api/hubspot-export")
+@app.post("/api/crm-export")
 def api_hubspot_export(payload: dict[str, Any], response: Response) -> dict[str, Any]:
     token = hubspot_service.hubspot_access_token()
     if not token:
@@ -360,6 +386,77 @@ def uuid_or_external(value: Any) -> tuple[uuid.UUID | None, str]:
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def readiness_report() -> dict[str, Any]:
+    environment = os.environ.get("ENVIRONMENT", "development").strip().lower()
+    data_dir_ready = ensure_data_dir_ready()
+    required_config = {
+        "databaseUrlConfigured": bool(config.database_url()),
+        "jwtConfigured": config.jwt_configured(),
+        "stripeConfigured": config.stripe_configured(),
+        "resendConfigured": config.resend_configured(),
+        "hubspotConfigured": bool(hubspot_service.hubspot_status()["configured"]),
+    }
+    production = environment == "production"
+    config_ready = all(required_config.values()) if production else True
+    ready = data_dir_ready and config_ready
+    return {
+        "ok": ready,
+        "ready": ready,
+        "status": "ready" if ready else "not_ready",
+        "service": "nexus-b2b-lead-generation-api",
+        "environment": environment,
+        "checkedAt": utc_now(),
+        "checks": {
+            "dataDirWritable": data_dir_ready,
+            "requiredConfiguration": required_config,
+            "productionConfigurationEnforced": production,
+        },
+    }
+
+
+def ensure_data_dir_ready() -> bool:
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        SCRAPER_DIR.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return False
+    return os.access(DATA_DIR, os.W_OK) and os.access(SCRAPER_DIR, os.W_OK)
+
+
+def prometheus_metrics() -> str:
+    summary = load_json(SCRAPER_SUMMARY_PATH)
+    readiness = readiness_report()
+    queue_errors = summary.get("errors", [])
+    if not isinstance(queue_errors, list):
+        queue_errors = []
+    quality = summary.get("quality") if isinstance(summary.get("quality"), dict) else {}
+    last_run = parse_datetime(str(summary.get("last_run_at") or ""))
+    last_run_timestamp = int(last_run.timestamp()) if last_run else 0
+    lines = [
+        "# HELP nexus_service_up Whether the Nexus API process is serving requests.",
+        "# TYPE nexus_service_up gauge",
+        'nexus_service_up{service="nexus-api"} 1',
+        "# HELP nexus_service_ready Whether the Nexus API readiness check is passing.",
+        "# TYPE nexus_service_ready gauge",
+        f'nexus_service_ready{{service="nexus-api"}} {1 if readiness["ready"] else 0}',
+        "# HELP nexus_scraper_total_records Total public-source OSINT records in the latest worker summary.",
+        "# TYPE nexus_scraper_total_records gauge",
+        f'nexus_scraper_total_records {int(summary.get("total_records") or count_lines(SCRAPER_JSONL_PATH) or 0)}',
+        "# HELP nexus_scraper_new_records New public-source OSINT records collected in the latest run.",
+        "# TYPE nexus_scraper_new_records gauge",
+        f'nexus_scraper_new_records {int(summary.get("new_records") or 0)}',
+        "# HELP nexus_scraper_failed_runs Failed source runs in the latest worker summary.",
+        "# TYPE nexus_scraper_failed_runs gauge",
+        f"nexus_scraper_failed_runs {len(queue_errors)}",
+        "# HELP nexus_scraper_last_run_timestamp_seconds Unix timestamp of the latest OSINT worker run.",
+        "# TYPE nexus_scraper_last_run_timestamp_seconds gauge",
+        f"nexus_scraper_last_run_timestamp_seconds {last_run_timestamp}",
+    ]
+    for status in ("approved_for_package", "review_recommended", "hold_for_manual_review"):
+        lines.append(f'nexus_scraper_quality_records{{status="{status}"}} {int(quality.get(status) or 0)}')
+    return "\n".join(lines) + "\n"
 
 
 def load_json(path: Path) -> dict[str, Any]:

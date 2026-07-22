@@ -7,6 +7,36 @@
     },
     "location": {
       "value": "${AZURE_LOCATION}"
+    },
+    "stripeSecretKey": {
+      "value": "${STRIPE_SECRET_KEY}"
+    },
+    "stripeWebhookSecret": {
+      "value": "${STRIPE_WEBHOOK_SECRET}"
+    },
+    "priceId": {
+      "value": "${PRICE_ID}"
+    },
+    "databaseUrl": {
+      "value": "${DATABASE_URL}"
+    },
+    "resendApiKey": {
+      "value": "${RESEND_API_KEY}"
+    },
+    "resendFrom": {
+      "value": "${RESEND_FROM}"
+    },
+    "waitlistNotifyTo": {
+      "value": "${WAITLIST_NOTIFY_TO}"
+    },
+    "hubspotAccessToken": {
+      "value": "${HUBSPOT_ACCESS_TOKEN}"
+    },
+    "hubspotPortalId": {
+      "value": "${HUBSPOT_PORTAL_ID}"
+    },
+    "runtimeEnvironment": {
+      "value": "${ENVIRONMENT}"
     }
   }
 }

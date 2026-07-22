@@ -1,0 +1,85 @@
+name: Deploy Backend to Render
+
+on:
+  workflow_dispatch:
+    inputs:
+      render_service_id:
+        description: "Render service ID to deploy"
+        required: false
+        default: "srv-d91akdb7uimc73a2b8g0"
+      debug:
+        description: "Print fallback deployment diagnostics"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-and-deploy:
+    name: Validate and deploy Render fallback
+    runs-on: ubuntu-latest
+    environment: Production
+    env:
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      RENDER_SERVICE_ID: ${{ inputs.render_service_id || vars.RENDER_SERVICE_ID || secrets.RENDER_SERVICE_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements-dev.txt
+
+      - name: Compile backend entrypoints
+        run: |
+          python -m py_compile \
+            backend/server.py \
+            backend/main.py \
+            backend/app/main.py \
+            backend/app/api/leads.py \
+            backend/app/api/membership.py \
+            backend/app/services/hubspot.py \
+            backend/app/services/stripe_service.py
+
+      - name: Run backend tests
+        run: PYTHONPATH=. python -m pytest backend/tests -q
+
+      - name: Debug Render fallback target
+        if: ${{ inputs.debug == 'true' }}
+        run: |
+          echo "Render fallback workflow is manual-only because Azure is primary."
+          echo "Branch: ${GITHUB_REF_NAME}"
+          echo "Commit: ${GITHUB_SHA}"
+          echo "Render service ID: ${RENDER_SERVICE_ID}"
+
+      - name: Validate required deployment secrets
+        run: |
+          : "${RENDER_API_KEY:?Missing secret RENDER_API_KEY}"
+          : "${RENDER_SERVICE_ID:?Missing Render service ID. Pass workflow input render_service_id, set repository variable RENDER_SERVICE_ID, or set secret RENDER_SERVICE_ID.}"
+
+      - name: Deploy to Render fallback
+        run: |
+          response="$(curl --fail --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${RENDER_API_KEY}" \
+            --header "Content-Type: application/json" \
+            --data '{}' \
+            "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys")"
+          echo "Render deploy accepted."
+          echo "$response"

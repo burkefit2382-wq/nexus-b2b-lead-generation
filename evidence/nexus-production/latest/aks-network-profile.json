@@ -1,0 +1,7 @@
+{
+  "networkDataplane": "azure",
+  "networkPlugin": "azure",
+  "networkPluginMode": "overlay",
+  "networkPolicy": "calico",
+  "provisioningState": "Succeeded"
+}

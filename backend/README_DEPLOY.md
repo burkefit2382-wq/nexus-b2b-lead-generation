@@ -27,9 +27,9 @@ cd "C:\Users\Robert\OneDrive\Imports\burkefit2382@gmail.com - Google Drive\Googl
 python -m pip install -r requirements.txt
 $env:LAUNCH_HOST = "127.0.0.1"
 $env:PUBLIC_BASE_URL = "https://your-tunnel.trycloudflare.com"
-$env:STRIPE_SECRET_KEY = "sk_test_or_live_xxxxxxxxx"
-$env:STRIPE_WEBHOOK_SECRET = "whsec_xxxxxxxxx"
-$env:RESEND_API_KEY = "re_xxxxxxxxx"
+$env:STRIPE_SECRET_KEY = "<set-in-local-shell-only>"
+$env:STRIPE_WEBHOOK_SECRET = "<set-in-local-shell-only>"
+$env:RESEND_API_KEY = "<set-in-local-shell-only>"
 $env:RESEND_FROM = "NEXUS <no-reply@mail.nexuscloud.sh>"
 $env:EMAIL_DOMAIN = "mail.nexuscloud.sh"
 $env:WAITLIST_NOTIFY_TO = "you@yourdomain.com"
@@ -45,10 +45,12 @@ cloudflared tunnel --url http://127.0.0.1:4173
 Copy the `https://...trycloudflare.com` URL from Cloudflare into `PUBLIC_BASE_URL` before starting checkout tests. In Stripe, create a webhook endpoint at:
 
 ```text
-https://your-tunnel.trycloudflare.com/api/stripe-webhook
+https://your-tunnel.trycloudflare.com/api/membership/webhook
 ```
 
 Enable `checkout.session.completed`.
+
+If you get **Cloudflare Error 1033**, your trycloudflare hostname is stale or no longer attached to a running tunnel. Start a fresh tunnel and use the new URL.
 
 ## Emergent Route Fallback
 
@@ -88,7 +90,7 @@ Deploy the contents of `launch_site/` as the site root. Use a Python-capable hos
    - `STRIPE_API_VERSION=2026-06-24.dahlia`
    - `STRIPE_SECRET_KEY`
    - `STRIPE_WEBHOOK_SECRET`
-   - `HUBSPOT_ACCESS_TOKEN` for CRM contact export, or `HUBSPOT_PRIVATE_APP_TOKEN` / `HUBSPOT_API_KEY` as fallback names
+   - `HUBSPOT_ACCESS_TOKEN` or `HUBSPOT_SERVICE_KEY` for CRM contact export, or `HUBSPOT_PRIVATE_APP_TOKEN` / `HUBSPOT_API_KEY` as fallback names
    - `PRICE_ID` only if you want a default fallback price when no button price is sent
 5. Health check path: `/healthz`.
 
@@ -106,7 +108,7 @@ Deploy the contents of `launch_site/` as the site root. Use a Python-capable hos
    - `STRIPE_API_VERSION=2026-06-24.dahlia`
    - `STRIPE_SECRET_KEY`
    - `STRIPE_WEBHOOK_SECRET`
-   - `HUBSPOT_ACCESS_TOKEN` for CRM contact export, or `HUBSPOT_PRIVATE_APP_TOKEN` / `HUBSPOT_API_KEY` as fallback names
+   - `HUBSPOT_ACCESS_TOKEN` or `HUBSPOT_SERVICE_KEY` for CRM contact export, or `HUBSPOT_PRIVATE_APP_TOKEN` / `HUBSPOT_API_KEY` as fallback names
    - `PRICE_ID` only if you want a default fallback price when no button price is sent
 4. Railway provides `PORT`; `server.py` reads it automatically.
 
@@ -171,7 +173,7 @@ Use Resend from a serverless function or backend route, not directly from browse
 For local testing, `server.py` calls the Resend helper when these environment variables are configured:
 
 ```powershell
-$env:RESEND_API_KEY = "re_xxxxxxxxx"
+$env:RESEND_API_KEY = "<set-in-local-shell-only>"
 $env:RESEND_FROM = "NEXUS <no-reply@mail.nexuscloud.sh>"
 $env:EMAIL_DOMAIN = "mail.nexuscloud.sh"
 $env:WAITLIST_NOTIFY_TO = "you@yourdomain.com"
@@ -207,7 +209,7 @@ For local testing after rotating any exposed key:
 ```powershell
 $env:PUBLIC_BASE_URL = "https://nexuscloud.sh"
 $env:STRIPE_API_VERSION = "2026-06-24.dahlia"
-$env:STRIPE_SECRET_KEY = "your_rotated_stripe_secret_key"
+$env:STRIPE_SECRET_KEY = "<set-in-local-shell-only>"
 python server.py
 ```
 
@@ -258,7 +260,7 @@ checkout.session.completed
 Set the webhook signing secret in the backend:
 
 ```powershell
-$env:STRIPE_WEBHOOK_SECRET = "your_stripe_webhook_secret"
+$env:STRIPE_WEBHOOK_SECRET = "<set-in-hosting-provider>"
 ```
 
 When a paid checkout completes, the backend records a fulfillment event in:

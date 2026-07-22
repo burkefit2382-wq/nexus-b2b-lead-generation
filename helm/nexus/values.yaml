@@ -1,0 +1,59 @@
+replicaCount: 2
+
+image:
+  repository: crjqmupr2v7hmzm.azurecr.io/nexus-api
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+
+backendAlias:
+  enabled: true
+  name: nexus-backend
+  port: 8000
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+  hosts:
+    - host: nexuscloud.sh
+      paths:
+        - path: /hubspot
+          pathType: Prefix
+        - path: /api
+          pathType: Prefix
+        - path: /
+          pathType: Prefix
+  tls: []
+  backendServiceName: nexus-backend
+  backendServicePort: 8000
+
+env:
+  LAUNCH_HOST: "0.0.0.0"
+  PORT: "4173"
+  PUBLIC_BASE_URL: "https://nexuscloud.sh"
+  TRACKING_ALLOWED_ORIGIN: "https://nexuscloud.sh"
+  ENVIRONMENT: "production"
+
+secretEnv:
+  STRIPE_SECRET_KEY: "REPLACE_ME"
+  STRIPE_WEBHOOK_SECRET: "REPLACE_ME"
+  PRICE_ID: "REPLACE_ME"
+  DATABASE_URL: "REPLACE_ME"
+  RESEND_API_KEY: "REPLACE_ME"
+  RESEND_FROM: "NEXUS <noreply@mail.nexuscloud.sh>"
+  WAITLIST_NOTIFY_TO: "REPLACE_ME"
+  HUBSPOT_ACCESS_TOKEN: "REPLACE_ME"
+  HUBSPOT_PORTAL_ID: "246668830"
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi

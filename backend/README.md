@@ -84,15 +84,17 @@ Copy `.env.example` and set values in your hosting provider. Keep secrets server
 ```text
 LAUNCH_HOST=0.0.0.0
 PUBLIC_BASE_URL=https://nexuscloud.sh
-STRIPE_SECRET_KEY=sk_live_or_test_...
-STRIPE_WEBHOOK_SECRET=whsec_...
-RESEND_API_KEY=re_...
+STRIPE_SECRET_KEY=<set-in-hosting-provider>
+STRIPE_WEBHOOK_SECRET=<set-in-hosting-provider>
+RESEND_API_KEY=<set-in-hosting-provider>
 RESEND_FROM=Nexus <sales@verified-domain.com>
 WAITLIST_NOTIFY_TO=ops@example.com
 LLAMA_CHAT_ENDPOINT=https://your-llama-compatible-endpoint
 LLAMA_CHAT_MODEL=llama3
-LLAMA_CHAT_API_KEY=optional_bearer_token
-HUBSPOT_ACCESS_TOKEN=your_hubspot_private_app_token
+LLAMA_CHAT_API_KEY=<optional-hosted-model-token>
+HUBSPOT_ACCESS_TOKEN=<hubspot-private-app-token>
+HUBSPOT_SERVICE_KEY=<hubspot-service-key>
+HUBSPOT_PORTAL_ID=246668830
 ```
 
 Fallback aliases are also accepted: `HUBSPOT_SERVICE_KEY`, `HUBSPOT_PRIVATE_APP_TOKEN`, or `HUBSPOT_API_KEY`.
