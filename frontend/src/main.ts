@@ -1,4 +1,18 @@
 import './style.css'
+import * as Sentry from '@sentry/browser'
+
+// Initialise Sentry — fully optional: app works fine when DSN is absent.
+const sentryDsn = import.meta.env.VITE_SENTRY_DSN as string | undefined
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: (import.meta.env.VITE_SENTRY_ENVIRONMENT as string | undefined) ?? 'production',
+    // Low default sample rate — override via VITE_SENTRY_TRACES_SAMPLE_RATE.
+    tracesSampleRate: parseFloat((import.meta.env.VITE_SENTRY_TRACES_SAMPLE_RATE as string | undefined) ?? '0.1'),
+    // Do not send PII (user IPs, etc.) automatically.
+    sendDefaultPii: false,
+  })
+}
 
 type Lead = {
   id: string

@@ -27,6 +27,37 @@ ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT.parent / "data"
 
 
+def _capture_resend_error(exc: BaseException, *, operation: str) -> None:
+    """Report a Resend email failure to Sentry (no-op when Sentry is absent)."""
+    try:
+        import sentry_sdk
+
+        with sentry_sdk.new_scope() as scope:
+            scope.set_tag("integration", "resend")
+            scope.set_extra("operation", operation)
+            sentry_sdk.capture_exception(exc)
+    except Exception:  # noqa: BLE001 - never raise from error-reporting helpers.
+        pass
+
+
+def _init_sentry() -> None:
+    """Initialise the Sentry SDK for the launch server (no-op if DSN absent)."""
+    dsn = os.environ.get("SENTRY_DSN", "").strip()
+    if not dsn:
+        return
+    try:
+        import sentry_sdk
+
+        sentry_sdk.init(
+            dsn=dsn,
+            environment=os.environ.get("SENTRY_ENVIRONMENT", "production"),
+            traces_sample_rate=float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
+            send_default_pii=False,
+        )
+    except Exception:  # noqa: BLE001 - monitoring must never break the server.
+        pass
+
+
 def load_local_env() -> None:
     env_path = ROOT / ".env"
     if not env_path.exists():
@@ -1632,6 +1663,7 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             )
             return "sent"
         except Exception as exc:  # noqa: BLE001 - local server should not fail submission if email fails.
+            _capture_resend_error(exc, operation="waitlist_notification")
             return f"failed: {exc}"
 
     def try_send_lead_package_notification(self, record: dict[str, Any]) -> str:
@@ -1671,9 +1703,8 @@ class LaunchHandler(SimpleHTTPRequestHandler):
             )
             return "sent"
         except Exception as exc:  # noqa: BLE001 - request storage should still succeed if email fails.
-            return f"failed: {exc}"
-
-    def generate_chat_response(self, prompt: str) -> tuple[str, str]:
+            _capture_resend_error(exc, operation="lead_package_notification")
+            return f"failed: {exc}"(self, prompt: str) -> tuple[str, str]:
         endpoint = self.llama_chat_endpoint()
         model = self.llama_chat_model()
 
@@ -2162,6 +2193,7 @@ class LaunchHandler(SimpleHTTPRequestHandler):
 
 
 def main() -> int:
+    _init_sentry()
     host = os.environ.get("LAUNCH_HOST", "127.0.0.1")
     port = int(os.environ.get("PORT") or os.environ.get("LAUNCH_PORT", "4173"))
     server = ThreadingHTTPServer((host, port), LaunchHandler)

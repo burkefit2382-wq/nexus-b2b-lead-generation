@@ -12,6 +12,7 @@ from fastapi.responses import HTMLResponse
 
 from .api.leads import router as leads_router
 from .api.membership import router as membership_router
+from .core import sentry as sentry_integration
 from .services import config
 from .services import hubspot as hubspot_service
 from .services.database import run_migrations
@@ -40,6 +41,7 @@ ALLOWED_EVENT_NAMES = {
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    sentry_integration.init()
     run_migrations(config.database_url())
     yield
 
@@ -135,6 +137,11 @@ def api_hubspot_export(payload: dict[str, Any], response: Response) -> dict[str,
     try:
         result = hubspot_service.upsert_hubspot_contact(token, properties)
     except hubspot_service.HubSpotExportError as exc:
+        sentry_integration.capture_integration_error(
+            exc,
+            "hubspot",
+            extra={"status": exc.status, "detail": exc.detail},
+        )
         response.status_code = 502
         return {
             "ok": False,
