@@ -17,7 +17,7 @@ resources:
 images:
 - name: crjqmupr2v7hmzm.azurecr.io/nexus-api
   newName: crjqmupr2v7hmzm.azurecr.io/nexus-api
-  newTag: sha-893db946cd8b25057118b4bad90f9d59139e14f8
+  newTag: sha-42b7e0f2ede552942a86afd30ec361920b40521c
 - name: crjqmupr2v7hmzm.azurecr.io/nexus-worker
   newName: crjqmupr2v7hmzm.azurecr.io/nexus-worker
-  newTag: sha-893db946cd8b25057118b4bad90f9d59139e14f8
+  newTag: sha-42b7e0f2ede552942a86afd30ec361920b40521c

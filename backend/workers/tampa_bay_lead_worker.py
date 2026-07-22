@@ -567,7 +567,7 @@ def worker_metrics_text(summary: dict[str, Any]) -> str:
     quality = summary.get("quality") if isinstance(summary.get("quality"), dict) else {}
     last_run = parse_datetime(str(summary.get("last_run_at") or ""))
     last_run_timestamp = int(last_run.timestamp()) if last_run else 0
-    ok = 1 if summary.get("ok") is not False else 0
+    ok = 1 if summary.get("ok") is True else 0
     lines = [
         "# HELP nexus_worker_up Whether the Nexus OSINT worker completed its latest execution path.",
         "# TYPE nexus_worker_up gauge",
@@ -637,8 +637,9 @@ def main() -> int:
     targets = select_targets(args.targets)
 
     if args.metrics:
-        print(worker_metrics_text(load_summary()), end="")
-    elif args.backfill_quality:
+        summary = load_summary()
+        print(worker_metrics_text(summary), end="")
+        return 0 if summary.get("ok") is True else 1
         summary = backfill_quality()
         print(json.dumps(summary, indent=2, sort_keys=True))
     elif args.loop:
