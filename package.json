@@ -15,7 +15,7 @@
     "launch:deploy": "npm run build && azd up --no-prompt"
   },
   "devDependencies": {
-    "wrangler": "^4.104.0"
+    "wrangler": "^4.113.0"
   },
   "dependencies": {
     "@hubspot/cli": "^7.0.2",
