@@ -1,7 +1,7 @@
 try:
-    from backend.workers.tampa_bay_lead_worker import normalize_element
+    from backend.workers.tampa_bay_lead_worker import normalize_element, worker_metrics_text
 except ModuleNotFoundError:
-    from workers.tampa_bay_lead_worker import normalize_element
+    from workers.tampa_bay_lead_worker import normalize_element, worker_metrics_text
 
 
 REAL_ESTATE_TARGET = {"kind": "real_estate", "label": "Real estate office"}
@@ -64,3 +64,21 @@ def test_osint_quality_holds_out_of_state_county_name_match() -> None:
     assert record["review_status"] == "hold_for_manual_review"
     assert "State mismatch" in record["osint_flags"]
     assert "outside target Florida county bounds" in record["osint_flags"]
+
+
+def test_worker_metrics_text() -> None:
+    metrics = worker_metrics_text(
+        {
+            "ok": True,
+            "total_records": 12,
+            "new_records": 3,
+            "errors": [{"error": "source failed"}],
+            "last_run_at": "2026-07-20T12:00:00+00:00",
+            "quality": {"approved_for_package": 7, "review_recommended": 4, "hold_for_manual_review": 1},
+        }
+    )
+
+    assert 'nexus_worker_up{worker="tampa_bay_lead_worker"} 1' in metrics
+    assert 'nexus_worker_total_records{worker="tampa_bay_lead_worker"} 12' in metrics
+    assert 'nexus_worker_failed_source_runs{worker="tampa_bay_lead_worker"} 1' in metrics
+    assert 'nexus_worker_quality_records{worker="tampa_bay_lead_worker",status="approved_for_package"} 7' in metrics

@@ -36,7 +36,9 @@ spec:
                   import urllib.request
 
                   checks = [
-                      ("service-healthz", "http://nexus-backend:8000/healthz", "ok"),
+                      ("service-health", "http://nexus-backend:8000/health", "ok"),
+                      ("service-ready", "http://nexus-backend:8000/ready", "ready"),
+                      ("service-metrics", "http://nexus-backend:8000/metrics", "nexus_service_up"),
                       ("service-api-health", "http://nexus-backend:8000/api/health", "healthy"),
                   ]
 
