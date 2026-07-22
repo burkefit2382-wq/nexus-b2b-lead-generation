@@ -38,6 +38,14 @@ def truthy_env(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def positive_int_env(name: str, default: int) -> int:
+    try:
+        value = int(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+    return value if value > 0 else default
+
+
 def normalize_text(value: Any) -> str:
     return " ".join(str(value or "").strip().split())
 
@@ -120,10 +128,16 @@ def load_suppression_values(path: Path) -> set[str]:
         except json.JSONDecodeError:
             item = line
         if isinstance(item, dict):
-            item = item.get("value") or item.get("canonical_id") or item.get("lead_id") or ""
-        value = normalize_text(item).casefold()
-        if value:
-            values.add(value)
+            candidates = [item.get("value"), item.get("canonical_id"), item.get("lead_id")]
+            phone = normalize_phone(item.get("phone"))
+            website = normalize_website(item.get("website"))
+            candidates.extend([phone, website])
+        else:
+            candidates = [item]
+        for candidate in candidates:
+            value = normalize_text(candidate).casefold()
+            if value:
+                values.add(value)
     return values
 
 
@@ -247,7 +261,7 @@ def export_hubspot(record: dict[str, Any], token: str) -> str:
 
 def run_pipeline(records: Iterable[dict[str, Any]], output_dir: Path, *, export_enabled: bool | None = None) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
     started_at = utc_now()
-    retention_days = int(os.environ.get("NEXUS_OSINT_RETENTION_DAYS", "365"))
+    retention_days = positive_int_env("NEXUS_OSINT_RETENTION_DAYS", 365)
     suppression_path = Path(os.environ.get("NEXUS_OSINT_SUPPRESSION_FILE", str(output_dir / "suppression_list.jsonl")))
     suppression_values = load_suppression_values(suppression_path)
     normalized = [normalize_record(record, retention_days) for record in records]
@@ -265,6 +279,8 @@ def run_pipeline(records: Iterable[dict[str, Any]], output_dir: Path, *, export_
 
     for record in unique.values():
         compliance = compliance_result(record, suppression_values)
+        for field in PROHIBITED_FIELDS:
+            record.pop(field, None)
         record["compliance"] = compliance
         record["pipeline_route"] = route_record(record, compliance)
         if record["pipeline_route"] == "approved":
@@ -292,14 +308,15 @@ def run_pipeline(records: Iterable[dict[str, Any]], output_dir: Path, *, export_
         else:
             for record in approved:
                 lead_id = normalize_text(record.get("lead_id"))
-                if not lead_id or lead_id in export_state:
+                ledger_key = normalize_text(record.get("canonical_id")) or lead_id
+                if not ledger_key or ledger_key in export_state:
                     continue
                 try:
                     contact_id = export_hubspot(record, token)
                 except RuntimeError as exc:
                     export_errors.append({"lead_id": lead_id, "error": str(exc)})
                     continue
-                export_state[lead_id] = {"contact_id": contact_id, "exported_at": utc_now()}
+                export_state[ledger_key] = {"lead_id": lead_id, "contact_id": contact_id, "exported_at": utc_now()}
                 exported += 1
 
     ordered = lambda items: sorted(items, key=lambda item: (-int(item.get("score") or 0), normalize_text(item.get("name"))))
@@ -335,4 +352,5 @@ def run_pipeline(records: Iterable[dict[str, Any]], output_dir: Path, *, export_
     event = {"event": "pipeline_completed", **{key: value for key, value in summary.items() if key not in {"outputs", "hubspot_export_errors"}}}
     with (output_dir / "pipeline_audit.jsonl").open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(event, sort_keys=True) + "\n")
-    return {normalize_text(record.get("lead_id")): record for record in unique.values() if normalize_text(record.get("lead_id"))}, summary
+    active_records = [record for record in unique.values() if record.get("pipeline_route") != "quarantined"]
+    return {normalize_text(record.get("lead_id")): record for record in active_records if normalize_text(record.get("lead_id"))}, summary

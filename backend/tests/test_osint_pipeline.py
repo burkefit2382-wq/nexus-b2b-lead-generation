@@ -6,6 +6,7 @@ try:
         compliance_result,
         deduplicate,
         normalize_record,
+        positive_int_env,
         run_pipeline,
     )
 except ModuleNotFoundError:
@@ -14,6 +15,7 @@ except ModuleNotFoundError:
         compliance_result,
         deduplicate,
         normalize_record,
+        positive_int_env,
         run_pipeline,
     )
 
@@ -81,7 +83,7 @@ def test_pipeline_routes_records_and_writes_auditable_outputs(tmp_path) -> None:
 
     processed, summary = run_pipeline(records, tmp_path, export_enabled=False)
 
-    assert len(processed) == 3
+    assert len(processed) == 2
     assert summary["duplicates_merged"] == 1
     assert summary["approved_records"] == 1
     assert summary["manual_review_records"] == 1
@@ -91,6 +93,7 @@ def test_pipeline_routes_records_and_writes_auditable_outputs(tmp_path) -> None:
     assert len((tmp_path / "approved_leads.jsonl").read_text(encoding="utf-8").splitlines()) == 1
     manifest = json.loads((tmp_path / "pipeline_manifest.json").read_text(encoding="utf-8"))
     assert manifest["pipeline_version"] == "1.0"
+    assert "lead-4" not in processed
 
 
 def test_pipeline_expires_records_outside_retention_window(tmp_path, monkeypatch) -> None:
@@ -101,3 +104,32 @@ def test_pipeline_expires_records_outside_retention_window(tmp_path, monkeypatch
     assert processed == {}
     assert summary["input_records"] == 1
     assert summary["expired_records"] == 1
+
+
+def test_invalid_retention_configuration_uses_safe_default(monkeypatch) -> None:
+    monkeypatch.setenv("NEXUS_OSINT_RETENTION_DAYS", "not-a-number")
+
+    assert positive_int_env("NEXUS_OSINT_RETENTION_DAYS", 365) == 365
+
+
+def test_pipeline_redacts_prohibited_fields_from_quarantine(tmp_path) -> None:
+    run_pipeline([lead(ssn="123-45-6789")], tmp_path, export_enabled=False)
+
+    quarantined = json.loads((tmp_path / "compliance_quarantine.jsonl").read_text(encoding="utf-8"))
+    assert "ssn" not in quarantined
+    assert quarantined["compliance"]["reasons"] == ["prohibited_personal_data"]
+
+
+def test_suppression_file_accepts_phone_and_website_fields(tmp_path, monkeypatch) -> None:
+    suppression = tmp_path / "suppression.jsonl"
+    suppression.write_text('{"phone":"(813) 555-0100"}\n{"website":"www.blocked.example/"}\n', encoding="utf-8")
+    monkeypatch.setenv("NEXUS_OSINT_SUPPRESSION_FILE", str(suppression))
+
+    processed, summary = run_pipeline(
+        [lead(), lead(lead_id="lead-2", name="Blocked LLC", phone="", website="https://blocked.example")],
+        tmp_path,
+        export_enabled=False,
+    )
+
+    assert processed == {}
+    assert summary["quarantined_records"] == 2
