@@ -2077,7 +2077,7 @@ class LaunchHandler(SimpleHTTPRequestHandler):
         data_dir_ready = self.ensure_data_dir_ready()
         required_config = {
             "databaseUrlConfigured": bool(os.environ.get("DATABASE_URL", "").strip()),
-            "stripeConfigured": self.stripe_configured(),
+            "stripeConfigured": self.stripe_status()["configured"],
             "resendConfigured": self.resend_status()["configured"],
             "hubspotConfigured": self.hubspot_status()["configured"],
         }
