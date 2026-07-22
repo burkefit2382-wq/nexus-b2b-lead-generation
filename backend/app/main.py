@@ -422,7 +422,7 @@ def ensure_data_dir_ready() -> bool:
         SCRAPER_DIR.mkdir(parents=True, exist_ok=True)
     except OSError:
         return False
-    return DATA_DIR.exists() and SCRAPER_DIR.exists()
+    return os.access(DATA_DIR, os.W_OK) and os.access(SCRAPER_DIR, os.W_OK)
 
 
 def prometheus_metrics() -> str:
