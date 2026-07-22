@@ -93,11 +93,11 @@ async def run_load_profile(
 
     async def one_request() -> None:
         nonlocal success
+        start = time.perf_counter()
         try:
             async with semaphore:
-                start = time.perf_counter()
                 response = await client.get(endpoint)
-                elapsed_ms = (time.perf_counter() - start) * 1000.0
+            elapsed_ms = (time.perf_counter() - start) * 1000.0
             latencies.append(elapsed_ms)
             if 200 <= response.status_code < 300:
                 success += 1
@@ -105,7 +105,8 @@ async def run_load_profile(
                 failures.append(f"{response.status_code}")
         except Exception as exc:  # noqa: BLE001 - report concrete error in output.
             failures.append(str(exc))
-            latencies.append(0.0)
+            elapsed_ms = (time.perf_counter() - start) * 1000.0
+            latencies.append(elapsed_ms)
 
     await asyncio.gather(*(one_request() for _ in range(total_requests)))
     total = len(latencies)
@@ -134,10 +135,13 @@ async def run_availability_check(
     latencies: list[float] = []
     for _ in range(probes):
         start = time.perf_counter()
-        response = await client.get(endpoint)
-        latencies.append((time.perf_counter() - start) * 1000.0)
-        if 200 <= response.status_code < 300:
-            successes += 1
+        try:
+            response = await client.get(endpoint)
+            latencies.append((time.perf_counter() - start) * 1000.0)
+            if 200 <= response.status_code < 300:
+                successes += 1
+        except Exception:
+            latencies.append((time.perf_counter() - start) * 1000.0)
         await asyncio.sleep(interval_ms / 1000.0)
 
     availability = (successes / probes) * 100.0 if probes else 0.0
@@ -365,6 +369,7 @@ def main() -> int:
     )
 
     output_md.parent.mkdir(parents=True, exist_ok=True)
+    output_json.parent.mkdir(parents=True, exist_ok=True)
     output_md.write_text(markdown, encoding="utf-8")
     output_json.write_text(json.dumps(results, indent=2), encoding="utf-8")
 

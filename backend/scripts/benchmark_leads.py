@@ -43,8 +43,8 @@ class DatasetMetrics:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Benchmark Apollo leads vs Nexus leads.")
-    parser.add_argument("--apollo", required=True, help="Path to Apollo CSV")
-    parser.add_argument("--nexus", required=True, help="Path to your leads CSV")
+    parser.add_argument("--apollo", required=True, help="Path to Apollo CSV or JSON")
+    parser.add_argument("--nexus", required=True, help="Path to your leads CSV or JSON")
     parser.add_argument("--sample-size", type=int, default=25, help="Rows sampled from each source")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for deterministic sampling")
     parser.add_argument(
