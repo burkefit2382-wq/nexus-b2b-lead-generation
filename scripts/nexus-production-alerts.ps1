@@ -29,14 +29,31 @@ function Add-Pass {
   Write-Host "PASS $Message"
 }
 
-$apps = & $Kubectl -n argocd get applications -o json | ConvertFrom-Json
-foreach ($app in $apps.items) {
-  $health = $app.status.health.status
-  if ($health -ne "Healthy") {
-    Add-Failure "ArgoCD app $($app.metadata.name) health is $health"
-  } else {
-    Add-Pass "ArgoCD app $($app.metadata.name) is Healthy"
+try {
+  $rawApps = & $Kubectl -n argocd get applications -o json 2>&1
+  $kubectlExitCode = $LASTEXITCODE
+  if ($kubectlExitCode -ne 0) {
+    $kubectlError = ($rawApps | Out-String).Trim()
+    throw "kubectl get applications failed with exit code $kubectlExitCode`: $kubectlError"
   }
+
+  $apps = ($rawApps | Out-String) | ConvertFrom-Json -ErrorAction Stop
+  if (-not $apps.items -or $apps.items.Count -eq 0) {
+    Add-Failure "No ArgoCD applications found in namespace argocd"
+  } else {
+    foreach ($app in $apps.items) {
+      $health = $app.status.health.status ?? "Unknown"
+      $sync = $app.status.sync.status ?? "Unknown"
+      $operationPhase = $app.status.operationState.phase ?? "Unknown"
+      if ($health -ne "Healthy" -or $sync -ne "Synced") {
+        Add-Failure "ArgoCD app $($app.metadata.name) health=$health sync=$sync operationPhase=$operationPhase"
+      } else {
+        Add-Pass "ArgoCD app $($app.metadata.name) is Healthy and Synced (operationPhase=$operationPhase)"
+      }
+    }
+  }
+} catch {
+  Add-Failure "Failed to query ArgoCD applications: $($_.Exception.Message)"
 }
 
 foreach ($deploymentName in @("nexus-api", "nexus-worker")) {
